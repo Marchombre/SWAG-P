@@ -5,7 +5,7 @@ def get_n_k(material_name, lam, json_path):
     with open(json_path) as file:
         data = json.load(file)
     if material_name not in data:
-        raise ValueError(f"Le matériau '{material_name}' n'est pas dans la base de données.")
+        raise ValueError(f"Le matériau '{material_name}' est pas dans la base de données.")
     material = data[material_name]
     if material["model"] == "ExpData":
         wl = np.array(material["wavelength_list"])
@@ -19,4 +19,4 @@ def get_n_k(material_name, lam, json_path):
         n_complex = np.sqrt(eps_complex)
         return np.real(n_complex), np.imag(n_complex)
     else:
-        raise ValueError(f"Le modèle '{material['model']}' pour {material_name} n'est pas supporté.")
+        raise ValueError(f"Le modèle '{material['model']}' pour '{material_name}' est pas supporté.")
