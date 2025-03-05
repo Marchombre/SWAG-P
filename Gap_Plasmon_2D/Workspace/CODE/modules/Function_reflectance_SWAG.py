@@ -1,3 +1,7 @@
+import numpy as np
+from Functions_RCWA import cascade, c_bas, interface, homogene, grating
+
+
 ### Fonction reflectance SWAG
 
 def reflectance(geometry, wave, materials, n_mod):

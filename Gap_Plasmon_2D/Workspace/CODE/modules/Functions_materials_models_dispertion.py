@@ -1,3 +1,10 @@
+import numpy as np
+from scipy.special import erf
+import numpy.fft as fft
+
+
+
+
 ### Fonctions pour le calcul de la permittivité par les modèles de dispersion
 def faddeeva(z, N):
     """Calcul approximatif de la fonction de Faddeeva."""

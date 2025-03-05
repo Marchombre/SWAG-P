@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./Gap_Plasmon_2D/Workspace/CODE/modules"
+    ]
+}
