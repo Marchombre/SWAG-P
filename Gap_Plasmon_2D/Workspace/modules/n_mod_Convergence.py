@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Import de la fonction de dispersion Brendel-Bormann
-from Brendel_Bormann import BrendelBormann
+from Brendel_Bormann_Faddeeva import BrendelBormann
 
 # Import des fonctions pour charger les matériaux
 from MaterialsLoader import load_materials, get_material_params
