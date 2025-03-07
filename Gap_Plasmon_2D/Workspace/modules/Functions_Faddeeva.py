@@ -2,16 +2,13 @@ import numpy as np
 from scipy.special import erf
 import numpy.fft as fft
 
+### Functions for computing permittivity using dispersion models
 
-
-
-### Fonctions pour le calcul de la permittivité par les modèles de dispersion
-
-## faddeeva implémente une approximation numérique en utilisant une méthode 
-# spectrale basée sur une transformée de Fourier rapide (FFT).
+## The faddeeva function implements a numerical approximation using a spectral method
+# based on a fast Fourier transform (FFT).
 
 def faddeeva(z, N):
-    """Calcul approximatif de la fonction de Faddeeva."""
+    """Approximate calculation of the Faddeeva function."""
     w = np.zeros(z.size, dtype=complex)
     idx = np.real(z) == 0
     w[idx] = np.exp(-np.abs(z[idx]**2)) * (1 - erf(np.imag(z[idx])))

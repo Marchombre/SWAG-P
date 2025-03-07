@@ -4,7 +4,7 @@ import pandas as pd
 from IPython.display import display
 from material_list_provider import get_available_materials
 
-# Liste par défaut des rôles utilisés dans votre simulation
+# Default list of roles used in your simulation
 DEFAULT_ROLES = [
     "perm_env", "perm_dielec", "perm_sub", "perm_reso",
     "perm_metalliclayer", "perm_accroche", "perm_func", "perm_mol"
@@ -12,27 +12,27 @@ DEFAULT_ROLES = [
 
 def create_material_selector(json_path, roles=DEFAULT_ROLES):
     """
-    Crée et affiche une interface interactive (dropdowns + zones Custom)
-    pour la sélection des matériaux. La liste des matériaux est générée dynamiquement
-    à partir du fichier JSON combiné.
+    Creates and displays an interactive interface (dropdowns + custom text fields)
+    for selecting materials. The list of available materials is dynamically generated
+    from the combined JSON file.
     
-    Paramètres
+    Parameters
     ----------
     json_path : str
-        Chemin vers le fichier JSON combiné.
-    roles : list, optionnel
-        Liste des rôles à utiliser (par défaut DEFAULT_ROLES).
+        Path to the combined JSON file.
+    roles : list, optional
+        List of roles to use (default is DEFAULT_ROLES).
     
-    Retourne
-    --------
+    Returns
+    -------
     widget_container : VBox
-        Conteneur (VBox) contenant l'ensemble des widgets,
-        ainsi que le bouton de validation et une zone de sortie pour le récapitulatif.
-        La configuration finale sera stockée dans la variable globale MATERIALS_CONFIG.
+        A container (VBox) holding all the widgets,
+        including the validation button and an output area for the summary.
+        The final configuration will be stored in the global variable MATERIALS_CONFIG.
     """
-    # Récupérer la liste dynamique des matériaux disponibles
+    # Retrieve the dynamic list of available materials
     all_materials = get_available_materials(json_path)
-    # Ajouter les options "None" et "Custom"
+    # Add the options "None" and "Custom"
     all_materials_with_options = ["None", "Custom"] + all_materials
 
     dropdowns = {}
@@ -66,7 +66,7 @@ def create_material_selector(json_path, roles=DEFAULT_ROLES):
         
         widget_boxes.append(widgets.HBox([dropdown, text_input]))
     
-    button_create_df = widgets.Button(description="Valider la configuration matériaux")
+    button_create_df = widgets.Button(description="Validate Materials Configuration")
     output_df = widgets.Output()
     
     def on_create_df(b):
@@ -83,12 +83,11 @@ def create_material_selector(json_path, roles=DEFAULT_ROLES):
         df_config = pd.DataFrame(config)
         with output_df:
             output_df.clear_output()
-            print("Configuration matériaux sélectionnée:")
+            print("Selected materials configuration:")
             display(df_config)
         import __main__
         __main__.MATERIALS_CONFIG = df_config
-        print("MATERIALS_CONFIG a été défini dans l'espace global __main__")
-
+        print("MATERIALS_CONFIG has been defined in the global __main__ space")
     
     button_create_df.on_click(on_create_df)
     

@@ -3,15 +3,14 @@ import numpy.fft as fft
 from scipy.special import erf
 from scipy.special import wofz
 
-
 def BrendelBormann(wav, f0, omega_p, Gamma0, f, omega, gamma, sigma):
     """
-    Brendel & Bormann model, using Voigt functions to model lorentzian
-    resonances potentially widened with a gaussian distribution.
-    f0, Gamma0 and omega_p are the chi_f parameters (eps_inf, plasma frequency)
-    f, gamma, omega, sigma are the chi_b parameters (Lorentz resonances)
-    f, gamma, omega, sigma must be lists (np arrays) of the same lengths
-    They are given in eV (wav in nm)
+    Brendel & Bormann model, using Voigt functions to model Lorentzian
+    resonances potentially broadened by a Gaussian distribution.
+    f0, Gamma0, and omega_p are the chi_f parameters (ε_inf, plasma frequency),
+    while f, gamma, omega, sigma are the chi_b parameters (Lorentz resonances).
+    f, gamma, omega, sigma must be lists (or numpy arrays) of the same length.
+    They are provided in eV (with wav in nm).
     """
     # Brendel-Bormann model with n resonances
     w = 6.62606957e-25 * 299792458 / 1.602176565e-19 / wav
@@ -27,30 +26,29 @@ def BrendelBormann(wav, f0, omega_p, Gamma0, f, omega, gamma, sigma):
         / (2 * np.sqrt(2) * a * sigma)
         * (wofz(x) + wofz(y))
     )
-    # Equivalent polarizability linked to free electrons (Drude model)
+    # Equivalent polarizability from free electrons (Drude model)
     chi_f = -(omega_p**2) * f0 / (w * (w + 1j * Gamma0))
     epsilon = 1 + chi_f + chi_b
     return epsilon
 
-
 def BrendelBormann_Faddeeva(lambda_test, f0, omega_p, Gamma0, f, omega, gamma, sigma, N):
     """
-    Modèle Brendel & Bormann utilisant la fonction de Voigt pour modéliser des résonances Lorentz
-    élargies par une distribution gaussienne.
+    Brendel & Bormann model using the Voigt function to model Lorentzian
+    resonances broadened by a Gaussian distribution.
     
-    Paramètres :
-      - lambda_test : longueur d'onde (nm)
-      - f0, omega_p, Gamma0 : paramètres de chi_f (en eV)
-      - f, gamma, omega, sigma : listes ou tableaux (numpy) des paramètres de chi_b (en eV)
-      - N : paramètre numérique pour la FFT dans faddeeva
-    Retourne :
-      - epsilon : permittivité complexe
+    Parameters:
+      - lambda_test : wavelength in nm
+      - f0, omega_p, Gamma0 : parameters for chi_f (in eV)
+      - f, gamma, omega, sigma : lists or numpy arrays of chi_b parameters (in eV)
+      - N : numerical parameter for the FFT in faddeeva
+    Returns:
+      - epsilon : computed complex permittivity
     """
-    # Conversion de la longueur d'onde en énergie (eV) : E ≈ 1240/λ (λ en nm)
-    E = 1240.0 / lambda_test  # énergie en eV
-    w = E  # On utilise w comme énergie en eV
+    # Convert wavelength to energy (eV): E ≈ 1240 / λ (with λ in nm)
+    E = 1240.0 / lambda_test  # energy in eV
+    w = E  # Use w as energy in eV
     
-    chi_b = 0.0 + 0.0j  # Initialisation
+    chi_b = 0.0 + 0.0j  # Initialization
     
     f = np.array(f, dtype=float)
     omega = np.array(omega, dtype=float)
@@ -69,16 +67,16 @@ def BrendelBormann_Faddeeva(lambda_test, f0, omega_p, Gamma0, f, omega, gamma, s
     return epsilon
 
 def faddeeva(z, N):
-    """Approximation de la fonction de Faddeeva en utilisant une méthode FFT.
+    """Approximation of the Faddeeva function using an FFT-based method.
     
-    Paramètres :
-      - z : argument complexe (scalaire ou array)
-      - N : nombre de modes pour le calcul (contrôle la précision)
+    Parameters:
+      - z : complex argument (scalar or array)
+      - N : number of modes used in the calculation (controls precision)
       
-    Retourne :
+    Returns:
       - w(z) ≈ exp(-z^2) erfc(-i z)
     """
-    # On s'assure que z est un array
+    # Ensure that z is an array
     z_arr = np.atleast_1d(z)
     w_val = np.zeros(z_arr.shape, dtype=complex)
     

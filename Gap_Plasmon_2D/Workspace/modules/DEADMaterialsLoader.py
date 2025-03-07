@@ -2,15 +2,15 @@ import json
 import os
 import numpy as np
 
-# Par défaut, on suppose que le fichier se trouve dans un dossier 'data' à la racine du projet.
+# By default, it is assumed that the file is located in a 'data' folder at the root of the project.
 JSON_PATH = os.path.abspath(os.path.join('/home/chardon-grossard/Bureau/SWAG-P/Gap_Plasmon_2D/Workspace/', 'data', 'BB_materials.json'))
 
 def load_materials():
     """
-    Charge les paramètres des matériaux depuis le fichier JSON.
+    Loads the material parameters from the JSON file.
     """
     if not os.path.exists(JSON_PATH):
-        raise FileNotFoundError(f"Fichier JSON introuvable : {JSON_PATH}")
+        raise FileNotFoundError(f"JSON file not found: {JSON_PATH}")
     
     with open(JSON_PATH, "r") as file:
         materials_data = json.load(file)
@@ -19,12 +19,11 @@ def load_materials():
 
 def get_material_params(material_name, materials_data):
     """
-    Récupère les paramètres d'un matériau donné depuis le JSON.
-    Retourne également le modèle (par exemple "BrendelBormann") pour
-    permettre de choisir la méthode de calcul.
+    Retrieves the parameters for a given material from the JSON file.
+    Also returns the model (for example, "BrendelBormann") to allow choosing the calculation method.
     """
     if material_name not in materials_data:
-        raise ValueError(f"Matériau '{material_name}' non trouvé dans le fichier JSON.")
+        raise ValueError(f"Material '{material_name}' not found in the JSON file.")
 
     material = materials_data[material_name]
 
@@ -35,6 +34,6 @@ def get_material_params(material_name, materials_data):
     omega = np.array(material["omega"])
     gamma = np.array(material["Gamma"])
     sigma = np.array(material["sigma"])
-    model = material.get("model", "BrendelBormann")  # Par défaut, on peut considérer "BrendelBormann"
+    model = material.get("model", "BrendelBormann")  # By default, we consider "BrendelBormann"
     
     return f0, omega_p, Gamma0, f, omega, gamma, sigma, model

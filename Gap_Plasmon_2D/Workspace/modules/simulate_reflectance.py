@@ -5,12 +5,11 @@ from Function_reflectance_SWAG import reflectance
 
 def simulate_reflectance(lambda_range, geometry, wave, df_config, json_path, n_mod):
     """
-    Effectue la simulation de la réflectance pour une plage de longueurs d'onde.
+    Make the reflectance simulation for a range of wavelengths.
+    For each value of lambda_range, the permittivity dictionary is dynamically rebuilt
+    from df_config and the reflectance is calculated.
     
-    Pour chaque valeur de lambda_range, on reconstruit dynamiquement le dictionnaire
-    des permittivités à partir de df_config et on calcule la réflectance.
-    
-    Retourne deux listes : Rup_values et Rdown_values.
+    Two lists are returned: Rup_values and Rdown_values.
     """
     Rup_values = []
     Rdown_values = []

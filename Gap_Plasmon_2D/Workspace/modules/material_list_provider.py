@@ -3,17 +3,17 @@ import json
 
 def load_combined_materials(json_path):
     """
-    Charge le fichier JSON combiné contenant les données pour ExpData et BrendelBormann.
+    Loads the combined JSON file containing data for ExpData and BrendelBormann.
     
-    Paramètre
-    ---------
+    Parameters
+    ----------
     json_path : str
-        Chemin vers le fichier JSON combiné.
+        Path to the combined JSON file.
         
-    Retourne
-    --------
+    Returns
+    -------
     combined : dict
-        Dictionnaire contenant les données des matériaux.
+        Dictionary containing the materials data.
     """
     with open(json_path, 'r') as f:
         combined = json.load(f)
@@ -21,17 +21,17 @@ def load_combined_materials(json_path):
 
 def get_available_materials(json_path):
     """
-    Retourne la liste triée des matériaux disponibles en chargeant le fichier JSON combiné.
+    Returns the sorted list of available materials by loading the combined JSON file.
     
-    Paramètre
-    ---------
+    Parameters
+    ----------
     json_path : str
-        Chemin vers le fichier JSON combiné.
+        Path to the combined JSON file.
         
-    Retourne
-    --------
+    Returns
+    -------
     all_materials : list
-        Liste triée des noms de matériaux disponibles.
+        Sorted list of available material names.
     """
     combined = load_combined_materials(json_path)
     all_materials = sorted(list(combined.keys()))

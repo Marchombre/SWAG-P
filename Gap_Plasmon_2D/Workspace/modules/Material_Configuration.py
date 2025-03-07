@@ -5,9 +5,9 @@ from Functions_ExpData import get_n_k, compute_permittivity
 
 def load_combined_materials(json_path):
     """
-    Charge le fichier JSON combiné contenant les données ExpData et BrendelBormann.
+    Loads the combined JSON file containing ExpData and BrendelBormann data.
     
-    Retourne un dictionnaire des matériaux.
+    Returns a dictionary of materials.
     """
     with open(json_path, 'r') as f:
         materials_data = json.load(f)
@@ -15,9 +15,9 @@ def load_combined_materials(json_path):
 
 def get_material_params(material_name, materials_data):
     """
-    Extrait les paramètres pour un matériau donné depuis le dictionnaire materials_data.
+    Extracts the parameters for a given material from the materials_data dictionary.
     
-    Retourne un tuple : (f0, omega_p, Gamma0, f, omega, gamma, sigma, model).
+    Returns a tuple: (f0, omega_p, Gamma0, f, omega, gamma, sigma, model).
     """
     if material_name in materials_data:
         material = materials_data[material_name]
@@ -32,26 +32,26 @@ def get_material_params(material_name, materials_data):
             model = material.get("model", "").lower()
             return f0, omega_p, Gamma0, f, omega, gamma, sigma, model
         except KeyError as e:
-            raise ValueError(f"Les paramètres pour '{material_name}' ne sont pas complets dans le fichier JSON combiné: {e}")
+            raise ValueError(f"The parameters for '{material_name}' are incomplete in the combined JSON file: {e}")
     else:
-        raise ValueError(f"Matériau '{material_name}' non trouvé dans le fichier JSON combiné.")
+        raise ValueError(f"Material '{material_name}' not found in the combined JSON file.")
 
 def build_material_configuration_dynamic(df_config, lambda_val, json_path):
     """
-    Construit un dictionnaire de permittivités à partir d'un DataFrame de configuration pour une longueur d'onde donnée,
-    en chargeant un fichier JSON combiné contenant les données ExpData et BrendelBormann.
+    Constructs a dictionary of permittivities from a configuration DataFrame for a given wavelength,
+    by loading a combined JSON file containing ExpData and BrendelBormann data.
     
-    Pour chaque matériau dans le DataFrame (colonnes "key" et "material") :
-      - Si la valeur est "None" (insensible à la casse), on affecte 1.0 (équivalent à l'air).
-      - Sinon, si le matériau figure dans le fichier JSON combiné (comparaison insensible à la casse) et que son
-        champ "model" vaut "expdata", on utilise get_n_k pour interpoler n et k et on calcule ε = (n+ik)².
-      - Sinon, si le matériau figure dans le fichier JSON combiné et que son "model" est autre (ex. "brendelbormann"),
-        on utilise get_material_params puis compute_permittivity.
-      - Sinon, on tente de convertir la valeur en float (pour une constante custom).
-      - Sinon, une erreur est levée.
+    For each material in the DataFrame (columns "key" and "material"):
+      - If the value is "None" (case-insensitive), assign 1.0 (equivalent to air).
+      - Otherwise, if the material is found in the combined JSON file (case-insensitive comparison)
+        and its "model" field is "expdata", use get_n_k to interpolate n and k and compute ε = (n+ik)².
+      - Otherwise, if the material is found in the combined JSON file and its "model" is something else
+        (e.g., "brendelbormann"), use get_material_params then compute_permittivity.
+      - Otherwise, attempt to convert the value to float (for a custom constant).
+      - Otherwise, an error is raised.
     """
     materials_data = load_combined_materials(json_path)
-    # Construire un dictionnaire pour la recherche insensible à la casse
+    # Build a case-insensitive lookup dictionary
     available_materials = {k.lower(): k for k in materials_data.keys()}
     
     materials_perm = {}
@@ -66,23 +66,22 @@ def build_material_configuration_dynamic(df_config, lambda_val, json_path):
             material = materials_data[actual_mat]
             model = material.get("model", "").lower()
             if model == "expdata":
-                # Traitement via ExpData
+                # Processing via ExpData
                 n_val, k_val = get_n_k(actual_mat, lambda_val, json_path)
                 perm = (n_val + 1j * k_val) ** 2
                 materials_perm[key] = perm
             else:
-                # Traitement via le modèle BB
+                # Processing via the BB model
                 try:
                     f0, omega_p, Gamma0, f, omega, gamma, sigma, model = get_material_params(actual_mat, materials_data)
                     perm = compute_permittivity(lambda_val, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=50)
                     materials_perm[key] = perm
                 except KeyError as e:
-                    raise ValueError(f"Les paramètres pour '{actual_mat}' ne sont pas complets: {e}")
+                    raise ValueError(f"The parameters for '{actual_mat}' are incomplete: {e}")
         else:
             try:
                 const_val = float(mat)
                 materials_perm[key] = const_val
             except ValueError:
-                raise ValueError(f"Matériau '{mat}' non trouvé dans le fichier JSON combiné, "
-                                 "et ne peut être interprété comme une constante.")
+                raise ValueError(f"Material '{mat}' not found in the combined JSON file, and cannot be interpreted as a constant.")
     return materials_perm

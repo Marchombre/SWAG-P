@@ -2,7 +2,7 @@
 import ipywidgets as widgets
 from IPython.display import display, clear_output
 
-# Paramètres par défaut pour wave, géométrie et limites
+# Default parameters for wave, geometry, and limits
 wave = {"wavelength": 450, "angle": 0, "polarization": 1}
 
 geometry_config = {
@@ -33,16 +33,16 @@ geometry_limits = {
 
 def create_geometry_widget():
     """
-    Crée et retourne un widget (VBox) contenant les sliders de géométrie et un bouton
-    permettant de valider la configuration. L'affichage se fait une seule fois.
+    Creates and returns a widget (VBox) containing geometry sliders and a button
+    to validate the configuration. The display is done only once.
     
-    Retourne:
-        - widget: VBox contenant les sliders, le bouton et la zone de sortie.
+    Returns:
+        - widget: VBox containing the sliders, the button, and the output area.
     """
     geometry_sliders = {}
     slider_widgets = []
     
-    # Créer un slider pour chaque paramètre
+    # Create a slider for each parameter
     for key, default in geometry_config.items():
         min_val, max_val = geometry_limits.get(key, (0, 200))
         slider = widgets.FloatSlider(
@@ -54,27 +54,26 @@ def create_geometry_widget():
         geometry_sliders[key] = slider
         slider_widgets.append(slider)
     
-    # Créer le bouton de validation et un widget de sortie pour afficher les valeurs mises à jour
-    button_update_geo = widgets.Button(description="Valider la configuration géométrique")
+    # Create a validation button and an output widget to display the updated values
+    button_update_geo = widgets.Button(description="Validate Geometry Configuration")
     output_geo = widgets.Output()
     
     def update_geometry(b):
-        # Mettre à jour geometry_config avec les valeurs actuelles
+        # Update geometry_config with the current slider values
         for key, slider in geometry_sliders.items():
             geometry_config[key] = slider.value
         with output_geo:
             clear_output()
-            print("Nouvelle configuration géométrique:")
+            print("New geometry configuration:")
             for key, value in geometry_config.items():
                 print(f"  {key}: {value}")
-        # Optionnel : afficher un message global dans __main__
+        # Optionally: display a global message in __main__
         import __main__
-        __main__.GEOMETRY_CONFIG = geometry_config  # si vous souhaitez que ce soit accessible globalement
-        print("GEOMETRY_CONFIG a été mis à jour dans l'espace global (__main__).")
+        __main__.GEOMETRY_CONFIG = geometry_config  # so that it is globally accessible
+        print("GEOMETRY_CONFIG has been updated in the global (__main__) space.")
 
-    
     button_update_geo.on_click(update_geometry)
     
-    # Créer et retourner une VBox contenant les sliders, le bouton et la zone de sortie
+    # Create and return a VBox containing the sliders, the button, and the output area
     widget = widgets.VBox(slider_widgets + [button_update_geo, output_geo])
     return widget
