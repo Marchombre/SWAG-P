@@ -1,8 +1,22 @@
 # simulate_and_plot.py
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from simulate_reflectance import simulate_reflectance
+
+
+# From the current directory, go up one level to the workspace directory
+workspace_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
+
+# Path to the workspace directory
+figures_dir = os.path.join(workspace_dir, "Figures")
+os.makedirs(figures_dir, exist_ok=True)
+
+# Path to save the figure
+fig_path = os.path.join(figures_dir, "reflectance_simulation.png")
+
+
 
 def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_path):
     """
@@ -67,6 +81,8 @@ def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_p
     plt.text(0.75, -0.5, 'Materials Configuration', ha='center', fontsize=13, transform=plt.gca().transAxes)
     
     plt.subplots_adjust(bottom=0.3)
+
+
     plt.show()
-    
+    plt.savefig(fig_path)
     return Rup_values, Rdown_values
