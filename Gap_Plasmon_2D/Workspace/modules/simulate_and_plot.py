@@ -3,18 +3,18 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from datetime import datetime
 from simulate_reflectance import simulate_reflectance
 
-
-# From the current directory, go up one level to the workspace directory
+# Path Workspace
 workspace_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
 
 # Path to the workspace directory
 figures_dir = os.path.join(workspace_dir, "Figures")
-os.makedirs(figures_dir, exist_ok=True)
 
 # Path to save the figure
-fig_path = os.path.join(figures_dir, "reflectance_simulation.png")
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+fig_path = os.path.join(figures_dir, f"reflectance_simulation_{timestamp}.png")
 
 
 
