@@ -1,10 +1,11 @@
-# material_selector.py
 import os
 import ipywidgets as widgets
 import pandas as pd
 from IPython.display import display
-from material_list_provider import get_available_materials
 import yaml
+
+# Import de la fonction étendue depuis material_list_provider
+from material_list_provider import get_available_materials_extended
 
 # Liste par défaut des rôles utilisés dans la simulation
 DEFAULT_ROLES = [
@@ -48,29 +49,34 @@ def get_catalog_options_local(catalog_path):
 # Charge les options du catalogue local.
 CATALOG_SHELVES, CATALOG_BOOKS, CATALOG_PAGES, shelf_to_books, book_to_pages = get_catalog_options_local(CATALOG_PATH)
 
+# Définissez ici le chemin vers le dossier data
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+
 def create_material_selector(json_path, roles=DEFAULT_ROLES):
     """
     Crée une interface interactive (dropdowns et champs supplémentaires)
-    pour la sélection des matériaux. La liste des matériaux disponibles est générée
-    dynamiquement à partir du fichier JSON combiné.
-
-    En plus de "None" et "Custom", le dropdown inclut l'option "RefractiveIndex" qui
-    permet de spécifier shelf, book et page pour un matériau depuis la base refractiveindex.info.
-
+    pour la sélection des matériaux.
+    
+    La liste des matériaux disponibles est générée dynamiquement à partir du fichier JSON combiné
+    ET des fichiers .txt présents dans le dossier data.
+    
+    En plus de "None" et "Custom", le dropdown inclut l'option "RefractiveIndex" qui permet de spécifier
+    shelf, book et page pour un matériau depuis la base refractiveindex.info.
+    
     La configuration finale est stockée dans la variable globale MATERIALS_CONFIG,
     et les éventuels overrides pour RefractiveIndex dans RI_OVERRIDES.
     """
-    all_materials = get_available_materials(json_path)
+    # Utilisation de la fonction étendue pour inclure les fichiers TXT
+    all_materials = get_available_materials_extended(json_path, DATA_DIR)
     all_materials_with_options = ["None", "Custom", "RefractiveIndex"] + all_materials
 
     dropdowns = {}
-    custom_inputs = {}  # Pour l'option "Custom".
-    ri_inputs = {}      # Pour l'option "RefractiveIndex": tuple (shelf, book, page).
+    custom_inputs = {}  # Pour l'option "Custom"
+    ri_inputs = {}      # Pour l'option "RefractiveIndex": tuple (shelf, book, page)
     widget_boxes = []
 
     def make_on_change(custom_widget, ri_box_widget):
         def _on_change(change):
-            # Selon la sélection, on affiche ou masque les widgets custom et RI.
             if change['new'] == "Custom":
                 custom_widget.layout.display = 'block'
                 ri_box_widget.layout.display = 'none'
@@ -90,7 +96,6 @@ def create_material_selector(json_path, roles=DEFAULT_ROLES):
                     child.layout.display = 'none'
         return _on_change
 
-    # Observateur pour le champ Shelf : met à jour les options du Book et réinitialise Page.
     def on_shelf_change(change, book_widget, page_widget):
         selected_shelf = change['new']
         if selected_shelf in shelf_to_books:
@@ -100,7 +105,6 @@ def create_material_selector(json_path, roles=DEFAULT_ROLES):
         page_widget.options = []
         page_widget.value = ""
 
-    # Observateur pour le champ Book : met à jour les options de Page.
     def on_book_change(change, shelf_widget, page_widget):
         selected_book = change['new']
         if shelf_widget.value:
@@ -110,7 +114,6 @@ def create_material_selector(json_path, roles=DEFAULT_ROLES):
             page_widget.options = []
         page_widget.value = ""
 
-    # Création des widgets pour chaque rôle.
     for role in roles:
         dropdown = widgets.Dropdown(
             options=all_materials_with_options,
@@ -132,14 +135,14 @@ def create_material_selector(json_path, roles=DEFAULT_ROLES):
         )
         ri_book = widgets.Combobox(
             placeholder="Select book",
-            options=[],  # Initialement vide, sera mis à jour par l'observateur.
+            options=[],
             description="Book:",
             ensure_option=True,
             layout=widgets.Layout(width='120px', display='none')
         )
         ri_page = widgets.Combobox(
             placeholder="Select page",
-            options=[],  # Initialement vide, sera mis à jour par l'observateur.
+            options=[],
             description="Page:",
             ensure_option=True,
             layout=widgets.Layout(width='120px', display='none')
@@ -147,7 +150,6 @@ def create_material_selector(json_path, roles=DEFAULT_ROLES):
         ri_box = widgets.HBox([ri_shelf, ri_book, ri_page])
         ri_box.layout.display = 'none'
         
-        # Ajout des observateurs pour mettre à jour les listes de books et pages.
         ri_shelf.observe(lambda change, bw=ri_book, pw=ri_page: on_shelf_change(change, bw, pw), names='value')
         ri_book.observe(lambda change, sw=ri_shelf, pw=ri_page: on_book_change(change, sw, pw), names='value')
         
@@ -179,7 +181,6 @@ def create_material_selector(json_path, roles=DEFAULT_ROLES):
                 if shelf == "" or book == "" or page == "":
                     mat_value = "None"
                 else:
-                    # Vous pouvez choisir d'inclure une chaîne informative ou simplement "RefractiveIndex"
                     mat_value = f"RefractiveIndex: {book}"
                     ri_overrides[role] = {"shelf": shelf, "book": book, "page": page}
             else:

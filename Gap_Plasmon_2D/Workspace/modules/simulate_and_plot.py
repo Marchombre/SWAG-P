@@ -1,88 +1,86 @@
-# simulate_and_plot.py
 import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
-from simulate_reflectance import simulate_reflectance
+from simulate_reflectance import simulate_reflectance  # Assurez-vous que ce module est accessible
 
-# Path Workspace
+# Chemin Workspace (supposé être le parent du dossier courant)
 workspace_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
 
-# Path to the workspace directory
+# Répertoire pour sauvegarder les figures
 figures_dir = os.path.join(workspace_dir, "Figures")
+if not os.path.exists(figures_dir):
+    os.makedirs(figures_dir)
 
-# Path to save the figure
+# Génération d'un nom de fichier avec timestamp
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 fig_path = os.path.join(figures_dir, f"reflectance_simulation_{timestamp}.png")
 
-
-
 def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_path):
     """
-    Executes the reflectance simulation over a range of wavelengths and displays the result,
-    along with a summary table of the geometric parameters and the materials configuration.
+    Exécute la simulation de réflectance sur une plage de longueurs d'onde et affiche le résultat,
+    ainsi qu'un tableau récapitulatif des paramètres géométriques et de la configuration des matériaux.
     
     Parameters
     ----------
     lambda_range : array_like
-        Range of wavelengths (in nm).
+        Plage de longueurs d'onde (en nm).
     n_mod : int
-        Number of RCWA modes.
+        Nombre de modes RCWA.
     geometry : dict
-        Dictionary defining the system's geometry.
+        Dictionnaire définissant la géométrie du système.
     wave : dict
-        Dictionary of wave parameters (angle, polarization, etc.).
+        Dictionnaire des paramètres de l'onde (angle, polarisation, etc.).
     materials_config : DataFrame
-        Materials configuration (from the dropdowns, MATERIALS_CONFIG).
+        Configuration des matériaux (issue du widget MATERIALS_CONFIG).
     json_path : str
-        Path to the JSON file containing ExpData.
+        Chemin vers le fichier JSON combiné contenant les données ExpData.
     
     Returns
     -------
     Rup_values, Rdown_values : lists
-        Reflectance values computed for each wavelength.
+        Valeurs de réflectance calculées pour chaque longueur d'onde.
     """
-    # Run the simulation using the existing function
+    # Exécution de la simulation via votre fonction existante
     Rup_values, Rdown_values = simulate_reflectance(lambda_range, geometry, wave, materials_config, json_path, n_mod)
     
-    # Create the reflectance plot
+    # Création de la figure
     plt.figure(figsize=(10, 6))
-    plt.plot(lambda_range, Rup_values,  label='Rup')
+    plt.plot(lambda_range, Rup_values, label='Rup')
     plt.plot(lambda_range, Rdown_values, label='Rdown')
     plt.xlabel("Wavelength (nm)")
     plt.ylabel("Reflectance")
-    plt.legend()
     plt.title("Reflectance Simulation")
+    plt.legend()
     plt.grid(True)
     
-    # Prepare the summary table for the geometry parameters
+    # Préparation des tableaux récapitulatifs
     geom_df = pd.DataFrame(list(geometry.items()), columns=['Geometric Parameter', 'Value'])
-    # Prepare the table for the materials configuration
-    mat_df = materials_config.copy()  # columns: key and material
+    mat_df = materials_config.copy()  # Colonnes : key et material
     
     cellText_geom = geom_df.values.tolist()
     cellText_mat = mat_df.values.tolist()
     
-    # Display the geometry table at the bottom left
+    # Ajout des tableaux dans la figure
     table_geom = plt.table(cellText=cellText_geom, colLabels=geom_df.columns,
                            loc='bottom', bbox=[0, -0.45, 0.5, 0.3])
     table_geom.auto_set_font_size(False)
     table_geom.set_fontsize(8)
     
-    # Display the materials configuration table at the bottom right
     table_mat = plt.table(cellText=cellText_mat, colLabels=mat_df.columns,
                           loc='bottom', bbox=[0.5, -0.45, 0.5, 0.3])
     table_mat.auto_set_font_size(False)
     table_mat.set_fontsize(8)
     
-    # Add titles for the tables
+    # Ajout des titres pour les tableaux
     plt.text(0.25, -0.5, 'Geometric Parameters', ha='center', fontsize=13, transform=plt.gca().transAxes)
     plt.text(0.75, -0.5, 'Materials Configuration', ha='center', fontsize=13, transform=plt.gca().transAxes)
     
     plt.subplots_adjust(bottom=0.3)
-
-
+    
+    # Sauvegarde de la figure avant affichage
+    plt.savefig(fig_path, bbox_inches='tight')
     plt.show()
-    plt.savefig(fig_path)
+    
     return Rup_values, Rdown_values
