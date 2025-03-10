@@ -48,8 +48,8 @@ def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_p
     
     # Create the reflectance plot
     plt.figure(figsize=(10, 6))
-    plt.plot(lambda_range, Rup_values, 'o-', label='Rup')
-    plt.plot(lambda_range, Rdown_values, 's-', label='Rdown')
+    plt.plot(lambda_range, Rup_values,  label='Rup')
+    plt.plot(lambda_range, Rdown_values, label='Rdown')
     plt.xlabel("Wavelength (nm)")
     plt.ylabel("Reflectance")
     plt.legend()

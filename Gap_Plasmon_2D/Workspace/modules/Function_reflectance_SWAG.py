@@ -1,3 +1,5 @@
+# Function_reflectance_SWAG.py
+
 import numpy as np
 from Functions_RCWA import cascade, c_bas, interface, homogene, grating
 
