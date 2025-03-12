@@ -13,10 +13,6 @@ figures_dir = os.path.join(workspace_dir, "Figures")
 if not os.path.exists(figures_dir):
     os.makedirs(figures_dir)
 
-# Génération d'un nom de fichier avec timestamp
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-fig_path = os.path.join(figures_dir, f"reflectance_simulation_{timestamp}.png")
-
 def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_path):
     """
     Exécute la simulation de réflectance sur une plage de longueurs d'onde et affiche le résultat,
@@ -33,7 +29,9 @@ def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_p
     wave : dict
         Dictionnaire des paramètres de l'onde (angle, polarisation, etc.).
     materials_config : DataFrame
-        Configuration des matériaux (issue du widget MATERIALS_CONFIG).
+        Configuration des matériaux (issue du widget MATERIALS_CONFIG).  
+        Chaque ligne contient deux colonnes : "key" et "material".  
+        Pour un matériau de type "RefractiveIndex", le dictionnaire peut contenir les clés "shelf", "book", "page" et "data" (chemin vers le fichier YAML).
     json_path : str
         Chemin vers le fichier JSON combiné contenant les données ExpData.
     
@@ -42,8 +40,12 @@ def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_p
     Rup_values, Rdown_values : lists
         Valeurs de réflectance calculées pour chaque longueur d'onde.
     """
-    # Exécution de la simulation via votre fonction existante
+    # Exécute la simulation en passant la configuration des matériaux
     Rup_values, Rdown_values = simulate_reflectance(lambda_range, geometry, wave, materials_config, json_path, n_mod)
+    
+    # Générer un nom de fichier avec timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fig_path = os.path.join(figures_dir, f"reflectance_simulation_{timestamp}.png")
     
     # Création de la figure
     plt.figure(figsize=(10, 6))
@@ -57,7 +59,9 @@ def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_p
     
     # Préparation des tableaux récapitulatifs
     geom_df = pd.DataFrame(list(geometry.items()), columns=['Geometric Parameter', 'Value'])
-    mat_df = materials_config.copy()  # Colonnes : key et material
+    # On convertit la colonne "material" en chaîne pour un affichage plus lisible
+    mat_df = materials_config.copy()
+    mat_df['material'] = mat_df['material'].apply(lambda d: str(d))
     
     cellText_geom = geom_df.values.tolist()
     cellText_mat = mat_df.values.tolist()
@@ -79,7 +83,7 @@ def run_simulation(lambda_range, n_mod, geometry, wave, materials_config, json_p
     
     plt.subplots_adjust(bottom=0.3)
     
-    # Sauvegarde de la figure avant affichage
+    # Sauvegarde et affichage de la figure
     plt.savefig(fig_path, bbox_inches='tight')
     plt.show()
     

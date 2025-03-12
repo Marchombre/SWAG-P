@@ -1,16 +1,24 @@
-import json
-import pandas as pd
-import numpy as np
-import yaml
 import os
 import re
+import json
+import numpy as np
+import yaml
 import scipy.interpolate
 
 from Functions_ExpData import get_n_k, compute_permittivity
+from refractiveindexINFO import RefractiveIndexMaterial, RefractiveIndexData
 
-# Import de la classe RefractiveIndexMaterial depuis refractiveindex.py
-from refractiveindex import RefractiveIndexMaterial
+# Expression régulière pour identifier une expression numérique
+numeric_expr_pattern = re.compile(r'^[\d\.\+\-\*\/\s\(\)]+$')
 
+# Définition des chemins
+workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+catalog_path = os.path.join(workspace_dir, "catalog_nk.yml")
+data_dir = os.path.join(workspace_dir, "data")
+
+###############################################################################
+# Fallback local : Recherche dans catalog_nk.yml et lecture du fichier de données
+###############################################################################
 def normalize_name_local(name):
     """
     Convertit la chaîne en minuscules, supprime les espaces en début/fin,
@@ -21,96 +29,82 @@ def normalize_name_local(name):
     s = re.sub(r"[ \/_-]+", "_", s)
     return s
 
-# Chemin vers le fichier catalog_nk.yml local
+# Chemin local vers le catalog (pour le fallback local)
 LOCAL_CATALOG_PATH = os.path.join(os.path.dirname(__file__), "catalog_nk.yml")
 
-def lookup_ri_catalog(material_name):
+def _find_page_dict_in_catalog(shelf, book, page):
     """
-    Recherche dans catalog_nk.yml un matériau dont les champs SHELF, BOOK et PAGE 
-    correspondent de manière flexible à material_name.
-    
-    Si material_name contient ":", il doit être au format "shelf:book:page".
-    Sinon, la chaîne normalisée est comparée aux trois champs.
-    
-    Renvoie (shelf, book, page) avec les valeurs originales.
+    Parcourt catalog_nk.yml pour retrouver l'entrée correspondant à (shelf, book, page).
+    Retourne le dictionnaire associé ou None.
     """
-    if ":" in material_name:
-        parts = material_name.split(":")
-        if len(parts) != 3:
-            raise ValueError("Material name must be in the format 'shelf:book:page' when using ':' as separator.")
-        shelf_target, book_target, page_target = (normalize_name_local(part) for part in parts)
-    else:
-        shelf_target = book_target = page_target = normalize_name_local(material_name)
-    
     with open(LOCAL_CATALOG_PATH, "r", encoding="utf-8") as f:
         catalog = yaml.load(f, Loader=yaml.BaseLoader)
-    for shelf in catalog:
-        shelf_val = shelf.get("SHELF", "")
-        shelf_norm = normalize_name_local(shelf_val)
-        if shelf_target not in shelf_norm and shelf_norm not in shelf_target:
-            continue
-        for book in shelf.get("content", []):
-            if "DIVIDER" in book:
-                continue
-            book_val = book.get("BOOK", "")
-            book_norm = normalize_name_local(book_val)
-            if book_target not in book_norm and book_norm not in book_target:
-                continue
-            for page in book.get("content", []):
-                if "DIVIDER" in page:
-                    continue
-                page_val = page.get("PAGE", "")
-                page_norm = normalize_name_local(page_val)
-                if page_target in page_norm or page_norm in page_target:
-                    return shelf_val, book_val, page_val
-    raise ValueError(f"Material '{material_name}' not found in catalog.")
-
-def find_data_file(shelf, book, base_path):
-    """
-    Recherche récursivement dans base_path/data le premier fichier YAML situé dans le répertoire correspondant à shelf et book.
-    Si data/<shelf>/<book> n'existe pas, recherche dans tous les sous-dossiers de data un dossier dont le nom normalisé correspond au book.
-    Renvoie le chemin complet du fichier trouvé, ou None.
-    """
-    data_root = os.path.join(base_path, "data")
-    target_dir = os.path.join(data_root, shelf, book)
-    if os.path.isdir(target_dir):
-        for root, dirs, files in os.walk(target_dir):
-            for file in files:
-                if file.lower().endswith((".yml", ".yaml")):
-                    return os.path.join(root, file)
-    else:
-        normalized_book = normalize_name_local(book)
-        for root, dirs, files in os.walk(data_root):
-            for d in dirs:
-                if normalize_name_local(d) == normalized_book:
-                    candidate = os.path.join(root, d)
-                    for r, ds, fs in os.walk(candidate):
-                        for f in fs:
-                            if f.lower().endswith((".yml", ".yaml")):
-                                return os.path.join(r, f)
+    for sh in catalog:
+        if "SHELF" in sh and sh["SHELF"] == shelf:
+            for bk in sh.get("content", []):
+                if "BOOK" in bk and bk["BOOK"] == book:
+                    for pg in bk.get("content", []):
+                        if "PAGE" in pg and pg["PAGE"] == page:
+                            return pg
     return None
 
-def find_txt_file(material_name, data_dir):
+def _interpolate_tabulated(nk_lines, wavelength_nm, mode="nk"):
     """
-    Recherche récursivement dans data_dir un fichier texte (.txt) dont le nom (sans extension)
-    correspond, après normalisation, à material_name.
-    Renvoie le chemin complet du fichier trouvé, ou None.
+    Parse une chaîne de données tabulées (exemple : "500 1.45 0\n600 1.44 0\n...")
+    et interpole les valeurs de n et k à la longueur d'onde wavelength_nm.
+    Le paramètre mode peut être "n", "k" ou "nk".
+    Retourne un tuple (n, k).
     """
-    for root, dirs, files in os.walk(data_dir):
-        for f in files:
-            if f.lower().endswith(".txt"):
-                base = os.path.splitext(f)[0]
-                if normalize_name_local(base) == normalize_name_local(material_name):
-                    return os.path.join(root, f)
-    return None
+    rows = nk_lines.strip().split("\n")
+    table = []
+    for r in rows:
+        rr = r.strip()
+        if rr:
+            parts = rr.split()
+            table.append(list(map(float, parts)))
+    table = np.array(table)
+    wl = table[:, 0]
+    if mode == "n" and table.shape[1] >= 2:
+        nvals = table[:, 1]
+        n_val = float(np.interp(wavelength_nm, wl, nvals))
+        return (n_val, 0.0)
+    elif mode == "k" and table.shape[1] >= 2:
+        kvals = table[:, 1]
+        k_val = float(np.interp(wavelength_nm, wl, kvals))
+        return (0.0, k_val)
+    elif mode == "nk" and table.shape[1] >= 3:
+        nvals = table[:, 1]
+        kvals = table[:, 2]
+        n_val = float(np.interp(wavelength_nm, wl, nvals))
+        k_val = float(np.interp(wavelength_nm, wl, kvals))
+        return (n_val, k_val)
+    return (0.0, 0.0)
+
+def _interpolate_formula(data_block, wavelength_nm):
+    """
+    Interpole les valeurs n et k pour un bloc de type "formula X" (X = 1..9)
+    tel que défini dans les données de refractiveindex.info.
+    Cette implémentation simplifiée doit être étendue pour une compatibilité complète.
+    """
+    ftype = data_block.get("type", "").split()  # ex: ["formula", "1"]
+    formula_type = ftype[1] if len(ftype) > 1 else "1"
+    coeff_str = data_block.get("coefficients", "")
+    wls_str = data_block.get("wavelength_range", "")
+    if not coeff_str or not wls_str:
+        return (1.0, 0.0)
+    wl_range = list(map(float, wls_str.split()))
+    lam_array = np.linspace(wl_range[0], wl_range[1], 100)
+    # Pour l'exemple, on renvoie n=1 pour toute longueur d'onde
+    n_array = np.ones_like(lam_array)
+    n_val = float(np.interp(wavelength_nm, lam_array, n_array))
+    return (n_val, 0.0)
 
 def get_refractive_index_epsilon_from_file(file_path, lambda_val):
     """
-    Lit le fichier situé à file_path et renvoie ε = (n + 1j*k)**2 pour la longueur d'onde lambda_val (en nm).
+    Lit le fichier situé à file_path et renvoie ε = (n + 1j*k)**2 pour lambda_val (en nm).
     
-    - Pour un fichier .txt, on suppose un format à colonnes : wl  n  k (avec une ligne d'en-tête).
+    - Si le fichier est un .txt, on suppose un format avec une ligne d'en-tête : wl  n  k.
     - Pour un fichier YAML, on gère les données "tabulated" et "formula".
-      Pour "formula", le calcul est délégué à RefractiveIndexData.
     """
     ext = os.path.splitext(file_path)[1].lower()
     if ext == ".txt":
@@ -138,14 +132,12 @@ def get_refractive_index_epsilon_from_file(file_path, lambda_val):
                     wl = table[:, 0]
                     n_array = table[:, 1]
                     n_val = float(np.interp(lambda_val, wl, n_array))
-                    k_val = 0
-                    return (n_val + 1j*k_val)**2
+                    return (n_val + 0j)**2
                 elif datatype[1] == "k":
                     wl = table[:, 0]
                     k_array = table[:, 1]
                     k_val = float(np.interp(lambda_val, wl, k_array))
-                    n_val = 0
-                    return (n_val + 1j*k_val)**2
+                    return (0 + 1j*k_val)**2
                 elif datatype[1] == "nk":
                     wl = table[:, 0]
                     n_array = table[:, 1]
@@ -161,7 +153,6 @@ def get_refractive_index_epsilon_from_file(file_path, lambda_val):
                 else:
                     wl = np.linspace(wavelength_range[0], wavelength_range[1], 101)
                 formula_type = int(datatype[1])
-                from refractiveindex import RefractiveIndexData
                 refr_index_obj = RefractiveIndexData.setupRefractiveIndex(
                     formula=formula_type,
                     rangeMin=float(wavelength_range[0]),
@@ -169,14 +160,34 @@ def get_refractive_index_epsilon_from_file(file_path, lambda_val):
                     coefficients=coefficients
                 )
                 n_val_array = refr_index_obj.getRefractiveIndex(np.array([lambda_val]))
-                return (float(n_val_array[0]) + 1j*0)**2
+                return (float(n_val_array[0]) + 0j)**2
         raise ValueError("No valid data found in file.")
 
+###############################################################################
+# Fonctions finales : configuration dynamique des matériaux
+###############################################################################
+def get_epsilon_refractiveindex(shelf, book, page, lambda_val_nm):
+    """
+    Utilise la classe pip RefractiveIndexMaterial pour obtenir n et k à la longueur d'onde lambda_val_nm.
+    En cas d'échec (par exemple, matériau non trouvé dans la base interne), le fallback local sera utilisé.
+    Retourne ε = (n + i k)².
+    """
+    rim = RefractiveIndexMaterial(shelf, book, page)
+    lam_array = np.array([lambda_val_nm], dtype=float)
+    n_array = rim.get_refractive_index(lam_array)
+    k_array = rim.get_extinction_coefficient(lam_array)
+    if len(n_array) == 0 or len(k_array) == 0:
+        raise ValueError("The refractiveindex library did not return any n,k data.")
+    n_val, k_val = float(n_array[0]), float(k_array[0])
+    return (n_val + 1j*k_val)**2
+
+
+
+
+
+
+
 def get_material_params(material_name, materials_data):
-    """
-    Extrait les paramètres d'un matériau depuis materials_data (JSON combiné).
-    Renvoie un tuple : (f0, omega_p, Gamma0, f, omega, gamma, sigma, model).
-    """
     if material_name in materials_data:
         material = materials_data[material_name]
         try:
@@ -194,116 +205,103 @@ def get_material_params(material_name, materials_data):
     else:
         raise ValueError(f"Material '{material_name}' not found in JSON.")
 
-# Regex pour vérifier une expression numérique (chiffres, opérateurs, espaces et parenthèses)
-numeric_expr_pattern = re.compile(r'^[\d\.\+\-\*\/\s\(\)]+$')
 
-def build_material_configuration_dynamic(df_config, lambda_val, json_path, ri_overrides=None):
+
+
+def build_material_configuration_dynamic(df_config, lambda_val_nm, json_path, ri_overrides=None):
     """
     Construit un dictionnaire de permittivités {role: ε} à partir d'une configuration (DataFrame).
 
-    Pour chaque rôle :
-      - "None" renvoie 1.0.
-      - Si le matériau est défini dans le JSON combiné, on utilise get_n_k (pour ExpData)
-        ou compute_permittivity (pour BrendelBormann) selon le champ "model".
-      - Si la valeur commence par "RefractiveIndex", on tente d'obtenir les indices via RefractiveIndexMaterial
-        (en utilisant getRefractiveIndex et getExtinctionCoefficient).
-        La recherche des identifiants se fait de manière flexible via lookup_ri_catalog.
-        En cas d'échec, on se rabat sur une recherche locale dans le dossier "data"
-        en cherchant d'abord un fichier YAML, puis un fichier TXT.
-      - Sinon, on tente d'évaluer la valeur comme une constante via eval si c'est une expression numérique.
-        Si ce n'est pas le cas, on tente de trouver un fichier TXT correspondant.
+    Chaque ligne du DataFrame doit contenir une configuration sous forme de dictionnaire,
+    avec la clé "type" pouvant prendre l'une des valeurs : "None", "RefractiveIndex", "Standard" ou "Custom".
+      - Pour "None" : retourne 1.0.
+      - Pour "RefractiveIndex" : le dictionnaire doit contenir "shelf", "book", "page" et idéalement "data"
+            (le chemin relatif vers le fichier YAML dans le catalogue). Si "data" est fourni, il sera utilisé
+            en priorité pour obtenir ε via get_refractive_index_epsilon_from_file. Sinon, on tente d'obtenir ε
+            via RefractiveIndexMaterial puis par fallback.
+      - Pour "Standard" : le dictionnaire doit contenir "material" (la chaîne indiquant le matériau standard),
+            et on récupère les données du JSON combiné en utilisant get_n_k (pour ExpData) ou compute_permittivity (pour Brendel–Bormann).
+      - Pour "Custom" : le dictionnaire doit contenir "expression" (l'expression numérique à évaluer).
+    
+    Retourne un dictionnaire {role: ε}.
     """
     if ri_overrides is None:
         ri_overrides = {}
-    with open(json_path, 'r') as f:
+
+    with open(json_path, "r", encoding="utf-8") as f:
         materials_data = json.load(f)
+
     available_materials = {k.lower(): k for k in materials_data.keys()}
     materials_perm = {}
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    data_dir = os.path.join(base_path, "data")
+    data_dir_local = os.path.join(base_path, "data")
 
-    for idx, row in df_config.iterrows():
-        key = row['key']
-        mat = row['material'].strip()
-        mat_lower = mat.lower()
+    for _, row in df_config.iterrows():
+        role = row["key"]
+        # On s'attend à ce que row["material"] soit un dictionnaire
+        mat_dict = row["material"] if isinstance(row["material"], dict) else {"type": str(row["material"]).strip()}
+        mtype = mat_dict.get("type", "").lower()
 
-        # Cas "None"
-        if mat_lower == "none":
-            materials_perm[key] = 1.0
-            continue
+        if mtype == "none":
+            materials_perm[role] = 1.0
 
-        # Cas présent dans le JSON combiné (ExpData ou BB)
-        if mat_lower in available_materials:
-            actual_mat = available_materials[mat_lower]
-            material = materials_data[actual_mat]
-            model = material.get("model", "").lower()
-            if model == "expdata":
-                n_val, k_val = get_n_k(actual_mat, lambda_val, json_path)
-                materials_perm[key] = (n_val + 1j*k_val)**2
+        elif mtype == "refractiveindex":
+            # Récupération des identifiants et du chemin 'data' provenant du selector
+            shelf = mat_dict.get("shelf", "")
+            book  = mat_dict.get("book", "")
+            page  = mat_dict.get("page", "")
+            data_field = mat_dict.get("data", "").strip()  # Ce champ doit être rempli dans le selector
+            if not shelf or not book or not page:
+                materials_perm[role] = 1.0
             else:
-                try:
-                    params = get_material_params(actual_mat, materials_data)
-                    perm = compute_permittivity(lambda_val, *params[:-1], N=50)
-                    materials_perm[key] = perm
-                except KeyError as e:
-                    raise ValueError(f"Incomplete parameters for '{actual_mat}': {e}")
-            continue
-
-        # Cas RefractiveIndex
-        if mat.startswith("RefractiveIndex"):
-            try:
-                if key in ri_overrides:
-                    override = ri_overrides[key]
-                    if "name" in override and override["name"]:
-                        shelf, book, page = lookup_ri_catalog(override["name"])
-                    else:
-                        shelf = override.get("shelf", "main")
-                        book = override.get("book")
-                        page = override.get("page")
-                        if not book or not page:
-                            raise ValueError(f"Override for role '{key}' incomplete: 'book' and 'page' required.")
+                if data_field:
+                    # Utiliser directement le chemin fourni
+                    filename = os.path.join(data_dir, data_field)
+                    eps = get_refractive_index_epsilon_from_file(filename, lambda_val_nm)
                 else:
-                    shelf, book, page = lookup_ri_catalog(key)
-                try:
-                    rim = RefractiveIndexMaterial(shelf=shelf, book=book, page=page)
-                    n = rim.material.getRefractiveIndex(np.array([lambda_val]))
                     try:
-                        k = rim.material.getExtinctionCoefficient(np.array([lambda_val]))
-                    except Exception:
-                        k = 0.0
-                    epsilon = (n + 1j*k)**2
-                    materials_perm[key] = epsilon
-                    continue
-                except Exception:
-                    # Fallback : recherche locale dans le dossier data
-                    data_file = find_data_file(shelf, book, base_path)
-                    if data_file is not None:
-                        epsilon = get_refractive_index_epsilon_from_file(data_file, lambda_val)
-                        materials_perm[key] = epsilon
-                        continue
-                    txt_file = find_txt_file(mat, data_dir)
-                    if txt_file is not None:
-                        epsilon = get_refractive_index_epsilon_from_file(txt_file, lambda_val)
-                        materials_perm[key] = epsilon
-                        continue
-                    raise ValueError(f"No data file found for shelf '{shelf}' and book '{book}'")
-            except Exception as e:
-                raise ValueError(f"RefractiveIndex material for role '{key}' not found: {e}")
-        else:
-            # Tentative d'évaluer comme constante si c'est une expression numérique
-            if numeric_expr_pattern.match(mat):
-                try:
-                    const_val = eval(mat, {"__builtins__": {}}, {})
-                    materials_perm[key] = const_val
-                except Exception as e2:
-                    raise ValueError(f"Error evaluating numeric expression '{mat}': {e2}")
-            else:
-                # Sinon, on tente de trouver un fichier TXT correspondant
-                txt_file = find_txt_file(mat, data_dir)
-                if txt_file is not None:
-                    epsilon = get_refractive_index_epsilon_from_file(txt_file, lambda_val)
-                    materials_perm[key] = epsilon
+                        # Première tentative via la classe locale RefractiveIndexMaterial
+                        eps = get_epsilon_refractiveindex(shelf, book, page, lambda_val_nm)
+                    except (AssertionError, ValueError):
+                        # En cas d'échec, utiliser le fallback pour obtenir le chemin
+                        from refractiveindexINFO import RefractiveIndex
+                        RI_instance = RefractiveIndex()
+                        filename = RI_instance.getMaterialFilename(shelf, book, page)
+                        if not filename:
+                            raise ValueError(f"Unable to locate data file for shelf '{shelf}', book '{book}', page '{page}'.")
+                        eps = get_refractive_index_epsilon_from_file(filename, lambda_val_nm)
+                materials_perm[role] = eps
+
+        elif mtype == "standard":
+            # Le dict doit contenir la clé "material" qui est la chaîne du matériau standard.
+            mat_str = mat_dict.get("material", "").strip()
+            if mat_str.lower() in available_materials:
+                actual_mat = available_materials[mat_str.lower()]
+                mat_info = materials_data[actual_mat]
+                model = mat_info.get("model", "").lower()
+                if model == "expdata":
+                    n_val, k_val = get_n_k(actual_mat, lambda_val_nm, json_path)
+                    materials_perm[role] = (n_val + 1j*k_val)**2
+                elif "brendel" in model or "bormann" in model:
+                    try:
+                        params = get_material_params(actual_mat, materials_data)
+                    except KeyError as e:
+                        raise ValueError(f"Incomplete parameters for '{actual_mat}': {e}")
+                    eps_val = compute_permittivity(lambda_val_nm, *params[:-1], N=50)
+                    materials_perm[role] = eps_val
                 else:
-                    raise ValueError(f"Material '{mat}' not found in JSON, nor via RefractiveIndex, and is not a valid numeric expression.")
+                    raise ValueError(f"Unrecognized model '{model}' for material '{mat_str}'.")
+            else:
+                raise ValueError(f"Standard material '{mat_str}' not found in JSON.")
+
+        elif mtype == "custom":
+            expr = mat_dict.get("expression", "").strip()
+            try:
+                const_val = eval(expr, {"__builtins__": {}}, {})
+                materials_perm[role] = const_val
+            except Exception as e:
+                raise ValueError(f"Error evaluating custom expression '{expr}': {e}")
+        else:
+            raise ValueError(f"Invalid material type '{mtype}' for role '{role}'.")
 
     return materials_perm

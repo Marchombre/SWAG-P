@@ -1,0 +1,100 @@
+{
+  "MATERIALS_CONFIG": [
+    {
+      "key": "perm_env",
+      "material": {
+        "type": "RefractiveIndex",
+        "shelf": "other",
+        "book": "air",
+        "page": "Ciddor",
+        "data": "other/mixed gases/air/nk/Ciddor.yml"
+      }
+    },
+    {
+      "key": "perm_dielec",
+      "material": {
+        "type": "RefractiveIndex",
+        "shelf": "main",
+        "book": "Si",
+        "page": "Franta-200K",
+        "data": "main/Si/nk/Franta-200K.yml"
+      }
+    },
+    {
+      "key": "perm_sub",
+      "material": {
+        "type": "Standard",
+        "material": "ITO"
+      }
+    },
+    {
+      "key": "perm_reso",
+      "material": {
+        "type": "RefractiveIndex",
+        "shelf": "main",
+        "book": "Ag",
+        "page": "Jiang",
+        "data": "main/Ag/nk/Jiang.yml"
+      }
+    },
+    {
+      "key": "perm_metalliclayer",
+      "material": {
+        "type": "RefractiveIndex",
+        "shelf": "main",
+        "book": "Au",
+        "page": "Yakubovsky-53nm",
+        "data": "main/Au/nk/Yakubovsky-53nm.yml"
+      }
+    },
+    {
+      "key": "perm_accroche",
+      "material": {
+        "type": "Custom",
+        "expression": "1.2**2"
+      }
+    },
+    {
+      "key": "perm_func",
+      "material": {
+        "type": "None"
+      }
+    },
+    {
+      "key": "perm_mol",
+      "material": {
+        "type": "None"
+      }
+    }
+  ],
+  "RI_OVERRIDES": {
+    "perm_env": {
+      "type": "RefractiveIndex",
+      "shelf": "other",
+      "book": "air",
+      "page": "Ciddor",
+      "data": "other/mixed gases/air/nk/Ciddor.yml"
+    },
+    "perm_dielec": {
+      "type": "RefractiveIndex",
+      "shelf": "main",
+      "book": "Si",
+      "page": "Franta-200K",
+      "data": "main/Si/nk/Franta-200K.yml"
+    },
+    "perm_reso": {
+      "type": "RefractiveIndex",
+      "shelf": "main",
+      "book": "Ag",
+      "page": "Jiang",
+      "data": "main/Ag/nk/Jiang.yml"
+    },
+    "perm_metalliclayer": {
+      "type": "RefractiveIndex",
+      "shelf": "main",
+      "book": "Au",
+      "page": "Yakubovsky-53nm",
+      "data": "main/Au/nk/Yakubovsky-53nm.yml"
+    }
+  }
+}
