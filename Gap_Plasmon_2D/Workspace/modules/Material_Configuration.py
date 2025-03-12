@@ -187,7 +187,13 @@ def get_epsilon_refractiveindex(shelf, book, page, lambda_val_nm):
 
 
 
+
 def get_material_params(material_name, materials_data):
+    """
+    Extracts the parameters for a given material from the materials_data dictionary.
+    
+    Returns a tuple: (f0, omega_p, Gamma0, f, omega, gamma, sigma, model).
+    """
     if material_name in materials_data:
         material = materials_data[material_name]
         try:
@@ -201,24 +207,24 @@ def get_material_params(material_name, materials_data):
             model = material.get("model", "").lower()
             return f0, omega_p, Gamma0, f, omega, gamma, sigma, model
         except KeyError as e:
-            raise ValueError(f"Incomplete parameters for '{material_name}': {e}")
+            raise ValueError(f"The parameters for '{material_name}' are incomplete in the combined JSON file: {e}")
     else:
-        raise ValueError(f"Material '{material_name}' not found in JSON.")
+        raise ValueError(f"Material '{material_name}' not found in the combined JSON file.")
 
 
 
-
-def build_material_configuration_dynamic(df_config, lambda_val_nm, json_path, ri_overrides=None):
+def build_material_configuration_dynamic(df_config, lambda_val_nm, json_combined_path, ri_overrides=None):
     """
     Construit un dictionnaire de permittivités {role: ε} à partir d'une configuration (DataFrame).
 
     Chaque ligne du DataFrame doit contenir une configuration sous forme de dictionnaire,
     avec la clé "type" pouvant prendre l'une des valeurs : "None", "RefractiveIndex", "Standard" ou "Custom".
       - Pour "None" : retourne 1.0.
-      - Pour "RefractiveIndex" : le dictionnaire doit contenir "shelf", "book", "page" et idéalement "data"
-            (le chemin relatif vers le fichier YAML dans le catalogue). Si "data" est fourni, il sera utilisé
-            en priorité pour obtenir ε via get_refractive_index_epsilon_from_file. Sinon, on tente d'obtenir ε
-            via RefractiveIndexMaterial puis par fallback.
+      - Pour "RefractiveIndex" : le dictionnaire doit contenir "shelf", "book", "page" et éventuellement "data"
+            (le chemin relatif vers le fichier YAML dans le catalogue). Si "data" est fourni, il sera utilisé en priorité
+            pour localiser le fichier. Sinon, le fichier sera recherché via shelf, book et page via la méthode getMaterialFilename.
+            Une fois le fichier trouvé, le module refractiveindexINFO est utilisé pour extraire l'indice n et le coefficient k,
+            puis calculer ε = (n + 1j*k)² (avec un k=0 par défaut si non spécifié).
       - Pour "Standard" : le dictionnaire doit contenir "material" (la chaîne indiquant le matériau standard),
             et on récupère les données du JSON combiné en utilisant get_n_k (pour ExpData) ou compute_permittivity (pour Brendel–Bormann).
       - Pour "Custom" : le dictionnaire doit contenir "expression" (l'expression numérique à évaluer).
@@ -228,17 +234,20 @@ def build_material_configuration_dynamic(df_config, lambda_val_nm, json_path, ri
     if ri_overrides is None:
         ri_overrides = {}
 
-    with open(json_path, "r", encoding="utf-8") as f:
+    # Chargement des données de matériaux depuis le fichier JSON combiné
+    with open(json_combined_path, "r", encoding="utf-8") as f:
         materials_data = json.load(f)
-
+        
+    # Construction d'un dictionnaire de recherche insensible à la casse
     available_materials = {k.lower(): k for k in materials_data.keys()}
     materials_perm = {}
+
+    # Répertoire local pour les fichiers YAML (utilisé pour le champ "data")
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_dir_local = os.path.join(base_path, "data")
 
     for _, row in df_config.iterrows():
         role = row["key"]
-        # On s'attend à ce que row["material"] soit un dictionnaire
         mat_dict = row["material"] if isinstance(row["material"], dict) else {"type": str(row["material"]).strip()}
         mtype = mat_dict.get("type", "").lower()
 
@@ -246,53 +255,58 @@ def build_material_configuration_dynamic(df_config, lambda_val_nm, json_path, ri
             materials_perm[role] = 1.0
 
         elif mtype == "refractiveindex":
-            # Récupération des identifiants et du chemin 'data' provenant du selector
-            shelf = mat_dict.get("shelf", "")
-            book  = mat_dict.get("book", "")
-            page  = mat_dict.get("page", "")
-            data_field = mat_dict.get("data", "").strip()  # Ce champ doit être rempli dans le selector
+            shelf = mat_dict.get("shelf", "").strip()
+            book  = mat_dict.get("book", "").strip()
+            page  = mat_dict.get("page", "").strip()
+            data_field = mat_dict.get("data", "").strip()  # chemin relatif vers le fichier YAML
+
             if not shelf or not book or not page:
                 materials_perm[role] = 1.0
             else:
                 if data_field:
-                    # Utiliser directement le chemin fourni
-                    filename = os.path.join(data_dir, data_field)
-                    eps = get_refractive_index_epsilon_from_file(filename, lambda_val_nm)
+                    filename = os.path.join(data_dir_local, data_field)
+                    if not os.path.exists(filename):
+                        raise ValueError(f"Le fichier spécifié dans 'data' n'existe pas : {filename}")
                 else:
-                    try:
-                        # Première tentative via la classe locale RefractiveIndexMaterial
-                        eps = get_epsilon_refractiveindex(shelf, book, page, lambda_val_nm)
-                    except (AssertionError, ValueError):
-                        # En cas d'échec, utiliser le fallback pour obtenir le chemin
-                        from refractiveindexINFO import RefractiveIndex
-                        RI_instance = RefractiveIndex()
-                        filename = RI_instance.getMaterialFilename(shelf, book, page)
-                        if not filename:
-                            raise ValueError(f"Unable to locate data file for shelf '{shelf}', book '{book}', page '{page}'.")
-                        eps = get_refractive_index_epsilon_from_file(filename, lambda_val_nm)
+                    from refractiveindexINFO import RefractiveIndex
+                    RI_instance = RefractiveIndex()
+                    filename = RI_instance.getMaterialFilename(shelf, book, page)
+                    if not filename:
+                        raise ValueError(f"Impossible de trouver le fichier pour shelf '{shelf}', book '{book}', page '{page}'.")
+
+                from refractiveindexINFO import Material, NoExtinctionCoefficient
+                mat_instance = Material(filename)
+                try:
+                    n = mat_instance.getRefractiveIndex(lambda_val_nm)
+                    k = mat_instance.getExtinctionCoefficient(lambda_val_nm)
+                except NoExtinctionCoefficient:
+                    # Par défaut, on considère k = 0 si le coefficient d'extinction n'est pas spécifié
+                    n = mat_instance.getRefractiveIndex(lambda_val_nm)
+                    k = 0.0
+                except Exception as e:
+                    raise ValueError(f"Erreur lors de la récupération des indices pour le fichier {filename} : {e}")
+                eps = (n + 1j * k) ** 2
                 materials_perm[role] = eps
 
         elif mtype == "standard":
-            # Le dict doit contenir la clé "material" qui est la chaîne du matériau standard.
             mat_str = mat_dict.get("material", "").strip()
-            if mat_str.lower() in available_materials:
-                actual_mat = available_materials[mat_str.lower()]
-                mat_info = materials_data[actual_mat]
-                model = mat_info.get("model", "").lower()
+            mat_lower = mat_str.lower()
+            if mat_lower in available_materials:
+                actual_mat = available_materials[mat_lower]
+                material = materials_data[actual_mat]
+                model = material.get("model", "").lower()
                 if model == "expdata":
-                    n_val, k_val = get_n_k(actual_mat, lambda_val_nm, json_path)
-                    materials_perm[role] = (n_val + 1j*k_val)**2
-                elif "brendel" in model or "bormann" in model:
-                    try:
-                        params = get_material_params(actual_mat, materials_data)
-                    except KeyError as e:
-                        raise ValueError(f"Incomplete parameters for '{actual_mat}': {e}")
-                    eps_val = compute_permittivity(lambda_val_nm, *params[:-1], N=50)
-                    materials_perm[role] = eps_val
+                    n_val, k_val = get_n_k(actual_mat, lambda_val_nm, json_combined_path)
+                    materials_perm[role] = (n_val + 1j * k_val) ** 2
                 else:
-                    raise ValueError(f"Unrecognized model '{model}' for material '{mat_str}'.")
+                    try:
+                        f0, omega_p, Gamma0, f, omega, gamma, sigma, _ = get_material_params(actual_mat, materials_data)
+                        perm = compute_permittivity(lambda_val_nm, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=50)
+                        materials_perm[role] = perm
+                    except KeyError as e:
+                        raise ValueError(f"Les paramètres pour '{actual_mat}' sont incomplets : {e}")
             else:
-                raise ValueError(f"Standard material '{mat_str}' not found in JSON.")
+                raise ValueError(f"Le matériau standard '{mat_str}' n'a pas été trouvé dans le fichier JSON.")
 
         elif mtype == "custom":
             expr = mat_dict.get("expression", "").strip()
@@ -300,8 +314,8 @@ def build_material_configuration_dynamic(df_config, lambda_val_nm, json_path, ri
                 const_val = eval(expr, {"__builtins__": {}}, {})
                 materials_perm[role] = const_val
             except Exception as e:
-                raise ValueError(f"Error evaluating custom expression '{expr}': {e}")
+                raise ValueError(f"Erreur lors de l'évaluation de l'expression personnalisée '{expr}': {e}")
         else:
-            raise ValueError(f"Invalid material type '{mtype}' for role '{role}'.")
+            raise ValueError(f"Type de matériau invalide '{mtype}' pour le rôle '{role}'.")
 
     return materials_perm

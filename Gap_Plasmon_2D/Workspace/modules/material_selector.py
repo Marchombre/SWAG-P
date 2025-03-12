@@ -50,7 +50,7 @@ workspace_dir = os.path.abspath(os.path.join(script_dir, ".."))
 
 catalog_path = os.path.join(workspace_dir, "catalog_nk.yml")
 data_dir = os.path.join(workspace_dir, "data")
-json_combined_path = os.path.join(data_dir, "combined_expdata.json")
+json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
 DEFAULT_ROLES = [
     "perm_env",
@@ -82,24 +82,63 @@ def load_catalog_full(catalog_file):
 # 2) LISTER LES MATERIAUX STANDARD (JSON + .txt)
 ##############################################################################
 
-def get_standard_materials(json_path, data_directory):
+def load_combined_materials(json_combined_path):
     """
-    Parcourt le JSON combiné (ExpData, Brendel-Bormann) + fichiers .txt
-    et renvoie la liste triée de tous les noms.
+    Loads the combined JSON file containing ExpData and BrendelBormann data.
+    Returns a dictionary of materials.
+    """
+    with open(json_combined_path, 'r') as f:
+        materials_data = json.load(f)
+    return materials_data
+
+def get_standard_materials(json_combined_path, data_directory):
+    """
+    Parcourt le JSON combiné (ExpData, Brendel-Bormann) et le répertoire data_directory
+    pour en extraire la liste de tous les noms de matériaux disponibles.
+
+    1) Charge le JSON combiné (via load_combined_materials) et récupère la liste de ses clés.
+    2) Parcourt le dossier data_directory pour y chercher tous les fichiers .txt.
+    3) Retourne la liste triée des noms de matériaux trouvés (sans doublons).
+
+    Parameters
+    ----------
+    json_combined_path : str
+        Chemin vers le fichier JSON combiné contenant ExpData/BrendelBormann.
+    data_directory : str
+        Chemin vers le dossier contenant d'éventuels fichiers .txt
+
+    Returns
+    -------
+    list
+        Liste triée des noms de matériaux (str).
     """
     found = set()
-    if os.path.isfile(json_path):
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        found.update(data.keys())
 
-    for root, dirs, files in os.walk(data_directory):
-        for fn in files:
-            if fn.lower().endswith(".txt"):
-                name = os.path.splitext(fn)[0]
-                found.add(name)
+    # 1) Lecture du JSON via load_combined_materials
+    if os.path.isfile(json_combined_path):
+        try:
+            materials_data = load_combined_materials(json_combined_path)
+            # Les clés du dictionnaire JSON représentent les noms de matériaux
+            found.update(materials_data.keys())
+        except Exception as e:
+            print(f"[AVERTISSEMENT] Impossible de lire/parsing le JSON '{json_combined_path}': {e}")
+    else:
+        print(f"[AVERTISSEMENT] Le fichier JSON '{json_combined_path}' est introuvable.")
 
+    # 2) Recherche des fichiers .txt dans data_directory
+    if os.path.isdir(data_directory):
+        for root, dirs, files in os.walk(data_directory):
+            for fn in files:
+                if fn.lower().endswith(".txt"):
+                    # On ajoute le nom du fichier (sans extension) à l'ensemble found
+                    name = os.path.splitext(fn)[0]
+                    found.add(name)
+    else:
+        print(f"[AVERTISSEMENT] Le dossier data '{data_directory}' n’existe pas ou n’est pas un répertoire.")
+
+    # 3) Retourne la liste triée
     return sorted(found)
+
 
 
 ##############################################################################

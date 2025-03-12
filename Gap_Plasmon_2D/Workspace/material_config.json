@@ -13,51 +13,44 @@
     {
       "key": "perm_dielec",
       "material": {
-        "type": "RefractiveIndex",
-        "shelf": "main",
-        "book": "Si",
-        "page": "Franta-200K",
-        "data": "main/Si/nk/Franta-200K.yml"
+        "type": "Standard",
+        "material": "Water"
       }
     },
     {
       "key": "perm_sub",
       "material": {
-        "type": "Standard",
-        "material": "ITO"
+        "type": "RefractiveIndex",
+        "shelf": "popular_glass",
+        "book": "BK7",
+        "page": "SCHOTT",
+        "data": "specs/schott/optical/N-BK7.yml"
       }
     },
     {
       "key": "perm_reso",
       "material": {
-        "type": "RefractiveIndex",
-        "shelf": "main",
-        "book": "Ag",
-        "page": "Jiang",
-        "data": "main/Ag/nk/Jiang.yml"
+        "type": "Standard",
+        "material": "Ag"
       }
     },
     {
       "key": "perm_metalliclayer",
       "material": {
-        "type": "RefractiveIndex",
-        "shelf": "main",
-        "book": "Au",
-        "page": "Yakubovsky-53nm",
-        "data": "main/Au/nk/Yakubovsky-53nm.yml"
+        "type": "None"
       }
     },
     {
       "key": "perm_accroche",
       "material": {
-        "type": "Custom",
-        "expression": "1.2**2"
+        "type": "None"
       }
     },
     {
       "key": "perm_func",
       "material": {
-        "type": "None"
+        "type": "Custom",
+        "expression": "1.22**2"
       }
     },
     {
@@ -75,26 +68,12 @@
       "page": "Ciddor",
       "data": "other/mixed gases/air/nk/Ciddor.yml"
     },
-    "perm_dielec": {
+    "perm_sub": {
       "type": "RefractiveIndex",
-      "shelf": "main",
-      "book": "Si",
-      "page": "Franta-200K",
-      "data": "main/Si/nk/Franta-200K.yml"
-    },
-    "perm_reso": {
-      "type": "RefractiveIndex",
-      "shelf": "main",
-      "book": "Ag",
-      "page": "Jiang",
-      "data": "main/Ag/nk/Jiang.yml"
-    },
-    "perm_metalliclayer": {
-      "type": "RefractiveIndex",
-      "shelf": "main",
-      "book": "Au",
-      "page": "Yakubovsky-53nm",
-      "data": "main/Au/nk/Yakubovsky-53nm.yml"
+      "shelf": "popular_glass",
+      "book": "BK7",
+      "page": "SCHOTT",
+      "data": "specs/schott/optical/N-BK7.yml"
     }
   }
 }
