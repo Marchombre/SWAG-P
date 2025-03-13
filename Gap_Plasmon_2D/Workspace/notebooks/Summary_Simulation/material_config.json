@@ -1,7 +1,7 @@
 {
   "ALL_CONFIGS": [
     {
-      "config_name": "ny",
+      "config_name": "1",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
@@ -24,7 +24,11 @@
         {
           "key": "perm_reso",
           "material": {
-            "type": "None"
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Johnson",
+            "data": "main/Ag/nk/Johnson.yml"
           }
         },
         {
@@ -52,22 +56,31 @@
           }
         }
       ],
-      "RI_OVERRIDES": {}
+      "RI_OVERRIDES": {
+        "perm_reso": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Ag",
+          "page": "Johnson",
+          "data": "main/Ag/nk/Johnson.yml"
+        }
+      }
     },
     {
-      "config_name": "rthy",
+      "config_name": "2",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
           "material": {
-            "type": "Custom",
-            "expression": "1"
+            "type": "Standard",
+            "material": "Ag"
           }
         },
         {
           "key": "perm_dielec",
           "material": {
-            "type": "None"
+            "type": "Custom",
+            "expression": "2"
           }
         },
         {

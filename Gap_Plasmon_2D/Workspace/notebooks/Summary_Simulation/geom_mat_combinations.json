@@ -1,53 +1,58 @@
 {
   "ALL_COMBINED_CONFIGS": [
     {
-      "config_name": "(-huy - ny",
+      "config_name": "Structure 1 - Structure 1",
       "geometry": {
-        "config_name": "(-huy",
+        "config_name": "Structure 1",
         "geometry": {
           "thick_super": 200.0,
           "width_reso": 30.0,
           "thick_reso": 30.0,
           "thick_gap": 3.0,
-          "thick_func": 1.0,
-          "thick_mol": 2.0,
+          "thick_func": 0.0,
+          "thick_mol": 0.0,
           "thick_metalliclayer": 10.0,
           "thick_sub": 200.0,
-          "thick_accroche": 1.0,
+          "thick_accroche": 0.0,
           "period": 100.2153
         }
       },
       "material": {
-        "config_name": "ny",
+        "config_name": "Structure 1",
         "MATERIALS_CONFIG": [
           {
             "key": "perm_env",
             "material": {
-              "type": "None"
+              "type": "Standard",
+              "material": "Air"
             }
           },
           {
             "key": "perm_dielec",
             "material": {
-              "type": "None"
+              "type": "Custom",
+              "expression": "1.45"
             }
           },
           {
             "key": "perm_sub",
             "material": {
-              "type": "None"
+              "type": "Standard",
+              "material": "ITO"
             }
           },
           {
             "key": "perm_reso",
             "material": {
-              "type": "None"
+              "type": "Standard",
+              "material": "Ag"
             }
           },
           {
             "key": "perm_metalliclayer",
             "material": {
-              "type": "None"
+              "type": "Standard",
+              "material": "Ag"
             }
           },
           {
@@ -73,60 +78,65 @@
       }
     },
     {
-      "config_name": "u_jk - rthy",
+      "config_name": "Structure 2 - Structure 2",
       "geometry": {
-        "config_name": "u_jk",
+        "config_name": "Structure 2",
         "geometry": {
           "thick_super": 200.0,
           "width_reso": 30.0,
           "thick_reso": 30.0,
           "thick_gap": 3.0,
-          "thick_func": 1.0,
-          "thick_mol": 2.0,
+          "thick_func": 0.0,
+          "thick_mol": 0.0,
           "thick_metalliclayer": 10.0,
           "thick_sub": 200.0,
-          "thick_accroche": 1.0,
+          "thick_accroche": 0.0,
           "period": 100.2153
         }
       },
       "material": {
-        "config_name": "rthy",
+        "config_name": "Structure 2",
         "MATERIALS_CONFIG": [
           {
             "key": "perm_env",
             "material": {
-              "type": "Custom",
-              "expression": "1"
+              "type": "Standard",
+              "material": "Air"
             }
           },
           {
             "key": "perm_dielec",
             "material": {
-              "type": "None"
+              "type": "Standard",
+              "material": "Ag"
             }
           },
           {
             "key": "perm_sub",
             "material": {
-              "type": "None"
+              "type": "Custom",
+              "expression": "1.5"
             }
           },
           {
             "key": "perm_reso",
             "material": {
-              "type": "None"
+              "type": "Standard",
+              "material": "Ag"
             }
           },
           {
             "key": "perm_metalliclayer",
             "material": {
-              "type": "None"
+              "type": "Standard",
+              "material": "Au"
             }
           },
           {
             "key": "perm_accroche",
             "material": {
-              "type": "None"
+              "type": "Standard",
+              "material": "Aluminium"
             }
           },
           {

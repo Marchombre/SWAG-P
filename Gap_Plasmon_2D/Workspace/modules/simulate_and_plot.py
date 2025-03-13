@@ -3,7 +3,6 @@
 
 import os
 import matplotlib.pyplot as plt
-import numpy as np
 from datetime import datetime
 
 from simulate_reflectance import simulate_reflectance_all_combos

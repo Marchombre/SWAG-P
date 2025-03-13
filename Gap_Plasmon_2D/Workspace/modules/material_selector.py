@@ -228,7 +228,6 @@ class MaterialRoleWidget:
 class MaterialSelectorTabbedNotebook:
     def __init__(self, roles):
         # Détermination des chemins (adaptés selon votre arborescence)
-        # Si le script est lancé dans un notebook, __file__ n'est pas défini, on utilise le répertoire courant
         script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
         workspace_dir = os.path.abspath(os.path.join(script_dir, ".."))
         catalog_path = os.path.join(workspace_dir, "catalog_nk.yml")
@@ -256,11 +255,24 @@ class MaterialSelectorTabbedNotebook:
             placeholder="Saisir le nom de la config"
         )
 
-        # Boutons
+        # Boutons pour ajouter et sauvegarder la configuration
         self.add_config_btn = widgets.Button(description="Add config")
         self.save_quit_btn = widgets.Button(description="Save & Quit")
         self.add_config_btn.on_click(self.on_add_config)
         self.save_quit_btn.on_click(self.on_save_quit)
+
+        # Nouveaux widgets pour charger, mettre à jour et supprimer une config enregistrée
+        self.config_dropdown = widgets.Dropdown(
+            options=[],
+            description="Saved Configs:",
+            style={'description_width': 'initial'}
+        )
+        self.load_config_btn = widgets.Button(description="Load Config")
+        self.update_config_btn = widgets.Button(description="Update Config")
+        self.delete_config_btn = widgets.Button(description="Delete Config")
+        self.load_config_btn.on_click(self.on_load_config)
+        self.update_config_btn.on_click(self.on_update_config)
+        self.delete_config_btn.on_click(self.on_delete_config)
 
         # Zone de sortie pour messages
         self.output = widgets.Output()
@@ -269,10 +281,15 @@ class MaterialSelectorTabbedNotebook:
             self.tab,
             self.config_name_text,
             widgets.HBox([self.add_config_btn, self.save_quit_btn]),
+            widgets.HBox([self.config_dropdown, self.load_config_btn, self.update_config_btn, self.delete_config_btn]),
             self.output
         ])
 
         self.all_configs = []
+
+    def update_config_dropdown(self):
+        options = [(cfg["config_name"], cfg) for cfg in self.all_configs]
+        self.config_dropdown.options = options if options else [("None", None)]
 
     def on_add_config(self, b):
         config_list = []
@@ -282,21 +299,18 @@ class MaterialSelectorTabbedNotebook:
             config_list.append({"key": role, "material": mat_info})
             if mat_info.get("type") == "RefractiveIndex":
                 ri_overrides[role] = mat_info
-
         config_name = self.config_name_text.value.strip()
         if not config_name:
             config_name = f"Config_{len(self.all_configs)+1}"
-
         config_dict = {
             "config_name": config_name,
             "MATERIALS_CONFIG": config_list,
             "RI_OVERRIDES": ri_overrides
         }
-
         self.all_configs.append(config_dict)
+        self.update_config_dropdown()
         with self.output:
             print(f"La configuration '{config_name}' a été ajoutée. Vous pouvez en ajouter d'autres ou cliquer sur Save & Quit.")
-        # Réinitialiser les champs
         self.config_name_text.value = ""
         for widget_role in self.role_widgets.values():
             widget_role.mode_dropdown.value = "None"
@@ -307,24 +321,86 @@ class MaterialSelectorTabbedNotebook:
             with self.output:
                 print("Aucune configuration n'a été ajoutée.")
             return
-
         final_dict = {"ALL_CONFIGS": self.all_configs}
-        # Construction du chemin de sauvegarde (adapté à votre organisation)
         module_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
         workspace_dir = os.path.dirname(module_dir)
         notebooks_dir = os.path.join(workspace_dir, "notebooks")
         summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
         if not os.path.exists(summary_dir):
             os.makedirs(summary_dir)
-
         config_file = os.path.join(summary_dir, "material_config.json")
         with open(config_file, "w", encoding="utf-8") as f:
             json.dump(final_dict, f, indent=2)
         with self.output:
             print(f"Toutes les configurations ont été enregistrées dans :\n{config_file}")
-        # Désactivation des boutons pour éviter de modifier après sauvegarde
         self.add_config_btn.disabled = True
         self.save_quit_btn.disabled = True
+        self.load_config_btn.disabled = True
+        self.update_config_btn.disabled = True
+        self.delete_config_btn.disabled = True
+
+    def on_load_config(self, b):
+        selected = self.config_dropdown.value
+        if selected is None:
+            with self.output:
+                print("Aucune configuration sélectionnée pour chargement.")
+            return
+        for entry in selected["MATERIALS_CONFIG"]:
+            role = entry["key"]
+            mat_config = entry["material"]
+            if role in self.role_widgets:
+                widget_role = self.role_widgets[role]
+                widget_role.mode_dropdown.value = mat_config.get("type", "None")
+                if mat_config.get("type", "").lower() == "custom":
+                    widget_role.custom_text.value = mat_config.get("expression", "")
+                elif mat_config.get("type", "").lower() == "standard":
+                    widget_role.standard_dropdown.value = mat_config.get("material", "")
+                elif mat_config.get("type", "").lower() == "refractiveindex":
+                    # Si vous avez une méthode pour charger une sélection dans RefractiveIndexArboWidget, appelez-la ici
+                    if hasattr(widget_role.ri_widget, "set_selection"):
+                        selection = {
+                            "shelf": mat_config.get("shelf", ""),
+                            "book": mat_config.get("book", ""),
+                            "page": mat_config.get("page", ""),
+                            "data": mat_config.get("data", "")
+                        }
+                        widget_role.ri_widget.set_selection(selection)
+        self.config_name_text.value = selected["config_name"]
+        with self.output:
+            print(f"Configuration '{selected['config_name']}' chargée dans les onglets.")
+
+    def on_update_config(self, b):
+        selected = self.config_dropdown.value
+        if selected is None:
+            with self.output:
+                print("Aucune configuration sélectionnée pour mise à jour.")
+            return
+        updated_config_list = []
+        ri_overrides = {}
+        for role, widget_role in self.role_widgets.items():
+            mat_info = widget_role.get_config()
+            updated_config_list.append({"key": role, "material": mat_info})
+            if mat_info.get("type") == "RefractiveIndex":
+                ri_overrides[role] = mat_info
+        for cfg in self.all_configs:
+            if cfg["config_name"] == selected["config_name"]:
+                cfg["MATERIALS_CONFIG"] = updated_config_list
+                cfg["RI_OVERRIDES"] = ri_overrides
+                break
+        self.update_config_dropdown()
+        with self.output:
+            print(f"Configuration '{selected['config_name']}' mise à jour.")
+
+    def on_delete_config(self, b):
+        selected = self.config_dropdown.value
+        if selected is None:
+            with self.output:
+                print("Aucune configuration sélectionnée pour suppression.")
+            return
+        self.all_configs = [cfg for cfg in self.all_configs if cfg["config_name"] != selected["config_name"]]
+        self.update_config_dropdown()
+        with self.output:
+            print(f"Configuration '{selected['config_name']}' supprimée.")
 
     def display(self):
         display(self.container)
@@ -343,3 +419,4 @@ DEFAULT_ROLES = [
 
 # --- Instanciation et affichage ---
 selector = MaterialSelectorTabbedNotebook(DEFAULT_ROLES)
+
