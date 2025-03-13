@@ -1,90 +1,41 @@
 {
   "ALL_CONFIGS": [
     {
-      "config_name": "jt",
+      "config_name": "Structure 1",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
           "material": {
-            "type": "None"
+            "type": "Standard",
+            "material": "Air"
           }
         },
         {
           "key": "perm_dielec",
           "material": {
-            "type": "None"
+            "type": "Custom",
+            "expression": "1.45"
           }
         },
         {
           "key": "perm_sub",
           "material": {
-            "type": "None"
+            "type": "Standard",
+            "material": "ITO"
           }
         },
         {
           "key": "perm_reso",
           "material": {
-            "type": "None"
+            "type": "Standard",
+            "material": "Ag"
           }
         },
         {
           "key": "perm_metalliclayer",
           "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "lik",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_dielec",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "None"
+            "type": "Standard",
+            "material": "Au"
           }
         },
         {

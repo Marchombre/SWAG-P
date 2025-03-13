@@ -1,47 +1,17 @@
 {
   "ALL_GEOMETRY_CONFIGS": [
     {
-      "config_name": "trh",
+      "config_name": "Structure 1",
       "geometry": {
         "thick_super": 200.0,
         "width_reso": 30.0,
         "thick_reso": 30.0,
         "thick_gap": 3.0,
-        "thick_func": 1.0,
-        "thick_mol": 2.0,
+        "thick_func": 0.0,
+        "thick_mol": 0.0,
         "thick_metalliclayer": 10.0,
         "thick_sub": 200.0,
-        "thick_accroche": 1.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "trhtr",
-      "geometry": {
-        "thick_super": 200.0,
-        "width_reso": 30.0,
-        "thick_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_func": 1.0,
-        "thick_mol": 2.0,
-        "thick_metalliclayer": 10.0,
-        "thick_sub": 200.0,
-        "thick_accroche": 1.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "thr",
-      "geometry": {
-        "thick_super": 200.0,
-        "width_reso": 30.0,
-        "thick_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_func": 1.0,
-        "thick_mol": 2.0,
-        "thick_metalliclayer": 10.0,
-        "thick_sub": 200.0,
-        "thick_accroche": 1.0,
+        "thick_accroche": 0.0,
         "period": 100.2153
       }
     }
