@@ -1,5 +1,5 @@
 Simulation Summary - All Geometry/Material Combos
-Timestamp: 20250313_155805
+Timestamp: 20250313_171326
 Wavelength range (nm): [ 450.          452.7638191   455.52763819  458.29145729  461.05527638
   463.81909548  466.58291457  469.34673367  472.11055276  474.87437186
   477.63819095  480.40201005  483.16582915  485.92964824  488.69346734
@@ -41,29 +41,29 @@ Wavelength range (nm): [ 450.          452.7638191   455.52763819  458.29145729 
   975.12562814  977.88944724  980.65326633  983.41708543  986.18090452
   988.94472362  991.70854271  994.47236181  997.2361809  1000.        ]
 Wave parameters: {'angle': 0, 'polarization': 1, 'wavelength': np.float64(1000.0)}
-Number of RCWA modes: 30
+Number of RCWA modes: 10
 
 ---- COMBINATIONS ----
 
-Combo name: (-huy - ny
+Combo name: Structure 1 - Structure 1
 Geometry:
-{'thick_super': 200.0, 'width_reso': 30.0, 'thick_reso': 30.0, 'thick_gap': 3.0, 'thick_func': 1.0, 'thick_mol': 2.0, 'thick_metalliclayer': 10.0, 'thick_sub': 200.0, 'thick_accroche': 1.0, 'period': 100.2153}
+{'thick_super': 200.0, 'width_reso': 30.0, 'thick_reso': 30.0, 'thick_gap': 3.0, 'thick_func': 0.0, 'thick_mol': 0.0, 'thick_metalliclayer': 10.0, 'thick_sub': 200.0, 'thick_accroche': 0.0, 'period': 100.2153}
 Material config (df_config):
-[{'key': 'perm_env', 'material': {'type': 'None'}}, {'key': 'perm_dielec', 'material': {'type': 'None'}}, {'key': 'perm_sub', 'material': {'type': 'None'}}, {'key': 'perm_reso', 'material': {'type': 'None'}}, {'key': 'perm_metalliclayer', 'material': {'type': 'None'}}, {'key': 'perm_accroche', 'material': {'type': 'None'}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}]
+[{'key': 'perm_env', 'material': {'type': 'None'}}, {'key': 'perm_dielec', 'material': {'type': 'Custom', 'expression': '1.45'}}, {'key': 'perm_sub', 'material': {'type': 'Standard', 'material': 'ITO'}}, {'key': 'perm_reso', 'material': {'type': 'Standard', 'material': 'Silver'}}, {'key': 'perm_metalliclayer', 'material': {'type': 'Standard', 'material': 'Gold'}}, {'key': 'perm_accroche', 'material': {'type': 'None'}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}]
 RI Overrides: {}
 First few reflectance points (Rup, Rdown):
-  λ=450.0 nm -> Rup=1.800262280758952e-32, Rdown=1.8002622807589528e-32
-  λ=452.7638190954774 nm -> Rup=4.520348142312536e-32, Rdown=4.520348142312536e-32
-  λ=455.52763819095475 nm -> Rup=2.3941138462943482e-33, Rdown=2.394113846294348e-33
+  λ=450.0 nm -> Rup=0.2570637043293928, Rdown=0.22610503800184684
+  λ=452.7638190954774 nm -> Rup=0.2687450756622169, Rdown=0.2390189248348868
+  λ=455.52763819095475 nm -> Rup=0.2808552005341534, Rdown=0.25255736468018064
 ----------------------------------------
-Combo name: u_jk - rthy
+Combo name: Structure 2 - Structure 2
 Geometry:
-{'thick_super': 200.0, 'width_reso': 30.0, 'thick_reso': 30.0, 'thick_gap': 3.0, 'thick_func': 1.0, 'thick_mol': 2.0, 'thick_metalliclayer': 10.0, 'thick_sub': 200.0, 'thick_accroche': 1.0, 'period': 100.2153}
+{'thick_super': 200.0, 'width_reso': 30.0, 'thick_reso': 30.0, 'thick_gap': 3.0, 'thick_func': 0.0, 'thick_mol': 0.0, 'thick_metalliclayer': 10.0, 'thick_sub': 200.0, 'thick_accroche': 0.0, 'period': 100.2153}
 Material config (df_config):
-[{'key': 'perm_env', 'material': {'type': 'Custom', 'expression': '1'}}, {'key': 'perm_dielec', 'material': {'type': 'None'}}, {'key': 'perm_sub', 'material': {'type': 'None'}}, {'key': 'perm_reso', 'material': {'type': 'None'}}, {'key': 'perm_metalliclayer', 'material': {'type': 'None'}}, {'key': 'perm_accroche', 'material': {'type': 'None'}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}]
+[{'key': 'perm_env', 'material': {'type': 'None'}}, {'key': 'perm_dielec', 'material': {'type': 'Custom', 'expression': '1.45'}}, {'key': 'perm_sub', 'material': {'type': 'Custom', 'expression': '1.5'}}, {'key': 'perm_reso', 'material': {'type': 'Standard', 'material': 'Ag'}}, {'key': 'perm_metalliclayer', 'material': {'type': 'Standard', 'material': 'Au'}}, {'key': 'perm_accroche', 'material': {'type': 'Standard', 'material': 'Al'}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}]
 RI Overrides: {}
 First few reflectance points (Rup, Rdown):
-  λ=450.0 nm -> Rup=1.800262280758952e-32, Rdown=1.8002622807589528e-32
-  λ=452.7638190954774 nm -> Rup=4.520348142312536e-32, Rdown=4.520348142312536e-32
-  λ=455.52763819095475 nm -> Rup=2.3941138462943482e-33, Rdown=2.394113846294348e-33
+  λ=450.0 nm -> Rup=0.3275215282427582, Rdown=0.39364985158812893
+  λ=452.7638190954774 nm -> Rup=0.3386568911526551, Rdown=0.4070672362645103
+  λ=455.52763819095475 nm -> Rup=0.35004848580504816, Rdown=0.42104216911081727
 ----------------------------------------

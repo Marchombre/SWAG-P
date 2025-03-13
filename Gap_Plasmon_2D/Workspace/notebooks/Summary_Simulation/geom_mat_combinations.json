@@ -1,58 +1,53 @@
 {
   "ALL_COMBINED_CONFIGS": [
     {
-      "config_name": "Structure 1 - Structure 1",
+      "config_name": "trh - kiu",
       "geometry": {
-        "config_name": "Structure 1",
+        "config_name": "trh",
         "geometry": {
           "thick_super": 200.0,
           "width_reso": 30.0,
           "thick_reso": 30.0,
           "thick_gap": 3.0,
-          "thick_func": 0.0,
-          "thick_mol": 0.0,
+          "thick_func": 1.0,
+          "thick_mol": 2.0,
           "thick_metalliclayer": 10.0,
           "thick_sub": 200.0,
-          "thick_accroche": 0.0,
+          "thick_accroche": 1.0,
           "period": 100.2153
         }
       },
       "material": {
-        "config_name": "Structure 1",
+        "config_name": "kiu",
         "MATERIALS_CONFIG": [
           {
             "key": "perm_env",
             "material": {
-              "type": "Standard",
-              "material": "Air"
+              "type": "None"
             }
           },
           {
             "key": "perm_dielec",
             "material": {
-              "type": "Custom",
-              "expression": "1.45"
+              "type": "None"
             }
           },
           {
             "key": "perm_sub",
             "material": {
-              "type": "Standard",
-              "material": "ITO"
+              "type": "None"
             }
           },
           {
             "key": "perm_reso",
             "material": {
-              "type": "Standard",
-              "material": "Ag"
+              "type": "None"
             }
           },
           {
             "key": "perm_metalliclayer",
             "material": {
-              "type": "Standard",
-              "material": "Ag"
+              "type": "None"
             }
           },
           {
@@ -78,65 +73,132 @@
       }
     },
     {
-      "config_name": "Structure 2 - Structure 2",
+      "config_name": "trhtr - k_y\u00e8",
       "geometry": {
-        "config_name": "Structure 2",
+        "config_name": "trhtr",
         "geometry": {
           "thick_super": 200.0,
           "width_reso": 30.0,
           "thick_reso": 30.0,
           "thick_gap": 3.0,
-          "thick_func": 0.0,
-          "thick_mol": 0.0,
+          "thick_func": 1.0,
+          "thick_mol": 2.0,
           "thick_metalliclayer": 10.0,
           "thick_sub": 200.0,
-          "thick_accroche": 0.0,
+          "thick_accroche": 1.0,
           "period": 100.2153
         }
       },
       "material": {
-        "config_name": "Structure 2",
+        "config_name": "k_y\u00e8",
         "MATERIALS_CONFIG": [
           {
             "key": "perm_env",
             "material": {
-              "type": "Standard",
-              "material": "Air"
+              "type": "Custom",
+              "expression": "4"
             }
           },
           {
             "key": "perm_dielec",
             "material": {
-              "type": "Standard",
-              "material": "Ag"
+              "type": "None"
             }
           },
           {
             "key": "perm_sub",
             "material": {
-              "type": "Custom",
-              "expression": "1.5"
+              "type": "None"
             }
           },
           {
             "key": "perm_reso",
             "material": {
-              "type": "Standard",
-              "material": "Ag"
+              "type": "None"
             }
           },
           {
             "key": "perm_metalliclayer",
             "material": {
-              "type": "Standard",
-              "material": "Au"
+              "type": "None"
             }
           },
           {
             "key": "perm_accroche",
             "material": {
-              "type": "Standard",
-              "material": "Aluminium"
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_func",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_mol",
+            "material": {
+              "type": "None"
+            }
+          }
+        ],
+        "RI_OVERRIDES": {}
+      }
+    },
+    {
+      "config_name": "trh - kiu",
+      "geometry": {
+        "config_name": "trh",
+        "geometry": {
+          "thick_super": 200.0,
+          "width_reso": 30.0,
+          "thick_reso": 30.0,
+          "thick_gap": 3.0,
+          "thick_func": 1.0,
+          "thick_mol": 2.0,
+          "thick_metalliclayer": 10.0,
+          "thick_sub": 200.0,
+          "thick_accroche": 1.0,
+          "period": 100.2153
+        }
+      },
+      "material": {
+        "config_name": "kiu",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_dielec",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "None"
             }
           },
           {

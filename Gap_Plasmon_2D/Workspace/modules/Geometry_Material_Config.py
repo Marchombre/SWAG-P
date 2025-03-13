@@ -71,15 +71,17 @@ def create_geometry_material_widget():
             for i in range(n_rows):
                 geom_cfg = geom_dropdowns[i].value
                 mat_cfg = mat_dropdowns[i].value
-                if geom_cfg is not None and mat_cfg is not None:
-                    # Nom combiné
-                    combined_name = f"{geom_cfg['config_name']} - {mat_cfg['config_name']}"
-                    combined = {
-                        "config_name": combined_name,
-                        "geometry": geom_cfg,      # dict: {"config_name":..., "geometry":{...}}
-                        "material": mat_cfg        # dict: {"config_name":..., "MATERIALS_CONFIG":..., ...}
-                    }
-                    combined_configs.append(combined)
+                # Si l'une des cellules est None, on ignore la ligne
+                if geom_cfg is None or mat_cfg is None:
+                    continue
+                # Sinon, on crée la combinaison
+                combined_name = f"{geom_cfg['config_name']} - {mat_cfg['config_name']}"
+                combined = {
+                    "config_name": combined_name,
+                    "geometry": geom_cfg,      # dict: {"config_name":..., "geometry":{...}}
+                    "material": mat_cfg        # dict: {"config_name":..., "MATERIALS_CONFIG":..., ...}
+                }
+                combined_configs.append(combined)
 
             if combined_configs:
                 print("Combined Geometry-Material Configurations:")
@@ -89,7 +91,7 @@ def create_geometry_material_widget():
                     print("  material:", cfg["material"]["config_name"])
                     print("-" * 40)
                 
-                # On enregistre dans geom_mat_combinations.json
+                # Enregistrement dans geom_mat_combinations.json
                 module_dir = os.path.dirname(os.path.abspath(__file__))
                 workspace_dir = os.path.dirname(module_dir)
                 notebooks_dir = os.path.join(workspace_dir, "notebooks")
@@ -110,3 +112,4 @@ def create_geometry_material_widget():
     # 6) Assemblage final
     grid_widget = widgets.VBox(rows + [combine_button, output_area])
     return grid_widget
+

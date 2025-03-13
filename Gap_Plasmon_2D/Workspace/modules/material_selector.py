@@ -333,11 +333,12 @@ class MaterialSelectorTabbedNotebook:
             json.dump(final_dict, f, indent=2)
         with self.output:
             print(f"Toutes les configurations ont été enregistrées dans :\n{config_file}")
-        self.add_config_btn.disabled = True
-        self.save_quit_btn.disabled = True
-        self.load_config_btn.disabled = True
-        self.update_config_btn.disabled = True
-        self.delete_config_btn.disabled = True
+        # Les lignes suivantes ont été supprimées pour garder l'interface active :
+        #self.add_config_btn.disabled = True
+        #self.save_quit_btn.disabled = True
+        #self.load_config_btn.disabled = True
+        #self.update_config_btn.disabled = True
+        #self.delete_config_btn.disabled = True
 
     def on_load_config(self, b):
         selected = self.config_dropdown.value
