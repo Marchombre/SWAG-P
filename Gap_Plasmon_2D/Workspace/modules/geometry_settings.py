@@ -1,10 +1,10 @@
 # geometry_settings.py
 import ipywidgets as widgets
 from IPython.display import display, clear_output
+import os
+import json
 
-# Default parameters for wave, geometry, and limits
-wave = {"wavelength": 450, "angle": 0, "polarization": 1}
-
+# Paramètres par défaut pour la géométrie
 geometry_config = {
     "thick_super": 200,
     "width_reso": 30,
@@ -31,18 +31,21 @@ geometry_limits = {
     "period": (50, 300)
 }
 
+# Liste globale pour stocker les configurations de géométrie enregistrées
+GEOMETRY_CONFIGS = []
+
 def create_geometry_widget():
     """
-    Creates and returns a widget (VBox) containing geometry sliders and a button
-    to validate the configuration. The display is done only once.
-    
-    Returns:
-        - widget: VBox containing the sliders, the button, and the output area.
+    Crée et retourne un widget (VBox) contenant :
+      - Des sliders pour modifier la géométrie.
+      - Un champ de saisie pour le nom de la configuration.
+      - Deux boutons : "Add Geometry Config" et "Save Geometry Configurations".
+      - Une zone d'affichage pour présenter la configuration actuelle et la liste des configurations enregistrées.
     """
     geometry_sliders = {}
     slider_widgets = []
     
-    # Create a slider for each parameter
+    # Création d'un slider pour chaque paramètre de geometry_config
     for key, default in geometry_config.items():
         min_val, max_val = geometry_limits.get(key, (0, 200))
         slider = widgets.FloatSlider(
@@ -54,26 +57,64 @@ def create_geometry_widget():
         geometry_sliders[key] = slider
         slider_widgets.append(slider)
     
-    # Create a validation button and an output widget to display the updated values
-    button_update_geo = widgets.Button(description="Validate Geometry Configuration")
-    output_geo = widgets.Output()
+    # Champ de saisie pour le nom de la configuration
+    config_name_text = widgets.Text(
+        value='',
+        placeholder='Nom de la configuration',
+        description='Config Name:',
+        style={'description_width': 'initial'}
+    )
     
-    def update_geometry(b):
-        # Update geometry_config with the current slider values
+    # Boutons pour ajouter et sauvegarder les configurations
+    button_add = widgets.Button(description="Add Geometry Config")
+    button_save = widgets.Button(description="Save Geometry Configurations")
+    output_area = widgets.Output()
+    
+    global GEOMETRY_CONFIGS
+    GEOMETRY_CONFIGS = []
+    
+    def add_geometry_config(b):
+        # Mise à jour de geometry_config avec les valeurs actuelles des sliders
         for key, slider in geometry_sliders.items():
             geometry_config[key] = slider.value
-        with output_geo:
+        # Récupération du nom de configuration
+        config_name = config_name_text.value.strip()
+        if not config_name:
+            config_name = f"Geometry_{len(GEOMETRY_CONFIGS)+1}"
+        # Création d'une copie de la configuration courante
+        new_config = {"config_name": config_name, "geometry": geometry_config.copy()}
+        GEOMETRY_CONFIGS.append(new_config)
+        with output_area:
             clear_output()
-            print("New geometry configuration:")
-            for key, value in geometry_config.items():
-                print(f"  {key}: {value}")
-        # Optionally: display a global message in __main__
-        import __main__
-        __main__.GEOMETRY_CONFIG = geometry_config  # so that it is globally accessible
-        print("GEOMETRY_CONFIG has been updated in the global (__main__) space.")
-
-    button_update_geo.on_click(update_geometry)
+            print("Configuration ajoutée :")
+            print(new_config)
+            print("\nListe des configurations enregistrées :")
+            for cfg in GEOMETRY_CONFIGS:
+                print(f"- {cfg['config_name']}: {cfg['geometry']}")
+        # Réinitialiser le champ de nom
+        config_name_text.value = ''
     
-    # Create and return a VBox containing the sliders, the button, and the output area
-    widget = widgets.VBox(slider_widgets + [button_update_geo, output_geo])
+    def save_geometry_configs(b):
+        # Détermination du chemin Summary_Simulation
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        workspace_dir = os.path.dirname(module_dir)
+        notebooks_dir = os.path.join(workspace_dir, "notebooks")
+        summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
+        if not os.path.exists(summary_dir):
+            os.makedirs(summary_dir)
+        # Sauvegarde de GEOMETRY_CONFIGS dans un fichier JSON dans summary_dir
+        save_path = os.path.join(summary_dir, "geometry_configurations.json")
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump({"ALL_GEOMETRY_CONFIGS": GEOMETRY_CONFIGS}, f, indent=2)
+        with output_area:
+            print(f"\nConfigurations sauvegardées dans {save_path}")
+        # Rendre les configurations accessibles globalement
+        import __main__
+        __main__.GEOMETRY_CONFIGS = GEOMETRY_CONFIGS
+    
+    button_add.on_click(add_geometry_config)
+    button_save.on_click(save_geometry_configs)
+    
+    widget = widgets.VBox(slider_widgets + [config_name_text, button_add, button_save, output_area])
     return widget
+

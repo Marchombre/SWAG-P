@@ -1,0 +1,149 @@
+{
+  "ALL_COMBINED_CONFIGS": [
+    {
+      "config_name": "(-huy - ny",
+      "geometry": {
+        "config_name": "(-huy",
+        "geometry": {
+          "thick_super": 200.0,
+          "width_reso": 30.0,
+          "thick_reso": 30.0,
+          "thick_gap": 3.0,
+          "thick_func": 1.0,
+          "thick_mol": 2.0,
+          "thick_metalliclayer": 10.0,
+          "thick_sub": 200.0,
+          "thick_accroche": 1.0,
+          "period": 100.2153
+        }
+      },
+      "material": {
+        "config_name": "ny",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_dielec",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_func",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_mol",
+            "material": {
+              "type": "None"
+            }
+          }
+        ],
+        "RI_OVERRIDES": {}
+      }
+    },
+    {
+      "config_name": "u_jk - rthy",
+      "geometry": {
+        "config_name": "u_jk",
+        "geometry": {
+          "thick_super": 200.0,
+          "width_reso": 30.0,
+          "thick_reso": 30.0,
+          "thick_gap": 3.0,
+          "thick_func": 1.0,
+          "thick_mol": 2.0,
+          "thick_metalliclayer": 10.0,
+          "thick_sub": 200.0,
+          "thick_accroche": 1.0,
+          "period": 100.2153
+        }
+      },
+      "material": {
+        "config_name": "rthy",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "Custom",
+              "expression": "1"
+            }
+          },
+          {
+            "key": "perm_dielec",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_func",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_mol",
+            "material": {
+              "type": "None"
+            }
+          }
+        ],
+        "RI_OVERRIDES": {}
+      }
+    }
+  ]
+}

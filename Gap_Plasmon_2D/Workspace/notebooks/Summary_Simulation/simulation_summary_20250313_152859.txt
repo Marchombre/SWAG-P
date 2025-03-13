@@ -1,0 +1,33 @@
+Simulation Summary - All Geometry/Material Combos
+Timestamp: 20250313_152859
+Wavelength range (nm): [450. 459. 468. 477. 486. 495. 504. 513. 522. 531. 540. 549. 558. 567.
+ 576. 585. 594. 603. 612. 621. 630. 639. 648. 657. 666. 675. 684. 693.
+ 702. 711. 720. 729. 738. 747. 756. 765. 774. 783. 792. 801. 810. 819.
+ 828. 837. 846. 855. 864. 873. 882. 891. 900.]
+Wave parameters: {'angle': 0, 'polarization': 1, 'wavelength': np.float64(900.0)}
+Number of RCWA modes: 10
+
+---- COMBINATIONS ----
+
+Combo name: Structure 1 - Structure 1
+Geometry:
+{'thick_super': 200.0, 'width_reso': 30.0, 'thick_reso': 30.0, 'thick_gap': 3.0, 'thick_func': 0.0, 'thick_mol': 0.0, 'thick_metalliclayer': 10.0, 'thick_sub': 200.0, 'thick_accroche': 0.0, 'period': 100.2153}
+Material config (df_config):
+[{'key': 'perm_env', 'material': {'type': 'Standard', 'material': 'Air'}}, {'key': 'perm_dielec', 'material': {'type': 'Custom', 'expression': '1.45'}}, {'key': 'perm_sub', 'material': {'type': 'Standard', 'material': 'ITO'}}, {'key': 'perm_reso', 'material': {'type': 'Standard', 'material': 'Ag'}}, {'key': 'perm_metalliclayer', 'material': {'type': 'Standard', 'material': 'Au'}}, {'key': 'perm_accroche', 'material': {'type': 'None'}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}]
+RI Overrides: {}
+First few reflectance points (Rup, Rdown):
+  λ=450.0 nm -> Rup=0.2570637043293928, Rdown=0.22610503800184684
+  λ=459.0 nm -> Rup=0.29667285034952257, Rdown=0.2703944935333307
+  λ=468.0 nm -> Rup=0.3409676686048675, Rdown=0.32072846963734897
+----------------------------------------
+Combo name: Structure 2 - Structure 2
+Geometry:
+{'thick_super': 200.0, 'width_reso': 30.0, 'thick_reso': 30.0, 'thick_gap': 3.0, 'thick_func': 0.0, 'thick_mol': 0.0, 'thick_metalliclayer': 10.0, 'thick_sub': 200.0, 'thick_accroche': 3.0, 'period': 100.2153}
+Material config (df_config):
+[{'key': 'perm_env', 'material': {'type': 'Standard', 'material': 'Air'}}, {'key': 'perm_dielec', 'material': {'type': 'Custom', 'expression': '1.45'}}, {'key': 'perm_sub', 'material': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'SiO2', 'page': 'Malitson', 'data': 'main/SiO2/nk/Malitson.yml'}}, {'key': 'perm_reso', 'material': {'type': 'Standard', 'material': 'Ag'}}, {'key': 'perm_metalliclayer', 'material': {'type': 'Standard', 'material': 'Au'}}, {'key': 'perm_accroche', 'material': {'type': 'Standard', 'material': 'Al'}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}]
+RI Overrides: {'perm_sub': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'SiO2', 'page': 'Malitson', 'data': 'main/SiO2/nk/Malitson.yml'}}
+First few reflectance points (Rup, Rdown):
+  λ=450.0 nm -> Rup=0.4789526906776969, Rdown=0.63698136407785
+  λ=459.0 nm -> Rup=0.4954769107949209, Rdown=0.6749146158182758
+  λ=468.0 nm -> Rup=0.4993117373065011, Rdown=0.7066460559108442
+----------------------------------------
