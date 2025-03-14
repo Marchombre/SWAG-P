@@ -3,7 +3,7 @@
 
 import os
 import matplotlib.pyplot as plt
-from datetime import datetime
+import re
 
 from simulate_reflectance import simulate_reflectance_all_combos
 
@@ -35,10 +35,10 @@ def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path):
     # 2) Création d'une figure
     plt.figure(figsize=(10, 6))
     
-    # 3) Pour chaque combo, on trace Rup et Rdown
+    # 3) Pour chaque combo, on trace Rup (et éventuellement Rdown)
     for combo_name, (Rup, Rdown) in results.items():
         plt.plot(lambda_range, Rup, label=f'Rup - {combo_name}')
-        plt.plot(lambda_range, Rdown, label=f'Rdown - {combo_name}')
+        # plt.plot(lambda_range, Rdown, label=f'Rdown - {combo_name}')
 
     plt.xlabel("Wavelength (nm)")
     plt.ylabel("Reflectance")
@@ -46,15 +46,21 @@ def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path):
     plt.legend()
     plt.grid(True)
 
-    # 4) Sauvegarde
+    # 4) Sauvegarde de la figure dans le dossier Figures
     module_dir = os.path.dirname(os.path.abspath(__file__))
     workspace_dir = os.path.dirname(module_dir)
     figures_dir = os.path.join(workspace_dir, "Figures")
     if not os.path.exists(figures_dir):
         os.makedirs(figures_dir)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fig_path = os.path.join(figures_dir, f"reflectance_combos_{timestamp}.png")
+    # Construit le suffixe du nom de fichier à partir de la liste des matériaux utilisés
+    # On prend les clés de results, on les trie et on les joint avec un underscore
+    materials_used = "_".join(sorted(results.keys()))
+    # Remplace les espaces par des underscores et supprime les caractères indésirables
+    materials_used_clean = re.sub(r'\s+', '_', materials_used)
+    materials_used_clean = re.sub(r'[^A-Za-z0-9_]', '', materials_used_clean)
+
+    fig_path = os.path.join(figures_dir, f"reflectance_{materials_used_clean}.png")
     plt.savefig(fig_path, bbox_inches='tight')
     plt.show()
     

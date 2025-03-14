@@ -249,6 +249,37 @@ class MaterialSelectorTabbedNotebook:
         for i, role in enumerate(roles):
             self.tab.set_title(i, role)
 
+        # Préconfigurations prédéfinies
+        self.preconfigs = {
+            "pre1": {
+                "perm_env": {"type": "None"},
+                "perm_dielec": {"type": "Custom", "expression": "1.45**2"},
+                "perm_sub": {"type": "Standard", "material": "ITO"},
+                "perm_reso": {"type": "Standard", "material": "Ag"},
+                "perm_metalliclayer": {"type": "Standard", "material": "Au"},
+                "perm_accroche": {"type": "None"},
+                "perm_func": {"type": "None"},
+                "perm_mol": {"type": "None"}
+            },
+            "pre2": {
+                "perm_env": {"type": "None"},
+                "perm_dielec": {"type": "Custom", "expression": "1.45**2"},
+                "perm_sub": {"type": "Standard", "material": "ITO"},
+                "perm_reso": {"type": "Standard", "material": "Ag"},
+                "perm_metalliclayer": {"type": "Standard", "material": "Au"},
+                "perm_accroche": {"type": "Standard", "material": "Cr"},
+                "perm_func": {"type": "None"},
+                "perm_mol": {"type": "None"}
+            }
+        }
+
+        # Dropdown pour sélectionner une préconfiguration
+        self.preconfig_dropdown = widgets.Dropdown(
+            options=[("Aucune", ""), ("Préconfig classique slade tomate oignon", "pre1"), ("Préconfig supplément Chrome", "pre2")],
+            description="Préconfig:"
+        )
+        self.preconfig_dropdown.observe(self.on_preconfig_change, names="value")
+
         # Champ pour le nom de la configuration
         self.config_name_text = widgets.Text(
             description="Configuration Name:",
@@ -256,8 +287,8 @@ class MaterialSelectorTabbedNotebook:
         )
 
         # Boutons pour ajouter et sauvegarder la configuration
-        self.add_config_btn = widgets.Button(description="Add config")
-        self.save_quit_btn = widgets.Button(description="Save & Quit")
+        self.add_config_btn = widgets.Button(description="Add Material config")
+        self.save_quit_btn = widgets.Button(description="Save & Quit", button_style='success',)
         self.add_config_btn.on_click(self.on_add_config)
         self.save_quit_btn.on_click(self.on_save_quit)
 
@@ -269,7 +300,7 @@ class MaterialSelectorTabbedNotebook:
         )
         self.load_config_btn = widgets.Button(description="Load Config")
         self.update_config_btn = widgets.Button(description="Update Config")
-        self.delete_config_btn = widgets.Button(description="Delete Config")
+        self.delete_config_btn = widgets.Button(description="Delete Config", button_style='danger')
         self.load_config_btn.on_click(self.on_load_config)
         self.update_config_btn.on_click(self.on_update_config)
         self.delete_config_btn.on_click(self.on_delete_config)
@@ -278,6 +309,7 @@ class MaterialSelectorTabbedNotebook:
         self.output = widgets.Output()
 
         self.container = widgets.VBox([
+            self.preconfig_dropdown,
             self.tab,
             self.config_name_text,
             widgets.HBox([self.add_config_btn, self.save_quit_btn]),
@@ -286,6 +318,24 @@ class MaterialSelectorTabbedNotebook:
         ])
 
         self.all_configs = []
+
+    def on_preconfig_change(self, change):
+        preconfig_id = change["new"]
+        if preconfig_id:
+            self.apply_preconfig(preconfig_id)
+
+    def apply_preconfig(self, preconfig_id):
+        mapping = self.preconfigs.get(preconfig_id, {})
+        for role, widget_role in self.role_widgets.items():
+            if role in mapping:
+                config = mapping[role]
+                widget_role.mode_dropdown.value = config["type"]
+                if config["type"] == "Custom":
+                    widget_role.custom_text.value = config.get("expression", "")
+                elif config["type"] == "Standard":
+                    widget_role.standard_dropdown.value = config.get("material", "")
+            else:
+                widget_role.mode_dropdown.value = "None"
 
     def update_config_dropdown(self):
         options = [(cfg["config_name"], cfg) for cfg in self.all_configs]
@@ -420,4 +470,3 @@ DEFAULT_ROLES = [
 
 # --- Instanciation et affichage ---
 selector = MaterialSelectorTabbedNotebook(DEFAULT_ROLES)
-

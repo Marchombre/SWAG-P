@@ -97,7 +97,8 @@ def BrendelBormann_Faddeeva(lambda_test, f0, omega_p, Gamma0, f, omega, gamma, s
     """
     # Conversion de la longueur d'onde en énergie (eV) : E ≈ 1240 / λ (avec λ en nm)
     E = 1240.0 / lambda_test  # énergie en eV
-    w = E  # on utilise w comme énergie en eV
+    w = 6.62606957e-25 * 299792458 / 1.602176565e-19 / lambda_test
+    #w = E  # on utilise w comme énergie en eV
     
     chi_b = 0.0 + 0.0j  # Initialisation
     
@@ -151,7 +152,15 @@ def get_n_k(material_name, lam, json_path):
     else:
         raise ValueError(f"Model '{material['model']}' for '{material_name}' is not supported.")
 
-def compute_permittivity(lam, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=50):
+
+
+
+
+
+
+
+
+def compute_permittivity(lam, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=64):
     """
     Calcule la permittivité complexe ε pour un matériau modélisé par le modèle Brendel-Bormann
     en utilisant l'approximation de la fonction de Faddeeva.
@@ -160,7 +169,7 @@ def compute_permittivity(lam, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=50)
       - lam : longueur d'onde en nm.
       - f0, omega_p, Gamma0 : paramètres du modèle (en eV).
       - f, omega, gamma, sigma : listes ou numpy arrays des paramètres de résonance (en eV).
-      - N : paramètre numérique pour le calcul FFT dans la fonction faddeeva (défaut = 50).
+      - N : paramètre numérique pour le calcul FFT dans la fonction faddeeva (défaut = 64).
     
     Retourne:
       - ε : permittivité complexe calculée

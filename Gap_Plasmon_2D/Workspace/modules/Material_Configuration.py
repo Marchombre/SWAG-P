@@ -126,7 +126,7 @@ def build_material_configuration_dynamic(df_config, lambda_val_nm, json_combined
                 else:
                     try:
                         f0, omega_p, Gamma0, f, omega, gamma, sigma, _ = get_material_params(actual_mat, materials_data)
-                        perm = compute_permittivity(lambda_val_nm, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=50)
+                        perm = compute_permittivity(lambda_val_nm, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=64)
                         materials_perm[role] = perm
                     except KeyError as e:
                         raise ValueError(f"Les paramètres pour '{actual_mat}' sont incomplets : {e}")

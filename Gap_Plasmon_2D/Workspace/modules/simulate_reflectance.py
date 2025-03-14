@@ -5,6 +5,7 @@ import os
 import json
 import datetime
 import pandas as pd
+import re
 
 from Material_Configuration import build_material_configuration_dynamic
 from Function_reflectance_SWAG import reflectance
@@ -75,13 +76,13 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
         df_config = pd.DataFrame(material_config_list)
         ri_overrides = combo["material"].get("RI_OVERRIDES", {})
 
-        # Simule
+        # Simulation
         Rup, Rdown = simulate_reflectance_single(
             lambda_range, geometry_dict, wave, df_config, json_combined_path, n_mod, ri_overrides
         )
         results[combo_name] = (Rup, Rdown)
 
-        # On stocke quelques détails pour le résumé
+        # Stockage des détails pour le résumé
         simulation_details[combo_name] = {
             "geometry": geometry_dict,
             "material_config": df_config.to_dict(orient="records"),
@@ -90,14 +91,61 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
             "Rdown": Rdown
         }
 
-    # 4) Création du résumé dans un fichier texte
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_filename = os.path.join(summary_dir, f"simulation_summary_{timestamp}.txt")
+    # 4) Construction du nom de fichier résumé
+    # Ordre général souhaité : env, reso, diélectrique, molecule, functionalisation, accroche, metallic layer, sub.
+    roles_order = [
+        "perm_env",
+        "perm_reso",
+        "perm_dielec",
+        "perm_mol",
+        "perm_func",
+        "perm_accroche",
+        "perm_metalliclayer",
+        "perm_sub"
+    ]
+    suffix_parts = []
+    if simulation_details:
+        # On utilise la configuration matérielle du premier combo (supposé représentatif)
+        first_combo = next(iter(simulation_details.values()))
+        for role in roles_order:
+            val = ""
+            # Recherche dans material_config de l'entrée correspondant au rôle
+            for entry in first_combo["material_config"]:
+                if entry.get("key", "").strip() == role:
+                    mat = entry.get("material", {})
+                    mtype = mat.get("type", "").strip().lower()
+                    if mtype == "none" or mtype == "":
+                        val = ""
+                    elif mtype == "standard":
+                        val = mat.get("material", "").strip()
+                    elif mtype == "custom":
+                        val = mat.get("expression", "").strip()
+                    break
+            # Pour le rôle metallic layer, on remplace "Au" par "Gold" si nécessaire
+            if role == "perm_metalliclayer" and val == "Au":
+                val = "Gold"
+            # Si la valeur est "None" ou trop compliquée, on ne l'inclut pas.
+            # Ici, on suppose que si la valeur ne correspond pas à une formule chimique simple
+            # (lettres, chiffres, éventuellement des points ou des astérisques), on l'ignore.
+            if val.lower() == "none" or val == "":
+                suffix_parts.append("")
+            else:
+                # On conserve uniquement les caractères alphanumériques, points, astérisques et signes de multiplication
+                # (pour conserver par exemple "1.45**2")
+                val_clean = re.sub(r'[^A-Za-z0-9\.\*\+]', '', val)
+                suffix_parts.append(val_clean)
+    # On joint les valeurs avec un underscore en respectant l'ordre
+    # On ignore les segments vides
+    filtered_parts = [part for part in suffix_parts if part]
+    material_str_clean = "_".join(filtered_parts)
 
+    summary_filename = os.path.join(summary_dir, f"simulation_summary_{material_str_clean}.txt")
+
+    # 5) Création du résumé dans un fichier texte
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     lines = []
     lines.append("Simulation Summary - All Geometry/Material Combos")
     lines.append(f"Timestamp: {timestamp}")
-    lines.append(f"Wavelength range (nm): {lambda_range}")
     lines.append(f"Wave parameters: {wave}")
     lines.append(f"Number of RCWA modes: {n_mod}\n")
     lines.append("---- COMBINATIONS ----\n")
@@ -109,8 +157,8 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
         lines.append("Material config (df_config):")
         lines.append(str(details["material_config"]))
         lines.append(f"RI Overrides: {details['ri_overrides']}")
-        lines.append("First few reflectance points (Rup, Rdown):")
-        for i in range(min(3, len(details["Rup"]))):
+        lines.append("Reflectance points (Rup, Rdown):")
+        for i in range(len(details["Rup"])):
             lines.append(f"  λ={lambda_range[i]} nm -> Rup={details['Rup'][i]}, Rdown={details['Rdown'][i]}")
         lines.append("-" * 40)
 
