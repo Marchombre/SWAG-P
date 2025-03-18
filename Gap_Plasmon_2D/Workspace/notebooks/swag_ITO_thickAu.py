@@ -487,4 +487,4 @@ plt.savefig("ITO_Rup_ITO_convert_to_nm.jpg")
 
 # Sauvegarde des résultats
 R = [Ru_ito, Rd_ito]
-np.savez("data_accroches_all_Rdown-Rup.npz", list_wavelength=list_wavelength, R=R)
+#np.savez("data_accroches_all_Rdown-Rup.npz", list_wavelength=list_wavelength, R=R)
