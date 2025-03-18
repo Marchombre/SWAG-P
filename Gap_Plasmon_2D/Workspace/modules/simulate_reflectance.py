@@ -10,6 +10,7 @@ import re
 from Material_Configuration import build_material_configuration_dynamic
 from Function_reflectance_SWAG import reflectance
 
+
 def simulate_reflectance_single(lambda_range, geometry, wave, df_config, json_combined_path, n_mod, ri_overrides=None):
     """
     Simule la réflectance (Rup, Rdown) pour une plage de longueurs d'onde, 
@@ -25,16 +26,33 @@ def simulate_reflectance_single(lambda_range, geometry, wave, df_config, json_co
     Rup_values = []
     Rdown_values = []
     for lam in lambda_range:
-        # Reconstruit les permittivités pour chaque rôle à la longueur d'onde lam
+        # 1. Pour chaque longueur d'onde lam, on reconstruit les permittivités des matériaux.
+        #    Cette étape se fait via la fonction build_material_configuration_dynamic.
+        #    Elle prend le DataFrame de configuration (df_config), la longueur d'onde actuelle,
+        #    le chemin vers le JSON combiné (contenant vos données ExpData/BrendelBormann) et 
+        #    d'éventuels overrides pour l'indice (ri_overrides).
+        #    Le résultat, materials_perm, est un dictionnaire où chaque clé correspond à un rôle 
+        #    (par exemple, "perm_sub", "perm_reso", etc.) et la valeur est la permittivité calculée.
         materials_perm = build_material_configuration_dynamic(df_config, lam, json_combined_path, ri_overrides)
-        # Met à jour la longueur d'onde dans wave
+        
+        # 2. Mise à jour de la longueur d'onde dans le dictionnaire wave.
+        #    Cela permet de passer la valeur lam (qui varie dans la boucle) à la fonction de calcul.
         wave["wavelength"] = lam
-        # Calcule la réflectance
+        
+        # 3. Appel de la fonction reflectance qui, à partir de la géométrie, des paramètres d'onde
+        #    et des permittivités calculées, retourne Rup (la réflectance vers le haut) et
+        #    Rdown (la réflectance vers le bas).
         Rup, Rdown = reflectance(geometry, wave, materials_perm, n_mod)
+        
+        # 4. On accumule les résultats pour chaque lam dans des listes.
         Rup_values.append(Rup)
         Rdown_values.append(Rdown)
 
+    # 5. Retourne les listes de résultats.
     return Rup_values, Rdown_values
+
+
+
 
 
 def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_path):
@@ -45,7 +63,7 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
     Retourne un dict { combo_name: (Rup_values, Rdown_values) }
     et génère un fichier texte de résumé dans Summary_Simulation.
     """
-    # 1) Détermination du chemin du fichier de combinaisons
+    # 1. Détermination du chemin du fichier JSON de combinaisons.
     module_dir = os.path.dirname(os.path.abspath(__file__))
     workspace_dir = os.path.dirname(module_dir)
     notebooks_dir = os.path.join(workspace_dir, "notebooks")
@@ -56,30 +74,43 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
         raise FileNotFoundError(f"Le fichier de combinaisons {combos_file} est introuvable. "
                                 "Créez-le via le widget Geometry/Material.")
 
-    # 2) Chargement des combinaisons
+    # 2. Chargement du fichier JSON.
     with open(combos_file, "r", encoding="utf-8") as f:
         data = json.load(f)
     all_combos = data.get("ALL_COMBINED_CONFIGS", [])
     if not all_combos:
         raise ValueError("Aucune combinaison trouvée dans geom_mat_combinations.json.")
 
-    # 3) Boucle de simulation
-    results = {}  # { combo_name: (Rup_values, Rdown_values) }
-    simulation_details = {}  # Pour le résumé
+    # 3. Pour chaque configuration enregistrée dans le JSON...
+    results = {}          # Pour stocker les résultats de simulation pour chaque configuration.
+    simulation_details = {}  # Pour sauvegarder les détails de chaque configuration (pour résumé).
 
     for combo in all_combos:
-        combo_name = combo["config_name"]  # ex: "Geometry_1 - Material_2"
-        # Récupération de la géométrie (dict de paramètres)
-        geometry_dict = combo["geometry"]["geometry"]  # ex: {"thick_super":..., "width_reso":...}
-        # Récupération du DataFrame de matériaux
+        # Extraction du nom de la configuration, par exemple "Geom_S1_based_on_schema - Mat_S1".
+        combo_name = combo["config_name"]
+        
+        # Extraction de la géométrie.
+        # Dans le JSON, la structure est : 
+        # "geometry": { "config_name": "...", "geometry": { ... } }
+        # On extrait le dictionnaire de paramètres géométriques.
+        geometry_dict = combo["geometry"]["geometry"]
+        
+        # Extraction de la configuration matérielle.
+        # Dans le JSON, "material" contient "MATERIALS_CONFIG" qui est une liste de dictionnaires.
         material_config_list = combo["material"]["MATERIALS_CONFIG"]
+        
+        # Conversion de la liste en DataFrame (ce qui est requis par build_material_configuration_dynamic).
         df_config = pd.DataFrame(material_config_list)
+        
+        # Extraction d'éventuels RI_OVERRIDES (pour des ajustements spécifiques de l'indice).
         ri_overrides = combo["material"].get("RI_OVERRIDES", {})
 
-        # Simulation
+        # 4. Simulation pour cette configuration en appelant simulate_reflectance_single.
         Rup, Rdown = simulate_reflectance_single(
             lambda_range, geometry_dict, wave, df_config, json_combined_path, n_mod, ri_overrides
         )
+        
+        # Stockage des résultats dans le dictionnaire results, clé = nom de configuration.
         results[combo_name] = (Rup, Rdown)
 
         # Stockage des détails pour le résumé
@@ -121,9 +152,7 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
                     elif mtype == "custom":
                         val = mat.get("expression", "").strip()
                     break
-            # Pour le rôle metallic layer, on remplace "Au" par "Gold" si nécessaire
-            if role == "perm_metalliclayer" and val == "Au":
-                val = "Gold"
+
             # Si la valeur est "None" ou trop compliquée, on ne l'inclut pas.
             # Ici, on suppose que si la valeur ne correspond pas à une formule chimique simple
             # (lettres, chiffres, éventuellement des points ou des astérisques), on l'ignore.

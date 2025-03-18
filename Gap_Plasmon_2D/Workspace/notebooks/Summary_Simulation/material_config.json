@@ -1,7 +1,7 @@
 {
   "ALL_CONFIGS": [
     {
-      "config_name": "Config_1",
+      "config_name": "S1",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
@@ -35,61 +35,6 @@
           "material": {
             "type": "Standard",
             "material": "Au"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Config_2",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_dielec",
-          "material": {
-            "type": "Standard",
-            "material": "Water"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "None"
           }
         },
         {

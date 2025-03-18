@@ -53,7 +53,8 @@ def nk_ITO(lam):
     
     tableau3D = np.array(tableau3D)
     # Extraction des colonnes : première colonne = longueur d'onde, deuxième = n, troisième = k
-    wl = tableau3D[:, 0]
+    wl = tableau3D[:, 0] #* 1000 
+
     n = tableau3D[:, 1]
     k = tableau3D[:, 2]
 
@@ -162,6 +163,7 @@ def epsNibb(lam):
     aha=1.0j*np.sqrt(np.pi)*f*omega_p**2/(2*np.sqrt(2)*a*sigma)*(faddeeva(x,64)+faddeeva(y,64))
     epsilon=1-omega_p**2*f0/(w*(w+1.0j*Gamma0))+np.sum(aha)
     return(epsilon)
+
 
 def faddeeva(z,N):
     "Bidouille les signes et les parties réelles et imaginaires d'un nombre complexe --> à creuser"
@@ -329,6 +331,7 @@ def HErmes(T,U,V,P,Amp,ny,h,a0):
 
 ### SWAG functions
 def reflectance(geometry, wave, materials, n_mod):  
+    # Normalization by the period
     period = geometry["period"]
     #thick_super = geometry["thick_super"] / period
     width_reso = geometry["width_reso"] / period
@@ -344,6 +347,8 @@ def reflectance(geometry, wave, materials, n_mod):
     angle = wave["angle"] 
     polarization = wave["polarization"]
 
+    # Materials properties extraction
+
     perm_env = materials["perm_env"]
     perm_dielec = materials["perm_dielec"]
     perm_sub = materials["perm_sub"]
@@ -351,7 +356,7 @@ def reflectance(geometry, wave, materials, n_mod):
     perm_metalliclayer =  materials["perm_metalliclayer"]
     perm_accroche = materials["perm_accroche"]
 
-    pos_reso = np.array([[width_reso, (1 - width_reso) / 2]])
+    pos_reso = np.array([[width_reso, (1 - width_reso) / 2]]) # (1 - width_reso)/2 is the offset
 
     n = 2 * n_mod + 1
 
@@ -414,7 +419,7 @@ thick_gap = 3              # hauteur du diélectrique en dessous du cube
 thick_func = 1             # présent partout tout le temps
 thick_mol = 2              # si molécules détectées
 thick_metal = 10           # épaisseur fixe de l'or au dessus du substrat
-thick_accroche = 1         # couche d'accroche 
+thick_accroche = 3         # couche d'accroche 
 period = 100.2153
 thick_sub = 200
 
@@ -472,13 +477,13 @@ for idx_wav, wavelength in enumerate(list_wavelength):
 import matplotlib.pyplot as plt
 
 plt.figure(3)
-plt.plot(list_wavelength, Ru_ito, label=f"Au thick: {thick_metal} nm")
+plt.plot(list_wavelength, Ru_ito, label=f"ITO /Au: {thick_metal} nm")
 plt.legend()
 plt.xlabel("Wavelength (nm)")
 plt.ylabel("Reflectance")
 plt.title("R up")
 plt.show(block=False)
-plt.savefig("ITO_Rup.jpg")
+plt.savefig("ITO_Rup_ITO_convert_to_nm.jpg")
 
 # Sauvegarde des résultats
 R = [Ru_ito, Rd_ito]

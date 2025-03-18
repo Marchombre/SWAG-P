@@ -101,13 +101,3 @@ def plot_all_combos(sim_summary_file):
     plt.savefig(fig_path, bbox_inches='tight')
     plt.show()
     print(f"Figure saved in: {fig_path}")
-
-if __name__ == "__main__":
-    # Exemple d'utilisation : adaptez les chemins selon votre arborescence
-    module_dir = os.path.dirname(os.path.abspath(__file__))
-    workspace_dir = os.path.dirname(module_dir)
-    notebooks_dir = os.path.join(workspace_dir, "notebooks")
-    summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
-    sim_summary_file = os.path.join(summary_dir, "simulation_summary_20250314_135436.txt")
-    
-    plot_all_combos(sim_summary_file)

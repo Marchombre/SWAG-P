@@ -145,6 +145,45 @@ class RefractiveIndexArboWidget:
             "data": data_field
         }
 
+
+    def set_selection(self, selection):
+        # Affecter la valeur pour le shelf
+        for i, entry in enumerate(self.library):
+            if entry.get("SHELF", "") == selection.get("shelf", ""):
+                self.shelf_dropdown.value = i
+                break
+
+        # Si on n'a pas encore stocké l'observateur, le définir et l'attacher.
+        if not hasattr(self, "_set_book_and_page_handler"):
+            def set_book_and_page(change):
+                # Affecter la valeur book
+                for option in self.book_dropdown.options:
+                    if option[0] == selection.get("book", "") or (
+                        option[1] is not None and 
+                        self.library[self.shelf_dropdown.value].get("content", [])[option[1]].get("BOOK", "") == selection.get("book", "")
+                    ):
+                        self.book_dropdown.value = option[1]
+                        break
+                # Affecter ensuite le page
+                if not hasattr(self, "_set_page_handler"):
+                    def set_page(change2):
+                        for option in self.page_dropdown.options:
+                            if option[0] == selection.get("page", ""):
+                                self.page_dropdown.value = option[1]
+                                break
+                    self._set_page_handler = set_page
+                    self.book_dropdown.observe(self._set_page_handler, names="value")
+            self._set_book_and_page_handler = set_book_and_page
+            self.shelf_dropdown.observe(self._set_book_and_page_handler, names="value")
+        else:
+            # Si l'observateur est déjà défini, on peut simplement l'appeler (ou l'attacher à nouveau)
+            try:
+                self.shelf_dropdown.unobserve(self._set_book_and_page_handler, names="value")
+            except ValueError:
+                pass
+            self.shelf_dropdown.observe(self._set_book_and_page_handler, names="value")
+
+
 # --- 4) Widget pour un rôle (MaterialRoleWidget) ---
 class MaterialRoleWidget:
     def __init__(self, role_name, library, standard_list):
@@ -224,7 +263,7 @@ class MaterialRoleWidget:
                 "data":  sel["data"]
             }
 
-# --- 5) Interface principale avec onglets ---
+# --- 5) Interface principale avec onglets et gestion des préconfigurations ---
 class MaterialSelectorTabbedNotebook:
     def __init__(self, roles):
         # Détermination des chemins (adaptés selon votre arborescence)
@@ -249,9 +288,9 @@ class MaterialSelectorTabbedNotebook:
         for i, role in enumerate(roles):
             self.tab.set_title(i, role)
 
-        # Préconfigurations prédéfinies
+        # Initialisation des préconfigurations (on conserve ici des valeurs par défaut)
         self.preconfigs = {
-            "pre1": {
+            "Préconfig Structure 1": {
                 "perm_env": {"type": "None"},
                 "perm_dielec": {"type": "Custom", "expression": "1.45**2"},
                 "perm_sub": {"type": "Standard", "material": "ITO"},
@@ -261,7 +300,7 @@ class MaterialSelectorTabbedNotebook:
                 "perm_func": {"type": "None"},
                 "perm_mol": {"type": "None"}
             },
-            "pre2": {
+            "Préconfig Structure 2": {
                 "perm_env": {"type": "None"},
                 "perm_dielec": {"type": "Custom", "expression": "1.45**2"},
                 "perm_sub": {"type": "Standard", "material": "ITO"},
@@ -272,27 +311,48 @@ class MaterialSelectorTabbedNotebook:
                 "perm_mol": {"type": "None"}
             }
         }
-
-        # Dropdown pour sélectionner une préconfiguration
+        # Dropdown pour sélectionner une préconfiguration existante
         self.preconfig_dropdown = widgets.Dropdown(
-            options=[("Aucune", ""), ("Préconfig classique slade tomate oignon", "pre1"), ("Préconfig supplément Chrome", "pre2")],
+            options=self._get_preconfig_options(),
             description="Préconfig:"
         )
+        # Champ pour saisir le nom d'une nouvelle préconfiguration
+        self.preconfig_name_text = widgets.Text(
+            description="Nom Préconfig:",
+            placeholder="Saisir un nom..."
+        )
+        # Boutons de gestion des préconfigurations
+        self.add_preconfig_btn = widgets.Button(description="Ajouter Préconfig", button_style="info")
+        self.update_preconfig_btn = widgets.Button(description="Mettre à jour Préconfig")
+        self.delete_preconfig_btn = widgets.Button(description="Supprimer Préconfig", button_style="danger")
+        # Liaison des événements
         self.preconfig_dropdown.observe(self.on_preconfig_change, names="value")
+        self.add_preconfig_btn.on_click(self.on_add_preconfig)
+        self.update_preconfig_btn.on_click(self.on_update_preconfig)
+        self.delete_preconfig_btn.on_click(self.on_delete_preconfig)
 
-        # Champ pour le nom de la configuration
+        # Zone de gestion des préconfigurations (un conteneur horizontal)
+        self.preconfig_control_box = widgets.HBox([
+            self.preconfig_dropdown,
+            self.preconfig_name_text,
+            self.add_preconfig_btn,
+            self.update_preconfig_btn,
+            self.delete_preconfig_btn
+        ])
+
+        # Champ pour le nom de la configuration (pour sauvegarder la config complète)
         self.config_name_text = widgets.Text(
             description="Configuration Name:",
             placeholder="Saisir le nom de la config"
         )
 
-        # Boutons pour ajouter et sauvegarder la configuration
+        # Boutons pour ajouter et sauvegarder la configuration globale
         self.add_config_btn = widgets.Button(description="Add Material config")
         self.save_quit_btn = widgets.Button(description="Save & Quit", button_style='success',)
         self.add_config_btn.on_click(self.on_add_config)
         self.save_quit_btn.on_click(self.on_save_quit)
 
-        # Nouveaux widgets pour charger, mettre à jour et supprimer une config enregistrée
+        # Widgets pour charger, mettre à jour et supprimer une configuration enregistrée
         self.config_dropdown = widgets.Dropdown(
             options=[],
             description="Saved Configs:",
@@ -308,8 +368,9 @@ class MaterialSelectorTabbedNotebook:
         # Zone de sortie pour messages
         self.output = widgets.Output()
 
+        # Assemblage final du conteneur
         self.container = widgets.VBox([
-            self.preconfig_dropdown,
+            self.preconfig_control_box,
             self.tab,
             self.config_name_text,
             widgets.HBox([self.add_config_btn, self.save_quit_btn]),
@@ -318,6 +379,13 @@ class MaterialSelectorTabbedNotebook:
         ])
 
         self.all_configs = []
+
+    def _get_preconfig_options(self):
+        # Retourne une liste d'options pour le dropdown des préconfigurations
+        options = [("Aucune", "")]
+        for key in self.preconfigs:
+            options.append((key, key))
+        return options
 
     def on_preconfig_change(self, change):
         preconfig_id = change["new"]
@@ -334,8 +402,63 @@ class MaterialSelectorTabbedNotebook:
                     widget_role.custom_text.value = config.get("expression", "")
                 elif config["type"] == "Standard":
                     widget_role.standard_dropdown.value = config.get("material", "")
+                elif config["type"] == "RefractiveIndex":
+                    # Si set_selection est disponible, on l'utilise
+                    if hasattr(widget_role.ri_widget, "set_selection"):
+                        selection = {
+                            "shelf": config.get("shelf", ""),
+                            "book": config.get("book", ""),
+                            "page": config.get("page", ""),
+                            "data": config.get("data", "")
+                        }
+                        widget_role.ri_widget.set_selection(selection)
             else:
                 widget_role.mode_dropdown.value = "None"
+
+    def on_add_preconfig(self, b):
+        name = self.preconfig_name_text.value.strip()
+        if not name:
+            with self.output:
+                print("Veuillez saisir un nom pour la préconfiguration.")
+            return
+        # Récupérer la configuration actuelle de tous les rôles
+        new_preconfig = {}
+        for role, widget_role in self.role_widgets.items():
+            new_preconfig[role] = widget_role.get_config()
+        self.preconfigs[name] = new_preconfig
+        self.preconfig_dropdown.options = self._get_preconfig_options()
+        with self.output:
+            print(f"La préconfiguration '{name}' a été ajoutée.")
+        self.preconfig_name_text.value = ""
+
+    def on_update_preconfig(self, b):
+        # Met à jour la préconfiguration actuellement sélectionnée avec la config actuelle
+        selected = self.preconfig_dropdown.value
+        if not selected:
+            with self.output:
+                print("Aucune préconfiguration sélectionnée pour mise à jour.")
+            return
+        updated_preconfig = {}
+        for role, widget_role in self.role_widgets.items():
+            updated_preconfig[role] = widget_role.get_config()
+        self.preconfigs[selected] = updated_preconfig
+        with self.output:
+            print(f"La préconfiguration '{selected}' a été mise à jour.")
+
+    def on_delete_preconfig(self, b):
+        selected = self.preconfig_dropdown.value
+        if not selected:
+            with self.output:
+                print("Aucune préconfiguration sélectionnée pour suppression.")
+            return
+        if selected in self.preconfigs:
+            del self.preconfigs[selected]
+            self.preconfig_dropdown.options = self._get_preconfig_options()
+            with self.output:
+                print(f"La préconfiguration '{selected}' a été supprimée.")
+        else:
+            with self.output:
+                print("La préconfiguration sélectionnée n'existe pas.")
 
     def update_config_dropdown(self):
         options = [(cfg["config_name"], cfg) for cfg in self.all_configs]
@@ -383,12 +506,6 @@ class MaterialSelectorTabbedNotebook:
             json.dump(final_dict, f, indent=2)
         with self.output:
             print(f"Toutes les configurations ont été enregistrées dans :\n{config_file}")
-        # Les lignes suivantes ont été supprimées pour garder l'interface active :
-        #self.add_config_btn.disabled = True
-        #self.save_quit_btn.disabled = True
-        #self.load_config_btn.disabled = True
-        #self.update_config_btn.disabled = True
-        #self.delete_config_btn.disabled = True
 
     def on_load_config(self, b):
         selected = self.config_dropdown.value
@@ -407,7 +524,6 @@ class MaterialSelectorTabbedNotebook:
                 elif mat_config.get("type", "").lower() == "standard":
                     widget_role.standard_dropdown.value = mat_config.get("material", "")
                 elif mat_config.get("type", "").lower() == "refractiveindex":
-                    # Si vous avez une méthode pour charger une sélection dans RefractiveIndexArboWidget, appelez-la ici
                     if hasattr(widget_role.ri_widget, "set_selection"):
                         selection = {
                             "shelf": mat_config.get("shelf", ""),
@@ -470,3 +586,4 @@ DEFAULT_ROLES = [
 
 # --- Instanciation et affichage ---
 selector = MaterialSelectorTabbedNotebook(DEFAULT_ROLES)
+

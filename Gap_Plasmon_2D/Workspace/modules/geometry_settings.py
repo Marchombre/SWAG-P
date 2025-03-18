@@ -1,5 +1,5 @@
 import ipywidgets as widgets
-from IPython.display import clear_output
+from IPython.display import clear_output, display
 import os
 import json
 
@@ -30,8 +30,36 @@ geometry_limits = {
     "period": (50, 300)
 }
 
+# Fichier de sauvegarde (dans le dossier Summary_Simulation)
+def get_geometry_save_path():
+    module_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+    workspace_dir = os.path.dirname(module_dir)
+    notebooks_dir = os.path.join(workspace_dir, "notebooks")
+    summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
+    if not os.path.exists(summary_dir):
+        os.makedirs(summary_dir)
+    return os.path.join(summary_dir, "geometry_configurations.json")
+
 # Liste globale pour stocker les configurations de géométrie enregistrées
 GEOMETRY_CONFIGS = []
+
+def load_geometry_configs():
+    """Charge les configurations sauvegardées depuis le fichier JSON (si il existe)."""
+    global GEOMETRY_CONFIGS
+    save_path = get_geometry_save_path()
+    if os.path.exists(save_path):
+        with open(save_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            GEOMETRY_CONFIGS = data.get("ALL_GEOMETRY_CONFIGS", [])
+    else:
+        GEOMETRY_CONFIGS = []
+
+def save_geometry_configs():
+    """Sauvegarde la liste GEOMETRY_CONFIGS dans le fichier JSON."""
+    save_path = get_geometry_save_path()
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump({"ALL_GEOMETRY_CONFIGS": GEOMETRY_CONFIGS}, f, indent=2)
+    return save_path
 
 def create_geometry_widget():
     """
@@ -46,7 +74,7 @@ def create_geometry_widget():
     geometry_sliders = {}
     slider_widgets = []
     
-    # Création d'un slider pour chaque paramètre avec un style soigné
+    # Création d'un slider pour chaque paramètre
     for key, default in geometry_config.items():
         min_val, max_val = geometry_limits.get(key, (0, 200))
         slider = widgets.FloatSlider(
@@ -68,7 +96,7 @@ def create_geometry_widget():
         style={'description_width': '120px'}
     )
     
-    # Boutons pour ajouter et sauvegarder les configurations avec style
+    # Boutons pour ajouter et sauvegarder les configurations
     button_add = widgets.Button(
         description="Add Geometry Config", 
         button_style='',
@@ -105,13 +133,15 @@ def create_geometry_widget():
     
     output_area = widgets.Output(layout=widgets.Layout(border='1px solid gray', padding='10px'))
     
-    global GEOMETRY_CONFIGS
-    GEOMETRY_CONFIGS = []
+    # Charger les configurations existantes
+    load_geometry_configs()
     
     def update_dropdown_options():
         # Met à jour le dropdown avec les config_name actuels
         options = [(cfg["config_name"], cfg) for cfg in GEOMETRY_CONFIGS]
         config_dropdown.options = options if options else [("None", None)]
+    
+    update_dropdown_options()
     
     def add_geometry_config(b):
         # Met à jour geometry_config avec les valeurs actuelles des sliders
@@ -125,6 +155,7 @@ def create_geometry_widget():
         new_config = {"config_name": config_name, "geometry": geometry_config.copy()}
         GEOMETRY_CONFIGS.append(new_config)
         update_dropdown_options()
+        save_geometry_configs()  # Sauvegarde automatique
         with output_area:
             clear_output()
             print("Configuration added:")
@@ -134,22 +165,11 @@ def create_geometry_widget():
                 print(f"- {cfg['config_name']}: {cfg['geometry']}")
         config_name_text.value = ''
     
-    def save_geometry_configs(b):
-        # Détermination du chemin Summary_Simulation
-        module_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
-        workspace_dir = os.path.dirname(module_dir)
-        notebooks_dir = os.path.join(workspace_dir, "notebooks")
-        summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
-        if not os.path.exists(summary_dir):
-            os.makedirs(summary_dir)
-        # Sauvegarde de GEOMETRY_CONFIGS dans un fichier JSON
-        save_path = os.path.join(summary_dir, "geometry_configurations.json")
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump({"ALL_GEOMETRY_CONFIGS": GEOMETRY_CONFIGS}, f, indent=2)
+    def save_geometry_configs_btn(b):
+        path = save_geometry_configs()
         with output_area:
-            print(f"\nConfigurations saved in {save_path}")
-        import __main__
-        __main__.GEOMETRY_CONFIGS = GEOMETRY_CONFIGS
+            clear_output()
+            print(f"Configurations saved in {path}")
     
     def load_config(b):
         # Charge la configuration sélectionnée dans les sliders et le champ de texte
@@ -180,6 +200,7 @@ def create_geometry_widget():
         new_name = config_name_text.value.strip() or selected["config_name"]
         selected["config_name"] = new_name
         update_dropdown_options()
+        save_geometry_configs()  # Sauvegarde après update
         with output_area:
             clear_output()
             print(f"Configuration updated: {selected}")
@@ -195,6 +216,7 @@ def create_geometry_widget():
         global GEOMETRY_CONFIGS
         GEOMETRY_CONFIGS = [cfg for cfg in GEOMETRY_CONFIGS if cfg["config_name"] != selected["config_name"]]
         update_dropdown_options()
+        save_geometry_configs()  # Sauvegarde après suppression
         with output_area:
             clear_output()
             print(f"Configuration '{selected['config_name']}' deleted.")
@@ -203,7 +225,7 @@ def create_geometry_widget():
                 print(f"- {cfg['config_name']}: {cfg['geometry']}")
     
     button_add.on_click(add_geometry_config)
-    button_save.on_click(save_geometry_configs)
+    button_save.on_click(save_geometry_configs_btn)
     button_load.on_click(load_config)
     button_update.on_click(update_config)
     button_delete.on_click(delete_config)
@@ -215,3 +237,6 @@ def create_geometry_widget():
         [output_area]
     )
     return widget
+
+# Pour afficher le widget dans le notebook :
+geometry_widget = create_geometry_widget()

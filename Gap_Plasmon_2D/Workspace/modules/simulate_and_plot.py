@@ -42,7 +42,7 @@ def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path):
 
     plt.xlabel("Wavelength (nm)")
     plt.ylabel("Reflectance")
-    plt.title("Reflectance Simulation - All Geometry/Material Combos")
+    plt.title("Reflectance Simulation") # Faire un titre automatique
     plt.legend()
     plt.grid(True)
 
