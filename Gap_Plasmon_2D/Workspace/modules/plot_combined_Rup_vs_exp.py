@@ -42,7 +42,7 @@ def read_experimental_data(file_path):
         raise ValueError("Aucune donnée expérimentale n'a été trouvée dans le fichier.")
     return np.array(wavelengths), np.array(R_values)
 
-def plot_combined_Rup_vs_exp(sim_summary_file, exp_file):
+def plot_combined_Rup_vs_exp(sim_summary_file, exp_file, exp_file2):
     """
     Utilise la fonction read_all_combos du module plot_all_combos pour extraire
     les spectres simulés depuis le fichier simulation_summary_XXX.txt, et lit
@@ -60,13 +60,15 @@ def plot_combined_Rup_vs_exp(sim_summary_file, exp_file):
     
     # Extraction des données expérimentales
     exp_wl, exp_R = read_experimental_data(exp_file)
-    
+    exp_wl2, exp_R2 = read_experimental_data(exp_file2)
+
     # Tracé du spectre expérimental
-    plt.plot(exp_wl, exp_R, linewidth=2, label="Experimental Rup")
-    
+    plt.plot(exp_wl, exp_R, linewidth=2, label="Experimental Rup S1")
+    plt.plot(exp_wl2, exp_R2, linewidth=2, label="Experimental Rup S2")
+
     plt.xlabel("Wavelength (nm)")
     plt.ylabel("Reflectance (Rup)")
-    plt.title("Reflectance Comparison: Simulation vs Experimental")
+    plt.title("Reflectance: Simulation vs Experimental")
     plt.legend()
     plt.grid(True)
     
@@ -82,13 +84,3 @@ def plot_combined_Rup_vs_exp(sim_summary_file, exp_file):
     plt.show()
     print(f"Figure saved in: {fig_path}")
 
-if __name__ == "__main__":
-    # Exemple d'utilisation : adaptez les chemins selon votre arborescence
-    module_dir = os.path.dirname(os.path.abspath(__file__))
-    workspace_dir = os.path.dirname(module_dir)
-    notebooks_dir = os.path.join(workspace_dir, "notebooks")
-    summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
-    sim_summary_file = os.path.join(summary_dir, "simulation_summary_20250314_135436.txt")
-    exp_file = os.path.join(summary_dir, "Data_structure1.txt")
-    
-    plot_combined_Rup_vs_exp(sim_summary_file, exp_file)

@@ -1,7 +1,84 @@
 {
   "ALL_COMBINED_CONFIGS": [
     {
-      "config_name": "Geom_S1 - S1",
+      "config_name": "Geom_S2 - Mat_S2",
+      "geometry": {
+        "config_name": "Geom_S2",
+        "geometry": {
+          "thick_super": 200.0,
+          "width_reso": 30.0,
+          "thick_reso": 30.0,
+          "thick_gap": 3.0,
+          "thick_func": 1.0,
+          "thick_mol": 0.0,
+          "thick_metalliclayer": 10.0,
+          "thick_sub": 200.0,
+          "thick_accroche": 3.0,
+          "period": 100.2153
+        }
+      },
+      "material": {
+        "config_name": "Mat_S2",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_dielec",
+            "material": {
+              "type": "Custom",
+              "expression": "1.45**2"
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "Custom",
+              "expression": "1.50**2"
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "Standard",
+              "material": "Silver"
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "Standard",
+              "material": "Gold"
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "Standard",
+              "material": "Aluminium"
+            }
+          },
+          {
+            "key": "perm_func",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_mol",
+            "material": {
+              "type": "None"
+            }
+          }
+        ],
+        "RI_OVERRIDES": {}
+      }
+    },
+    {
+      "config_name": "Geom_S1 - Mat_S1",
       "geometry": {
         "config_name": "Geom_S1",
         "geometry": {
@@ -18,7 +95,7 @@
         }
       },
       "material": {
-        "config_name": "S1",
+        "config_name": "Mat_S1",
         "MATERIALS_CONFIG": [
           {
             "key": "perm_env",
@@ -44,14 +121,14 @@
             "key": "perm_reso",
             "material": {
               "type": "Standard",
-              "material": "Ag"
+              "material": "Silver"
             }
           },
           {
             "key": "perm_metalliclayer",
             "material": {
               "type": "Standard",
-              "material": "Au"
+              "material": "Gold"
             }
           },
           {

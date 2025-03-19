@@ -84,7 +84,42 @@ def BrendelBormann_Faddeeva(lambda_test, f0, omega_p, Gamma0, f, omega, gamma, s
 
 
 
+# CORRECTION v2
 
+def BrendelBormann_Faddeeva(lambda_test, f0, omega_p, Gamma0, f, omega, gamma, sigma, N):
+    """
+    Modèle Brendel & Bormann utilisant la fonction de Voigt pour modéliser des résonances lorentziennes
+    élargies par une distribution gaussienne, avec l'approximation FFT pour la fonction de Faddeeva.
+
+    Paramètres:
+      - lambda_test : longueur d'onde en nm
+      - f0, omega_p, Gamma0 : paramètres pour chi_f (en eV)
+      - f, omega, gamma, sigma : listes ou numpy arrays pour chi_b (en eV)
+      - N : paramètre numérique pour le calcul FFT dans la fonction faddeeva
+
+    Retourne:
+      - epsilon : permittivité complexe calculée
+    """
+    # Convertir les paramètres en tableaux NumPy pour éviter les problèmes de type
+    f = np.array(f, dtype=float)
+    omega = np.array(omega, dtype=float)
+    gamma = np.array(gamma, dtype=float)
+    sigma = np.array(sigma, dtype=float)
+    
+    w_val = 6.62606957e-25 * 299792458 / (1.602176565e-19 * lambda_test)
+    a = np.sqrt(w_val * (w_val + 1j * gamma))
+    a = a * np.sign(np.real(a))
+
+    x = (a - omega) / (np.sqrt(2) * sigma)
+    y = (a + omega) / (np.sqrt(2) * sigma)
+
+    chi_b = np.sum(1j * np.sqrt(np.pi) * f * omega_p**2 / (2 * np.sqrt(2) * a * sigma) *
+                   (faddeeva(x, N) + faddeeva(y, N)))
+    chi_f = - (omega_p**2) * f0 / (w_val * (w_val + 1j * Gamma0))
+
+    epsilon = 1 + chi_f + chi_b
+    
+    return epsilon
 
 
 
@@ -134,3 +169,45 @@ def faddeeva(z, N):
         return w_val[0]
     else:
         return w_val
+    
+
+
+
+
+# ancienne version
+# 
+# 
+def faddeeva(z, N):
+    """
+    Approximation de la fonction de Faddeeva utilisant une méthode basée sur la FFT.
+    """
+    z = np.array(z, copy=True, ndmin=1)
+    w = np.zeros(z.size, dtype=complex)
+
+    idx = (np.real(z) == 0)
+    w[idx] = np.exp(np.abs(-z[idx]**2)) * (1 - erf(np.imag(z[idx])))
+    idx = np.invert(idx)
+    idx1 = idx + (np.imag(z) < 0)
+
+    z[idx1] = np.conj(z[idx1])
+
+    M = 2 * N
+    M2 = 2 * M
+    k = np.arange(-M + 1, M)
+    L = np.sqrt(N / np.sqrt(2))
+
+    theta = k * np.pi / M
+    t = L * np.tan(theta / 2)
+    f_val = np.exp(-t**2) * (L**2 + t**2)
+    f_val = np.append(0, f_val)
+    a_coeff = np.real(np.fft.fft(np.fft.fftshift(f_val))) / M2
+    a_coeff = np.flipud(a_coeff[1:N+1])
+
+    Z = (L + 1.0j * z[idx]) / (L - 1.0j * z[idx])
+    p = np.polyval(a_coeff, Z)
+    w[idx] = 2 * p / (L - 1.0j * z[idx])**2 + (1 / np.sqrt(np.pi)) / (L - 1.0j * z[idx])
+    w[idx1] = np.conj(2 * np.exp(-z[idx1]**2) - w[idx1])
+    if np.ndim(z) == 0:
+        return w[0]
+    else:
+        return w    

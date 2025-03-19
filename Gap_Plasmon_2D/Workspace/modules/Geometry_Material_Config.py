@@ -28,7 +28,7 @@ def create_geometry_material_widget():
     geom_data = load_json_config("geometry_configurations.json").get("ALL_GEOMETRY_CONFIGS", [])
     mat_data = load_json_config("material_config.json").get("ALL_CONFIGS", [])
     
-    # Fonctions utilitaires pour créer les dropdowns avec un style soigné
+    # Fonctions utilitaires pour créer les dropdowns
     def get_geom_dropdown():
         options = [(cfg["config_name"], cfg) for cfg in geom_data] if geom_data else [("None", None)]
         return widgets.Dropdown(

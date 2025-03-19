@@ -63,7 +63,7 @@ def nk_ITO(lam):
     k_int = np.interp(lam, wl, k)
 
     ri = n_int + 1.0j * k_int
-    return ri
+    return (n_int, k_int, ri)
 
 
 
@@ -459,7 +459,8 @@ geometry = {
 for idx_wav, wavelength in enumerate(list_wavelength):
     perm_Ag = epsAgbb(wavelength)
     perm_Au = epsAubb(wavelength)
-    perm_ito = nk_ITO(wavelength) ** 2
+    perm_Al = epsAlbb(wavelength)
+    perm_ito = nk_ITO(wavelength)[2] ** 2
 
     materials = {
         "perm_env": perm_env,
@@ -467,7 +468,7 @@ for idx_wav, wavelength in enumerate(list_wavelength):
         "perm_sub": perm_ito,
         "perm_reso": perm_Ag,
         "perm_metalliclayer": perm_Au,
-        "perm_accroche": perm_Au
+        "perm_accroche": perm_Al
     }
 
     wave = {"wavelength": wavelength, "angle": angle, "polarization": polarization}
@@ -483,7 +484,7 @@ plt.xlabel("Wavelength (nm)")
 plt.ylabel("Reflectance")
 plt.title("R up")
 plt.show(block=False)
-plt.savefig("ITO_Rup_ITO_convert_to_nm.jpg")
+plt.savefig("ITO_Rup.jpg")
 
 # Sauvegarde des résultats
 R = [Ru_ito, Rd_ito]

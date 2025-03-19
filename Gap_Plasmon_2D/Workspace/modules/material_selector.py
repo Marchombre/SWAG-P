@@ -294,8 +294,8 @@ class MaterialSelectorTabbedNotebook:
                 "perm_env": {"type": "None"},
                 "perm_dielec": {"type": "Custom", "expression": "1.45**2"},
                 "perm_sub": {"type": "Standard", "material": "ITO"},
-                "perm_reso": {"type": "Standard", "material": "Ag"},
-                "perm_metalliclayer": {"type": "Standard", "material": "Au"},
+                "perm_reso": {"type": "Standard", "material": "Silver"},
+                "perm_metalliclayer": {"type": "Standard", "material": "Gold"},
                 "perm_accroche": {"type": "None"},
                 "perm_func": {"type": "None"},
                 "perm_mol": {"type": "None"}
@@ -303,10 +303,10 @@ class MaterialSelectorTabbedNotebook:
             "Préconfig Structure 2": {
                 "perm_env": {"type": "None"},
                 "perm_dielec": {"type": "Custom", "expression": "1.45**2"},
-                "perm_sub": {"type": "Standard", "material": "ITO"},
-                "perm_reso": {"type": "Standard", "material": "Ag"},
-                "perm_metalliclayer": {"type": "Standard", "material": "Au"},
-                "perm_accroche": {"type": "Standard", "material": "Cr"},
+                "perm_sub": {"type": "Custom", "expression": "1.50**2"},
+                "perm_reso": {"type": "Standard", "material": "Silver"},
+                "perm_metalliclayer": {"type": "Standard", "material": "Gold"},
+                "perm_accroche": {"type": "Standard", "material": "Aluminium"},
                 "perm_func": {"type": "None"},
                 "perm_mol": {"type": "None"}
             }
