@@ -30,15 +30,15 @@ geometry_limits = {
     "period": (50, 300)
 }
 
-# Fichier de sauvegarde (dans le dossier Summary_Simulation)
+# Fichier de sauvegarde (dans le dossier CONFIGURATIONS_dir)
 def get_geometry_save_path():
     module_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
     workspace_dir = os.path.dirname(module_dir)
-    notebooks_dir = os.path.join(workspace_dir, "notebooks")
-    summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
-    if not os.path.exists(summary_dir):
-        os.makedirs(summary_dir)
-    return os.path.join(summary_dir, "geometry_configurations.json")
+    CONFIGURATIONS_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
+    if not os.path.exists(CONFIGURATIONS_dir):
+        os.makedirs(CONFIGURATIONS_dir)
+    return os.path.join(CONFIGURATIONS_dir, "geometry_configurations.json")
+
 
 # Liste globale pour stocker les configurations de géométrie enregistrées
 GEOMETRY_CONFIGS = []

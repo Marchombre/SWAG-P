@@ -29,6 +29,21 @@
         "thick_accroche": 0.0,
         "period": 100.2153
       }
+    },
+    {
+      "config_name": "Geom_S2+mol",
+      "geometry": {
+        "thick_super": 200.0,
+        "width_reso": 30.0,
+        "thick_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_func": 1.0,
+        "thick_mol": 1.0,
+        "thick_metalliclayer": 10.0,
+        "thick_sub": 200.0,
+        "thick_accroche": 3.0,
+        "period": 100.2153
+      }
     }
   ]
 }

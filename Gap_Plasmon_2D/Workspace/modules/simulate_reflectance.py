@@ -57,18 +57,20 @@ def simulate_reflectance_single(lambda_range, geometry, wave, df_config, json_co
 
 def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_path):
     """
-    Charge le fichier geom_mat_combinations.json dans Summary_Simulation,
+    Charge le fichier geom_mat_combinations.json dans CONFIGURATIONS,
     puis simule la réflectance pour chaque combinaison géométrie-matériaux.
     
     Retourne un dict { combo_name: (Rup_values, Rdown_values) }
-    et génère un fichier texte de résumé dans Summary_Simulation.
+    et génère un fichier texte de résumé dans CONFIGURATIONS.
     """
     # 1. Détermination du chemin du fichier JSON de combinaisons.
     module_dir = os.path.dirname(os.path.abspath(__file__))
     workspace_dir = os.path.dirname(module_dir)
+    CONFIGURATIONS_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
+    combos_file = os.path.join(CONFIGURATIONS_dir, "geom_mat_combinations.json")
+    
     notebooks_dir = os.path.join(workspace_dir, "notebooks")
     summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
-    combos_file = os.path.join(summary_dir, "geom_mat_combinations.json")
 
     if not os.path.isfile(combos_file):
         raise FileNotFoundError(f"Le fichier de combinaisons {combos_file} est introuvable. "
@@ -153,7 +155,7 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
                         val = mat.get("expression", "").strip()
                     break
 
-            # Si la valeur est "None" ou trop compliquée, on ne l'inclut pas.
+            # Si la valeur est "None" on ne l'inclut pas.
             # Ici, on suppose que si la valeur ne correspond pas à une formule chimique simple
             # (lettres, chiffres, éventuellement des points ou des astérisques), on l'ignore.
             if val.lower() == "none" or val == "":

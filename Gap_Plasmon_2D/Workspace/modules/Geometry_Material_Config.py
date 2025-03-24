@@ -5,13 +5,12 @@ import json
 
 def load_json_config(file_name):
     """
-    Charge un fichier JSON situé dans Summary_Simulation.
+    Charge un fichier JSON situé dans CONFIGURATIONS_dir.
     """
     module_dir = os.path.dirname(os.path.abspath(__file__))
     workspace_dir = os.path.dirname(module_dir)
-    notebooks_dir = os.path.join(workspace_dir, "notebooks")
-    summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
-    file_path = os.path.join(summary_dir, file_name)
+    CONFIGURATIONS_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
+    file_path = os.path.join(CONFIGURATIONS_dir, file_name)
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
@@ -125,14 +124,14 @@ def create_geometry_material_widget():
                     print("  geometry:", cfg["geometry"]["config_name"])
                     print("  material:", cfg["material"]["config_name"])
                     print("-" * 40)
+                    
                 # Enregistrement dans geom_mat_combinations.json
                 module_dir = os.path.dirname(os.path.abspath(__file__))
                 workspace_dir = os.path.dirname(module_dir)
-                notebooks_dir = os.path.join(workspace_dir, "notebooks")
-                summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
-                if not os.path.exists(summary_dir):
-                    os.makedirs(summary_dir)
-                combos_file = os.path.join(summary_dir, "geom_mat_combinations.json")
+                CONFIGURATIONS_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
+                if not os.path.exists(CONFIGURATIONS_dir):
+                    os.makedirs(CONFIGURATIONS_dir)
+                combos_file = os.path.join(CONFIGURATIONS_dir, "geom_mat_combinations.json")
                 with open(combos_file, "w", encoding="utf-8") as f:
                     json.dump({"ALL_COMBINED_CONFIGS": combined_configs}, f, indent=2)
                 print(f"\nCombinations saved in {combos_file}")

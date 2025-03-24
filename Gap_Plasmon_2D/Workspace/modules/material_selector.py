@@ -1,17 +1,15 @@
 import os
 import yaml
 import json
-import pandas as pd
 import ipywidgets as widgets
 from IPython.display import display
 
-# --- 1) CHARGEMENT DU CATALOGUE ---
+# --- Fonctions utilitaires ---
 def load_catalog_full(catalog_file):
     with open(catalog_file, "r", encoding="utf-8") as f:
         lib = yaml.safe_load(f)
     return lib
 
-# --- 2) CHARGEMENT DES MATÉRIAUX STANDARD (JSON + .txt) ---
 def load_combined_materials(json_combined_path):
     with open(json_combined_path, 'r', encoding='utf-8') as f:
         materials_data = json.load(f)
@@ -19,7 +17,6 @@ def load_combined_materials(json_combined_path):
 
 def get_standard_materials(json_combined_path, data_directory):
     found = set()
-    # Lecture du JSON
     if os.path.isfile(json_combined_path):
         try:
             materials_data = load_combined_materials(json_combined_path)
@@ -28,8 +25,6 @@ def get_standard_materials(json_combined_path, data_directory):
             print(f"[AVERTISSEMENT] Problème lecture JSON '{json_combined_path}': {e}")
     else:
         print(f"[AVERTISSEMENT] Le fichier JSON '{json_combined_path}' est introuvable.")
-
-    # Recherche des fichiers .txt dans data_directory
     if os.path.isdir(data_directory):
         for root, dirs, files in os.walk(data_directory):
             for fn in files:
@@ -38,21 +33,17 @@ def get_standard_materials(json_combined_path, data_directory):
                     found.add(name)
     else:
         print(f"[AVERTISSEMENT] Le dossier data '{data_directory}' n’existe pas ou n’est pas un répertoire.")
-
     return sorted(found)
 
-# --- 3) Widget RefractiveIndex (sélections Shelf -> Book -> Page) ---
+# --- Classe RefractiveIndexArboWidget ---
 class RefractiveIndexArboWidget:
     def __init__(self, library):
         self.library = library
-        # Création de trois Dropdown pour shelf, book et page
         self.shelf_dropdown = widgets.Dropdown(description="Shelf:")
         self.book_dropdown = widgets.Dropdown(description="Book:")
         self.page_dropdown = widgets.Dropdown(description="Page:")
-        # Container horizontal
         self.container = widgets.HBox([self.shelf_dropdown, self.book_dropdown, self.page_dropdown])
         self._populate_shelf()
-        # Liaison des événements
         self.shelf_dropdown.observe(self.on_shelf_changed, names='value')
         self.book_dropdown.observe(self.on_book_changed, names='value')
 
@@ -145,18 +136,13 @@ class RefractiveIndexArboWidget:
             "data": data_field
         }
 
-
     def set_selection(self, selection):
-        # Affecter la valeur pour le shelf
         for i, entry in enumerate(self.library):
             if entry.get("SHELF", "") == selection.get("shelf", ""):
                 self.shelf_dropdown.value = i
                 break
-
-        # Si on n'a pas encore stocké l'observateur, le définir et l'attacher.
         if not hasattr(self, "_set_book_and_page_handler"):
             def set_book_and_page(change):
-                # Affecter la valeur book
                 for option in self.book_dropdown.options:
                     if option[0] == selection.get("book", "") or (
                         option[1] is not None and 
@@ -164,7 +150,6 @@ class RefractiveIndexArboWidget:
                     ):
                         self.book_dropdown.value = option[1]
                         break
-                # Affecter ensuite le page
                 if not hasattr(self, "_set_page_handler"):
                     def set_page(change2):
                         for option in self.page_dropdown.options:
@@ -176,37 +161,30 @@ class RefractiveIndexArboWidget:
             self._set_book_and_page_handler = set_book_and_page
             self.shelf_dropdown.observe(self._set_book_and_page_handler, names="value")
         else:
-            # Si l'observateur est déjà défini, on peut simplement l'appeler (ou l'attacher à nouveau)
             try:
                 self.shelf_dropdown.unobserve(self._set_book_and_page_handler, names="value")
             except ValueError:
                 pass
             self.shelf_dropdown.observe(self._set_book_and_page_handler, names="value")
 
-
-# --- 4) Widget pour un rôle (MaterialRoleWidget) ---
+# --- Classe MaterialRoleWidget ---
 class MaterialRoleWidget:
     def __init__(self, role_name, library, standard_list):
         self.role_name = role_name
         self.library = library
         self.standard_list = standard_list
 
-        # Dropdown pour choisir le mode
         self.mode_dropdown = widgets.Dropdown(
             options=["None", "Custom", "Standard", "RefractiveIndex"],
             description="Mode:"
         )
-        # Champ de saisie pour mode Custom
         self.custom_text = widgets.Text(placeholder="Saisir l'expression")
-        # Dropdown pour mode Standard
         self.standard_dropdown = widgets.Dropdown(
             options=standard_list,
             description="Standard:"
         )
-        # Widget pour RefractiveIndex
         self.ri_widget = RefractiveIndexArboWidget(library)
 
-        # Conteneur vertical pour regrouper les widgets
         self.container = widgets.VBox([
             self.mode_dropdown,
             self.custom_text,
@@ -263,19 +241,24 @@ class MaterialRoleWidget:
                 "data":  sel["data"]
             }
 
-# --- 5) Interface principale avec onglets et gestion des préconfigurations ---
+# --- Classe MaterialSelectorTabbedNotebook ---
 class MaterialSelectorTabbedNotebook:
     def __init__(self, roles):
-        # Détermination des chemins (adaptés selon votre arborescence)
+        # Détermination des chemins (adaptés à votre arborescence)
         script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
         workspace_dir = os.path.abspath(os.path.join(script_dir, ".."))
         catalog_path = os.path.join(workspace_dir, "catalog_nk.yml")
         data_dir = os.path.join(workspace_dir, "data")
         json_combined_path = os.path.join(data_dir, "combined_materials.json")
+        # Dossier CONFIGURATIONS pour les configurations persistantes
+        self.CONFIGURATIONS_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
 
         self.library = load_catalog_full(catalog_path)
         self.standard_list = get_standard_materials(json_combined_path, data_dir)
         self.roles = roles
+
+        # Définir output AVANT d'appeler load_saved_configs
+        self.output = widgets.Output()
 
         # Création d'un onglet avec un MaterialRoleWidget par rôle
         self.role_widgets = {}
@@ -288,7 +271,7 @@ class MaterialSelectorTabbedNotebook:
         for i, role in enumerate(roles):
             self.tab.set_title(i, role)
 
-        # Initialisation des préconfigurations (on conserve ici des valeurs par défaut)
+        # Préconfigurations par défaut (elles seront persistées)
         self.preconfigs = {
             "Préconfig Structure 1": {
                 "perm_env": {"type": "None"},
@@ -311,27 +294,25 @@ class MaterialSelectorTabbedNotebook:
                 "perm_mol": {"type": "None"}
             }
         }
-        # Dropdown pour sélectionner une préconfiguration existante
+        # Charger les préconfig sauvegardées si elles existent
+        self.load_preconfigs()
+
         self.preconfig_dropdown = widgets.Dropdown(
             options=self._get_preconfig_options(),
             description="Préconfig:"
         )
-        # Champ pour saisir le nom d'une nouvelle préconfiguration
         self.preconfig_name_text = widgets.Text(
             description="Nom Préconfig:",
             placeholder="Saisir un nom..."
         )
-        # Boutons de gestion des préconfigurations
         self.add_preconfig_btn = widgets.Button(description="Ajouter Préconfig", button_style="info")
         self.update_preconfig_btn = widgets.Button(description="Mettre à jour Préconfig")
         self.delete_preconfig_btn = widgets.Button(description="Supprimer Préconfig", button_style="danger")
-        # Liaison des événements
         self.preconfig_dropdown.observe(self.on_preconfig_change, names="value")
         self.add_preconfig_btn.on_click(self.on_add_preconfig)
         self.update_preconfig_btn.on_click(self.on_update_preconfig)
         self.delete_preconfig_btn.on_click(self.on_delete_preconfig)
 
-        # Zone de gestion des préconfigurations (un conteneur horizontal)
         self.preconfig_control_box = widgets.HBox([
             self.preconfig_dropdown,
             self.preconfig_name_text,
@@ -340,19 +321,16 @@ class MaterialSelectorTabbedNotebook:
             self.delete_preconfig_btn
         ])
 
-        # Champ pour le nom de la configuration (pour sauvegarder la config complète)
         self.config_name_text = widgets.Text(
             description="Configuration Name:",
             placeholder="Saisir le nom de la config"
         )
 
-        # Boutons pour ajouter et sauvegarder la configuration globale
         self.add_config_btn = widgets.Button(description="Add Material config")
-        self.save_quit_btn = widgets.Button(description="Save & Quit", button_style='success',)
+        self.save_quit_btn = widgets.Button(description="Save & Quit", button_style='success')
         self.add_config_btn.on_click(self.on_add_config)
         self.save_quit_btn.on_click(self.on_save_quit)
 
-        # Widgets pour charger, mettre à jour et supprimer une configuration enregistrée
         self.config_dropdown = widgets.Dropdown(
             options=[],
             description="Saved Configs:",
@@ -365,10 +343,6 @@ class MaterialSelectorTabbedNotebook:
         self.update_config_btn.on_click(self.on_update_config)
         self.delete_config_btn.on_click(self.on_delete_config)
 
-        # Zone de sortie pour messages
-        self.output = widgets.Output()
-
-        # Assemblage final du conteneur
         self.container = widgets.VBox([
             self.preconfig_control_box,
             self.tab,
@@ -379,9 +353,9 @@ class MaterialSelectorTabbedNotebook:
         ])
 
         self.all_configs = []
+        self.load_saved_configs()
 
     def _get_preconfig_options(self):
-        # Retourne une liste d'options pour le dropdown des préconfigurations
         options = [("Aucune", "")]
         for key in self.preconfigs:
             options.append((key, key))
@@ -389,7 +363,11 @@ class MaterialSelectorTabbedNotebook:
 
     def on_preconfig_change(self, change):
         preconfig_id = change["new"]
-        if preconfig_id:
+        if preconfig_id == "":
+            for role, widget_role in self.role_widgets.items():
+                widget_role.mode_dropdown.value = "None"
+                widget_role.custom_text.value = ""
+        else:
             self.apply_preconfig(preconfig_id)
 
     def apply_preconfig(self, preconfig_id):
@@ -403,13 +381,12 @@ class MaterialSelectorTabbedNotebook:
                 elif config["type"] == "Standard":
                     widget_role.standard_dropdown.value = config.get("material", "")
                 elif config["type"] == "RefractiveIndex":
-                    # Si set_selection est disponible, on l'utilise
                     if hasattr(widget_role.ri_widget, "set_selection"):
                         selection = {
                             "shelf": config.get("shelf", ""),
-                            "book": config.get("book", ""),
-                            "page": config.get("page", ""),
-                            "data": config.get("data", "")
+                            "book":  config.get("book", ""),
+                            "page":  config.get("page", ""),
+                            "data":  config.get("data", "")
                         }
                         widget_role.ri_widget.set_selection(selection)
             else:
@@ -421,18 +398,18 @@ class MaterialSelectorTabbedNotebook:
             with self.output:
                 print("Veuillez saisir un nom pour la préconfiguration.")
             return
-        # Récupérer la configuration actuelle de tous les rôles
         new_preconfig = {}
         for role, widget_role in self.role_widgets.items():
             new_preconfig[role] = widget_role.get_config()
         self.preconfigs[name] = new_preconfig
         self.preconfig_dropdown.options = self._get_preconfig_options()
+        self.preconfig_dropdown.value = ""
+        self.save_preconfigs()
         with self.output:
             print(f"La préconfiguration '{name}' a été ajoutée.")
         self.preconfig_name_text.value = ""
 
     def on_update_preconfig(self, b):
-        # Met à jour la préconfiguration actuellement sélectionnée avec la config actuelle
         selected = self.preconfig_dropdown.value
         if not selected:
             with self.output:
@@ -442,6 +419,9 @@ class MaterialSelectorTabbedNotebook:
         for role, widget_role in self.role_widgets.items():
             updated_preconfig[role] = widget_role.get_config()
         self.preconfigs[selected] = updated_preconfig
+        self.preconfig_dropdown.options = self._get_preconfig_options()
+        self.preconfig_dropdown.value = ""
+        self.save_preconfigs()
         with self.output:
             print(f"La préconfiguration '{selected}' a été mise à jour.")
 
@@ -454,11 +434,56 @@ class MaterialSelectorTabbedNotebook:
         if selected in self.preconfigs:
             del self.preconfigs[selected]
             self.preconfig_dropdown.options = self._get_preconfig_options()
+            self.preconfig_dropdown.value = ""
+            self.save_preconfigs()
             with self.output:
                 print(f"La préconfiguration '{selected}' a été supprimée.")
         else:
             with self.output:
                 print("La préconfiguration sélectionnée n'existe pas.")
+
+    def load_preconfigs(self):
+        preconfig_file = os.path.join(self.CONFIGURATIONS_dir, "preconfigs.json")
+        if os.path.isfile(preconfig_file):
+            try:
+                with open(preconfig_file, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                self.preconfigs = loaded.get("PRECONFIGS", self.preconfigs)
+                with self.output:
+                    print(f"Préconfigurations chargées depuis {preconfig_file}")
+            except Exception as e:
+                with self.output:
+                    print(f"Erreur lors du chargement des préconfigurations depuis {preconfig_file}: {e}")
+        else:
+            with self.output:
+                print("Aucun fichier de préconfigurations trouvé, utilisation des valeurs par défaut.")
+
+    def save_preconfigs(self):
+        preconfig_file = os.path.join(self.CONFIGURATIONS_dir, "preconfigs.json")
+        try:
+            with open(preconfig_file, "w", encoding="utf-8") as f:
+                json.dump({"PRECONFIGS": self.preconfigs}, f, indent=2)
+            with self.output:
+                print(f"Préconfigurations sauvegardées dans {preconfig_file}")
+        except Exception as e:
+            with self.output:
+                print(f"Erreur lors de la sauvegarde des préconfigurations dans {preconfig_file}: {e}")
+
+    def load_saved_configs(self):
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        workspace_dir = os.path.dirname(module_dir)
+        CONFIGURATIONS_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
+        config_file = os.path.join(CONFIGURATIONS_dir, "material_config.json")
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                final_dict = json.load(f)
+            self.all_configs = final_dict.get("ALL_CONFIGS", [])
+            self.update_config_dropdown()
+            with self.output:
+                print(f"Configurations chargées depuis {config_file}")
+        except Exception as e:
+            with self.output:
+                print(f"Impossible de charger les configurations depuis {config_file}: {e}")
 
     def update_config_dropdown(self):
         options = [(cfg["config_name"], cfg) for cfg in self.all_configs]
@@ -495,13 +520,12 @@ class MaterialSelectorTabbedNotebook:
                 print("Aucune configuration n'a été ajoutée.")
             return
         final_dict = {"ALL_CONFIGS": self.all_configs}
-        module_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+        module_dir = os.path.dirname(os.path.abspath(__file__))
         workspace_dir = os.path.dirname(module_dir)
-        notebooks_dir = os.path.join(workspace_dir, "notebooks")
-        summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
-        if not os.path.exists(summary_dir):
-            os.makedirs(summary_dir)
-        config_file = os.path.join(summary_dir, "material_config.json")
+        CONFIGURATIONS_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
+        if not os.path.exists(CONFIGURATIONS_dir):
+            os.makedirs(CONFIGURATIONS_dir)
+        config_file = os.path.join(CONFIGURATIONS_dir, "material_config.json")
         with open(config_file, "w", encoding="utf-8") as f:
             json.dump(final_dict, f, indent=2)
         with self.output:
@@ -572,7 +596,7 @@ class MaterialSelectorTabbedNotebook:
     def display(self):
         display(self.container)
 
-# --- Configuration par défaut des rôles ---
+# --- Définition des rôles par défaut ---
 DEFAULT_ROLES = [
     "perm_env",
     "perm_dielec",
@@ -583,6 +607,8 @@ DEFAULT_ROLES = [
     "perm_func",
     "perm_mol"
 ]
+
+
 
 # --- Instanciation et affichage ---
 selector = MaterialSelectorTabbedNotebook(DEFAULT_ROLES)

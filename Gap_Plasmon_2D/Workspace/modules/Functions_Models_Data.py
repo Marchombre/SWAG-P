@@ -86,12 +86,6 @@ def BrendelBormann_Faddeeva(lambda_test, f0, omega_p, Gamma0, f, omega, gamma, s
 
 
 
-def compute_permittivity(lam, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=64):
-    """
-    Wrapper pour calculer la permittivité à l'aide du modèle Brendel & Bormann.
-    """
-    return BrendelBormann_Faddeeva(lam, f0, omega_p, Gamma0, f, omega, gamma, sigma, N)
-
 def get_n_k(material_name, lam, json_combined_path):
     """
     Extrait n et k à partir d'un fichier JSON contenant des données expérimentales.
@@ -167,7 +161,7 @@ def get_permittivity_from_txt(material_name, lambda_val_nm, data_dir):
     # Conversion des longueurs d'onde du fichier :
     # Le fichier fournit les wl en micromètres. Pour que l'interpolation se fasse 
     # avec lambda_val_nm (en nanomètres), on convertit wl_data en nm en multipliant par 1000.
-    wl_data = np.array(wl_data)# * 1000
+    wl_data = np.array(wl_data) * 1000
     n_data = np.array(n_data)
     k_data = np.array(k_data)
 
@@ -182,7 +176,7 @@ def get_material_permittivity(material_name, lambda_val_nm, json_combined_path, 
     
     Recherche dans le fichier JSON combiné :
       - Si le modèle est "expdata", on utilise get_n_k.
-      - Sinon, on utilise compute_permittivity.
+      - Sinon, on utilise BrendelBormann_Faddeeva.
     
     Si le matériau n'est pas trouvé dans le JSON, on lit le fichier texte correspondant dans data_dir.
     """
@@ -201,6 +195,7 @@ def get_material_permittivity(material_name, lambda_val_nm, json_combined_path, 
         if model == "expdata":
             n_val, k_val = get_n_k(actual_mat, lambda_val_nm, json_combined_path)
             return (n_val + 1j * k_val)**2
+        
         elif model == "brendelbormann":
             try:
                 f0 = material["f0"]
@@ -210,7 +205,8 @@ def get_material_permittivity(material_name, lambda_val_nm, json_combined_path, 
                 omega = material["omega"]
                 gamma = material["Gamma"]
                 sigma = material["sigma"]
-                return compute_permittivity(lambda_val_nm, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=64)
+                return BrendelBormann_Faddeeva(lambda_val_nm, f0, omega_p, Gamma0, f, omega, gamma, sigma, N=64)
+            
             except KeyError as e:
                 raise ValueError(f"Les paramètres pour '{actual_mat}' sont incomplets dans le JSON : {e}")
             
