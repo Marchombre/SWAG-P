@@ -1,0 +1,21 @@
+# Dossiers et fichiers Jupyter
+.ipynb_checkpoints/
+
+# Dossiers spécifiques à votre projet
+/Optimisation/
+/PyMoosh/
+/STAGE_SWAG_P/
+/Sensors/
+/Venv_PyMoosh/
+
+# Fichiers spécifiques
+/SiA_Rup.jpg
+/data_accroches_all_Rdown-Rup.npz
+/material_test_Rup.jpg
+
+# Fichiers générés ou temporaires
+json
+np
+plt
+pm
+sys

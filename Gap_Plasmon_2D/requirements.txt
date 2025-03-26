@@ -1,0 +1,15 @@
+sys
+os
+io
+re
+json
+yaml
+scipy
+numpy
+pandas
+matplotlib
+ipywidgets
+IPython
+subprocess
+datetime
+# Ajoutez ici toutes les autres librairies dont votre projet a besoin
