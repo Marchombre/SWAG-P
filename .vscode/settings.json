@@ -1,6 +1,8 @@
+// settings.json
+
 {
     "python.analysis.extraPaths": [
-        "./Gap_Plasmon_2D/Workspace/CODE/modules",
         "./Gap_Plasmon_2D/Workspace/modules"
-    ]
+    ],
+    "python.analysis.autoImportCompletions": true
 }
