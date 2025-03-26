@@ -4,13 +4,13 @@
       "perm_env": {
         "type": "None"
       },
-      "perm_dielec": {
+      "perm_gap": {
         "type": "Custom",
         "expression": "1.45**2"
       },
-      "perm_sub": {
-        "type": "Standard",
-        "material": "ITO"
+      "perm_diel": {
+        "type": "Custom",
+        "expression": "1.45**2"
       },
       "perm_reso": {
         "type": "Standard",
@@ -28,13 +28,22 @@
       },
       "perm_mol": {
         "type": "None"
+      },
+      "perm_sub": {
+        "type": "Standard",
+        "material": "ITO"
       }
     },
     "Pr\u00e9config Structure 2": {
       "perm_env": {
         "type": "None"
       },
-      "perm_dielec": {
+      "perm_gap": {
+        "type": "Custom",
+        "expression": "1.45**2"
+
+      },
+      "perm_diel": {
         "type": "Custom",
         "expression": "1.45**2"
       },

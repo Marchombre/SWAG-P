@@ -27,32 +27,19 @@ def simulate_reflectance_single(lambda_range, geometry, wave, df_config, json_co
     Rdown_values = []
     for lam in lambda_range:
         # 1. Pour chaque longueur d'onde lam, on reconstruit les permittivités des matériaux.
-        #    Cette étape se fait via la fonction build_material_configuration_dynamic.
-        #    Elle prend le DataFrame de configuration (df_config), la longueur d'onde actuelle,
-        #    le chemin vers le JSON combiné (contenant vos données ExpData/BrendelBormann) et 
-        #    d'éventuels overrides pour l'indice (ri_overrides).
-        #    Le résultat, materials_perm, est un dictionnaire où chaque clé correspond à un rôle 
-        #    (par exemple, "perm_sub", "perm_reso", etc.) et la valeur est la permittivité calculée.
         materials_perm = build_material_configuration_dynamic(df_config, lam, json_combined_path, ri_overrides)
         
         # 2. Mise à jour de la longueur d'onde dans le dictionnaire wave.
-        #    Cela permet de passer la valeur lam (qui varie dans la boucle) à la fonction de calcul.
         wave["wavelength"] = lam
         
-        # 3. Appel de la fonction reflectance qui, à partir de la géométrie, des paramètres d'onde
-        #    et des permittivités calculées, retourne Rup (la réflectance vers le haut) et
-        #    Rdown (la réflectance vers le bas).
+        # 3. Appel de la fonction reflectance qui retourne Rup et Rdown.
         Rup, Rdown = reflectance(geometry, wave, materials_perm, n_mod)
         
-        # 4. On accumule les résultats pour chaque lam dans des listes.
+        # 4. Accumulation des résultats pour chaque lam.
         Rup_values.append(Rup)
         Rdown_values.append(Rdown)
 
-    # 5. Retourne les listes de résultats.
     return Rup_values, Rdown_values
-
-
-
 
 
 def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_path):
@@ -83,39 +70,32 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
     if not all_combos:
         raise ValueError("Aucune combinaison trouvée dans geom_mat_combinations.json.")
 
-    # 3. Pour chaque configuration enregistrée dans le JSON...
-    results = {}          # Pour stocker les résultats de simulation pour chaque configuration.
-    simulation_details = {}  # Pour sauvegarder les détails de chaque configuration (pour résumé).
+    results = {}          # Pour stocker les résultats de simulation.
+    simulation_details = {}  # Pour sauvegarder les détails (pour résumé).
 
     for combo in all_combos:
-        # Extraction du nom de la configuration, par exemple "Geom_S1_based_on_schema - Mat_S1".
+        # Extraction du nom de la configuration.
         combo_name = combo["config_name"]
         
         # Extraction de la géométrie.
-        # Dans le JSON, la structure est : 
-        # "geometry": { "config_name": "...", "geometry": { ... } }
-        # On extrait le dictionnaire de paramètres géométriques.
         geometry_dict = combo["geometry"]["geometry"]
         
         # Extraction de la configuration matérielle.
-        # Dans le JSON, "material" contient "MATERIALS_CONFIG" qui est une liste de dictionnaires.
         material_config_list = combo["material"]["MATERIALS_CONFIG"]
         
-        # Conversion de la liste en DataFrame (ce qui est requis par build_material_configuration_dynamic).
+        # Conversion en DataFrame.
         df_config = pd.DataFrame(material_config_list)
         
-        # Extraction d'éventuels RI_OVERRIDES (pour des ajustements spécifiques de l'indice).
+        # Extraction des RI_OVERRIDES.
         ri_overrides = combo["material"].get("RI_OVERRIDES", {})
 
-        # 4. Simulation pour cette configuration en appelant simulate_reflectance_single.
+        # Simulation pour cette configuration.
         Rup, Rdown = simulate_reflectance_single(
             lambda_range, geometry_dict, wave, df_config, json_combined_path, n_mod, ri_overrides
         )
         
-        # Stockage des résultats dans le dictionnaire results, clé = nom de configuration.
         results[combo_name] = (Rup, Rdown)
 
-        # Stockage des détails pour le résumé
         simulation_details[combo_name] = {
             "geometry": geometry_dict,
             "material_config": df_config.to_dict(orient="records"),
@@ -124,55 +104,43 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
             "Rdown": Rdown
         }
 
-    # 4) Construction du nom de fichier résumé
-    # Ordre général souhaité : env, reso, diélectrique, molecule, functionalisation, accroche, metallic layer, sub.
+    # 4) Construction du nom de fichier résumé.
+    # Nouvel ordre de rôles :
     roles_order = [
         "perm_env",
         "perm_reso",
-        "perm_dielec",
+        "perm_gap",
         "perm_mol",
         "perm_func",
-        "perm_accroche",
+        "perm_diel",
         "perm_metalliclayer",
+        "perm_accroche",
         "perm_sub"
     ]
     suffix_parts = []
     if simulation_details:
-        # On utilise la configuration matérielle du premier combo (supposé représentatif)
         first_combo = next(iter(simulation_details.values()))
         for role in roles_order:
             val = ""
-            # Recherche dans material_config de l'entrée correspondant au rôle
             for entry in first_combo["material_config"]:
                 if entry.get("key", "").strip() == role:
                     mat = entry.get("material", {})
                     mtype = mat.get("type", "").strip().lower()
-                    if mtype == "none" or mtype == "":
+                    if mtype in ("none", ""):
                         val = ""
                     elif mtype == "standard":
                         val = mat.get("material", "").strip()
                     elif mtype == "custom":
                         val = mat.get("expression", "").strip()
                     break
-
-            # Si la valeur est "None" on ne l'inclut pas.
-            # Ici, on suppose que si la valeur ne correspond pas à une formule chimique simple
-            # (lettres, chiffres, éventuellement des points ou des astérisques), on l'ignore.
-            if val.lower() == "none" or val == "":
-                suffix_parts.append("")
-            else:
-                # On conserve uniquement les caractères alphanumériques, points, astérisques et signes de multiplication
-                # (pour conserver par exemple "1.45**2")
+            if val.lower() != "none" and val != "":
                 val_clean = re.sub(r'[^A-Za-z0-9\.\*\+]', '', val)
                 suffix_parts.append(val_clean)
-    # On joint les valeurs avec un underscore en respectant l'ordre
-    # On ignore les segments vides
     filtered_parts = [part for part in suffix_parts if part]
     material_str_clean = "_".join(filtered_parts)
 
     summary_filename = os.path.join(summary_dir, f"simulation_summary_{material_str_clean}.txt")
 
-    # 5) Création du résumé dans un fichier texte
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     lines = []
     lines.append("Simulation Summary - All Geometry/Material Combos")
@@ -198,3 +166,4 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
 
     print(f"Résumé de la simulation multi-combos sauvegardé dans : {summary_filename}")
     return results
+

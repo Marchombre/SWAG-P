@@ -1,47 +1,66 @@
 {
   "ALL_GEOMETRY_CONFIGS": [
     {
-      "config_name": "Geom_S2",
+      "config_name": "Geom_S1_diel=1",
       "geometry": {
         "thick_super": 200.0,
-        "width_reso": 30.0,
         "thick_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_func": 1.0,
-        "thick_mol": 0.0,
-        "thick_metalliclayer": 10.0,
-        "thick_sub": 200.0,
-        "thick_accroche": 3.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S1",
-      "geometry": {
-        "thick_super": 200.0,
         "width_reso": 30.0,
-        "thick_reso": 30.0,
         "thick_gap": 3.0,
-        "thick_func": 1.0,
         "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 1.0,
         "thick_metalliclayer": 10.0,
-        "thick_sub": 200.0,
         "thick_accroche": 0.0,
+        "thick_sub": 200.0,
         "period": 100.2153
       }
     },
     {
-      "config_name": "Geom_S2+mol",
+      "config_name": "Geom_S1_func=1",
       "geometry": {
         "thick_super": 200.0,
-        "width_reso": 30.0,
         "thick_reso": 30.0,
+        "width_reso": 30.0,
         "thick_gap": 3.0,
+        "thick_mol": 0.0,
         "thick_func": 1.0,
-        "thick_mol": 1.0,
+        "thick_diel": 0.0,
         "thick_metalliclayer": 10.0,
+        "thick_accroche": 0.0,
         "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Geom_S2_diel=1",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 1.0,
+        "thick_metalliclayer": 10.0,
         "thick_accroche": 3.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Geom_S2_func=1",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.0,
+        "thick_func": 1.0,
+        "thick_diel": 0.0,
+        "thick_metalliclayer": 10.0,
+        "thick_accroche": 3.0,
+        "thick_sub": 200.0,
         "period": 100.2153
       }
     }
