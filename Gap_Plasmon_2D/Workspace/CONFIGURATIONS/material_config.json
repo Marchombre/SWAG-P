@@ -261,6 +261,73 @@
         }
       ],
       "RI_OVERRIDES": {}
+    },
+    {
+      "config_name": "Mat_DielFuncMol",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "Custom",
+            "expression": "1.40"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "Custom",
+            "expression": "1.43"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "Standard",
+            "material": "Silver"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "Standard",
+            "material": "Gold"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Standard",
+            "material": "ITO"
+          }
+        }
+      ],
+      "RI_OVERRIDES": {}
     }
   ]
 }

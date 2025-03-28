@@ -63,6 +63,118 @@
         "thick_sub": 200.0,
         "period": 100.2153
       }
+    },
+    {
+      "config_name": "Geom_Diel1Func1Mol0.5<Gap",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.5,
+        "thick_func": 1.0,
+        "thick_diel": 1.0,
+        "thick_metalliclayer": 10.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Geom_Diel1.4Func1.2Mol0.6>Gap",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.6,
+        "thick_func": 1.2,
+        "thick_diel": 1.4,
+        "thick_metalliclayer": 10.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Geom_Diel0.7Func2Mol0.5>Gap",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.5,
+        "thick_func": 2.0,
+        "thick_diel": 0.7,
+        "thick_metalliclayer": 10.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Geom_Func1Mol0.5<Gap",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.5,
+        "thick_func": 1.0,
+        "thick_diel": 0.0,
+        "thick_metalliclayer": 10.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Geom_Diel1.7Func1Mol0.5<Gap5",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 5.0,
+        "thick_mol": 0.5,
+        "thick_func": 1.0,
+        "thick_diel": 1.7,
+        "thick_metalliclayer": 10.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Geom_Diel3Func1Mol0.5<Gap",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.5,
+        "thick_func": 1.0,
+        "thick_diel": 3.0,
+        "thick_metalliclayer": 10.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Geom_Diel1.7Func2Mol1.5>Gap",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 1.5,
+        "thick_func": 2.0,
+        "thick_diel": 1.7,
+        "thick_metalliclayer": 10.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
     }
   ]
 }

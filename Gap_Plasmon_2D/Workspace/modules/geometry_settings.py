@@ -327,8 +327,8 @@ def create_geometry_widget():
             # Draw Lateral columns in correct order: Dielectric, Functionalisation, Molecule
             y_curr_left = y_inter_bottom
             thickness_poly_scaled = scale * t_diel
-            draw_layer(ax, left_x,  y_curr_left, lateral_width, thickness_poly_scaled, "lightgreen", "Dielectric")
-            draw_layer(ax, right_x, y_curr_left, lateral_width, thickness_poly_scaled, "lightgreen", "Dielectric")
+            draw_layer(ax, left_x,  y_curr_left, lateral_width, thickness_poly_scaled, "green", "Dielectric")
+            draw_layer(ax, right_x, y_curr_left, lateral_width, thickness_poly_scaled, "green", "Dielectric")
             y_curr_left += thickness_poly_scaled
 
             thickness_func_scaled = scale * t_func

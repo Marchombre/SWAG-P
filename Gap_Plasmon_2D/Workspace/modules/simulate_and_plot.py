@@ -108,7 +108,7 @@ def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path, geo
     title = "Simulation Reflectance"
     
     # Figure 
-    fig = plt.figure(figsize=(9, 10))
+    fig = plt.figure(figsize=(10, 10))
     gs = GridSpec(2, 1, height_ratios=[3, 2.5])
     
     # --- Graphique ---
