@@ -1,15 +1,11 @@
-sys
-os
-io
-re
-json
-yaml
+PyYAML
 scipy
 numpy
 pandas
 matplotlib
 ipywidgets
 IPython
-subprocess
-datetime
-# Ajoutez ici toutes les autres librairies dont votre projet a besoin
+voila
+PyQt6
+PyMoosh
+ipyevents

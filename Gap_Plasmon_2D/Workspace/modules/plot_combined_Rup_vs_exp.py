@@ -2,70 +2,38 @@
 # plot_combined_Rup_vs_exp.py
 
 import os
-import re
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
-
-# On importe la fonction de lecture des données simulées depuis le module plot_all_combos.py
-from plot_all_combos import read_all_combos
-
-def read_experimental_data(file_path):
-    """
-    Lit le fichier de données expérimentales (Data_structure1.txt) qui contient
-    un en-tête suivi des données sous le format :
-    
-      Wavelengths (nm)     R
-      450.0, 0.2654618528289272
-      452.7638190954774, 0.2701075857791835
-      ...
-      
-    Les lignes d'en-tête (ne contenant pas de virgule) sont ignorées.
-    Retourne (wavelengths, R_values) sous forme de tableaux numpy.
-    """
-    wavelengths = []
-    R_values = []
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or ',' not in line:
-                continue
-            parts = line.split(',')
-            try:
-                wl = float(parts[0].strip())
-                R_val = float(parts[1].strip())
-                wavelengths.append(wl)
-                R_values.append(R_val)
-            except Exception:
-                continue
-    if not wavelengths or not R_values:
-        raise ValueError("Aucune donnée expérimentale n'a été trouvée dans le fichier.")
-    return np.array(wavelengths), np.array(R_values)
+from data_readers import read_all_combos, read_experimental_data
 
 def plot_combined_Rup_vs_exp(sim_summary_file, exp_file, exp_file2):
     """
-    Utilise la fonction read_all_combos du module plot_all_combos pour extraire
-    les spectres simulés depuis le fichier simulation_summary_XXX.txt, et lit
-    les données expérimentales depuis exp_file. Les deux spectres sont tracés
-    sur le même graphique.
+    Utilise read_all_combos pour extraire les spectres simulés depuis le fichier simulation_summary_XXX.txt,
+    et lit les données expérimentales depuis exp_file et exp_file2 en utilisant read_experimental_data.
+    Trace ensuite les courbes simulées et expérimentales sur le même graphique.
+    
+    Paramètres :
+      - sim_summary_file : chemin vers le fichier simulation_summary (issu du sous-dossier de notebooks, par exemple Summary_Simulation)
+      - exp_file : chemin vers le premier fichier de données expérimentales
+      - exp_file2 : chemin vers le second fichier de données expérimentales
     """
-    # Extraction des données simulées via le module plot_all_combos
+    # Extraction des spectres simulés
     combos = read_all_combos(sim_summary_file)
     
+    # Création de la figure
     plt.figure(figsize=(10, 6))
     
-    # Tracé des courbes simulées pour chaque combo
+    # Tracé des courbes simulées
     for combo_name, (wavelengths, Rup_values) in combos.items():
         plt.plot(wavelengths, Rup_values, '-', linewidth=2, label=combo_name)
     
-    # Extraction des données expérimentales
+    # Lecture et tracé des courbes expérimentales
     exp_wl, exp_R = read_experimental_data(exp_file)
     exp_wl2, exp_R2 = read_experimental_data(exp_file2)
-
-    # Tracé du spectre expérimental
     plt.plot(exp_wl, exp_R, linewidth=2, label="Experimental Rup S1")
     plt.plot(exp_wl2, exp_R2, linewidth=2, label="Experimental Rup S2")
-
+    
     plt.xlabel("Wavelength (nm)")
     plt.ylabel("Reflectance (Rup)")
     plt.title("Reflectance: Simulation vs Experimental")
@@ -74,13 +42,19 @@ def plot_combined_Rup_vs_exp(sim_summary_file, exp_file, exp_file2):
     
     # Sauvegarde de la figure dans le dossier Figures
     module_dir = os.path.dirname(os.path.abspath(__file__))
-    workspace_dir = os.path.dirname(module_dir)
+    workspace_dir = os.path.dirname(module_dir)  # Workspace est le parent de modules
     figures_dir = os.path.join(workspace_dir, "Figures")
     if not os.path.exists(figures_dir):
         os.makedirs(figures_dir)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     fig_path = os.path.join(figures_dir, f"combined_Rup_{timestamp}.png")
     plt.savefig(fig_path, bbox_inches='tight')
-    plt.show()
     print(f"Figure saved in: {fig_path}")
 
+if __name__ == "__main__":
+    # Exemple d'utilisation : adaptez les chemins ci-dessous selon votre structure réelle.
+    # Les données se trouvent dans le sous-dossier "Summary_Simulation" du dossier notebooks.
+    sim_summary_file = "/chemin/vers/notebooks/Summary_Simulation/simulation_summary_exemple.txt"
+    exp_file = "/chemin/vers/notebooks/Summary_Simulation/Data_structure1.txt"
+    exp_file2 = "/chemin/vers/notebooks/Summary_Simulation/Data_structure2.txt"
+    plot_combined_Rup_vs_exp(sim_summary_file, exp_file, exp_file2)
