@@ -5,11 +5,6 @@ Module: simulate_and_plot.py
 Ce module permet de simuler la reflectance pour différentes combinaisons géométriques et matérielles.
 Il fournit également des fonctions pour construire des tableaux récapitulatifs des configurations.
 
-Deux modes de lecture sont supportés pour la construction du tableau :
-  - Mode JSON : Lecture du fichier de configuration (geom_mat_combinations.json) (utilisé dans l'onglet Simulation).
-  - Mode Simulation Summary : Lecture des fichiers texte de simulation afin d'extraire dynamiquement
-    toutes les combinaisons (même lorsqu'un fichier contient plusieurs spectres).
-
 La fonction build_summary_table(filter_labels=None, sim_files=None, exp_files=None) renvoie :
   - config_labels : liste des labels des configurations (une colonne par spectre)
   - geometry_summaries : liste des résumés de géométrie correspondants
@@ -24,9 +19,12 @@ import ast
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
+from datetime import datetime
 
 from simulate_reflectance import simulate_reflectance_all_combos
 from Geometry_Material_Config import load_json_config
+from Saving_Functions import get_material_str_clean, save_simulation_summary, save_figure
+from data_readers import parse_simulation_summary, parse_experimental_data_summary
 
 # Liste ordonnée des paramètres géométriques avec noms conviviaux
 ordered_params = [
@@ -44,14 +42,6 @@ ordered_params = [
 ]
 
 def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path, geom_mat_combinations_path=None):
-    """
-    Exécute la simulation de reflectance pour toutes les combinaisons et trace le résultat.
-    Retourne un dictionnaire des résultats.
-    
-    Ce mode est utilisé pour l'onglet Simulation.
-    Les configurations sont lues depuis le fichier JSON (ou un fichier alternatif) et un tableau complet
-    (pour toutes les configurations) est affiché sous le graphique.
-    """
     results = simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_path)
     
     if geom_mat_combinations_path is None:
@@ -67,40 +57,50 @@ def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path, geo
     material_summaries = []
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     
+    simulation_details = {}
     for config in all_configs:
-        full_label = config.get("config_name", "UnknownConfig")
-        label = full_label.replace(" - ", "\n")
+        combo_name = config["config_name"]
+        geometry_dict = config["geometry"]["geometry"]
+        material_config_list = config["material"]["MATERIALS_CONFIG"]
+        # Pour simplifier, nous ne transformons pas le df_config en dict ici, on garde la liste
+        simulation_details[combo_name] = {
+            "geometry": geometry_dict,
+            "material_config": material_config_list,
+            "ri_overrides": config["material"].get("RI_OVERRIDES", {}),
+            # On ajoute Rup et Rdown pour la sauvegarde du résumé
+            "Rup": results[combo_name][0],
+            "Rdown": results[combo_name][1]
+        }
+        label = combo_name.replace(" - ", "\n")
         config_labels.append(label)
-        geom_config = config.get("geometry", {}).get("geometry", {})
         geom_lines = []
         for key, disp_name in ordered_params:
-            if key in geom_config:
-                geom_lines.append(f"{disp_name}: {geom_config[key]}")
+            if key in geometry_dict:
+                geom_lines.append(f"{disp_name}: {geometry_dict[key]}")
         geometry_summaries.append("\n".join(geom_lines))
         
-        material_details = config.get("material", {})
         mat_lines = []
-        if "MATERIALS_CONFIG" in material_details:
-            for entry in material_details["MATERIALS_CONFIG"]:
-                key = entry.get("key", "")
-                disp_name = key
-                for k, dname in ordered_params:
-                    if k == key:
-                        disp_name = dname
-                        break
-                mat_info = entry.get("material", {})
-                mtype = mat_info.get("type", "").strip().lower()
-                if mtype == "standard":
-                    val = mat_info.get("material", "").strip()
-                elif mtype == "custom":
-                    val = mat_info.get("expression", "").strip()
-                else:
-                    val = ""
-                if val:
-                    mat_lines.append(f"{disp_name}: {val}")
+        for entry in material_config_list:
+            key = entry.get("key", "")
+            disp_name = key
+            for k, dname in ordered_params:
+                if k == key:
+                    disp_name = dname
+                    break
+            mat_info = entry.get("material", {})
+            mtype = mat_info.get("type", "").strip().lower()
+            if mtype == "standard":
+                val = mat_info.get("material", "").strip()
+            elif mtype == "custom":
+                val = mat_info.get("expression", "").strip()
+            else:
+                val = ""
+            if val:
+                mat_lines.append(f"{disp_name}: {val}")
         material_summaries.append("\n".join(mat_lines))
     
     title = "Simulation Reflectance spectra"
+    
     fig = plt.figure(figsize=(10, 10))
     gs = fig.add_gridspec(2, 1, height_ratios=[3, 2.5])
     ax1 = fig.add_subplot(gs[0])
@@ -153,143 +153,29 @@ def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path, geo
             cell.set_height(0.04 * row_heights[row])
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     
-    module_dir = os.path.dirname(os.path.abspath(__file__))
-    workspace_dir = os.path.dirname(module_dir)
-    figures_dir = os.path.join(workspace_dir, "Figures")
-    if not os.path.exists(figures_dir):
-        os.makedirs(figures_dir)
-    fig_path = os.path.join(figures_dir, f"{re.sub(r'[^A-Za-z0-9_]', '', title)}.png")
-    plt.savefig(fig_path, bbox_inches="tight")
-    print(f"Figure saved in: {fig_path}")
+    # Sauvegarde des fichiers de résumé et de la figure via Saving_Functions
+    
+    # Obtenir le répertoire du fichier courant
+    current_dir_Sim_and_plot = os.getcwd()
+    # Chemin relatif vers le dossier "notebooks" (voisin de "modules")
+    notebooks_path = os.path.join(current_dir_Sim_and_plot, '..', 'notebooks')
+    figures_dir = os.path.join(current_dir_Sim_and_plot, '..', 'Figures')
+    summary_dir = os.path.join(notebooks_path, "Summary_Simulation")
+    
+    
+    save_simulation_summary(simulation_details, lambda_range, wave, n_mod, summary_dir)
+    material_str_clean = get_material_str_clean(simulation_details)
+    save_figure(fig, title, figures_dir, material_str_clean)
     
     return results
 
-def parse_simulation_summary(file_path):
-    """
-    Extrait toutes les combinaisons d'un fichier de simulation texte.
-    
-    Pour chaque bloc, recherche :
-      - "Combo name:" suivi du label,
-      - "Geometry:" suivi d'un dictionnaire Python,
-      - "Material config (df_config):" suivie d'une liste.
-    
-    Retourne une liste de dictionnaires avec les clés : 'label', 'geometry', 'material'.
-    """
-    combos = []
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except Exception as e:
-        print(f"Erreur lors de la lecture de {file_path}: {e}")
-        return combos
-    pattern = re.compile(
-        r"Combo name:\s*(?P<label>.*?)\s*\n"
-        r"(?:.*?\n)*?"
-        r"Geometry:\s*(?P<geometry>\{.*?\})\s*\n"
-        r"(?:.*?\n)*?"
-        r"Material config \(df_config\):\s*(?P<material>\[.*?\])",
-        re.DOTALL
-    )
-    for match in pattern.finditer(content):
-        label = match.group("label").strip().replace(" - ", "\n")
-        geom_str = match.group("geometry").strip()
-        mat_str = match.group("material").strip()
-        try:
-            geometry = ast.literal_eval(geom_str)
-        except Exception:
-            geometry = {}
-        try:
-            material = ast.literal_eval(mat_str)
-        except Exception:
-            material = []
-        combos.append({"label": label, "geometry": geometry, "material": material})
-    return combos
-
-def parse_experimental_data_summary(file_path):
-    """
-    Extrait un résumé structuré à partir d'un fichier expérimental.
-
-    Le fichier expérimental contient des lignes telles que :
-       Environnement : Air / n=1 
-       Cube : Argent / n(lambda) / 30 nm
-       Gap diélectrique / n = 1.45 / 2 nm
-       Fonctionnalisation diélectrique / n = 1.45 / 1 nm
-       Couche métallique : Or / n(lambda) / 10 nm
-       Substrat : ITO / n(lambda) / 200 nm
-
-    Pour chaque ligne, si le séparateur "/" est présent, on filtre les tokens pour supprimer ceux contenant "n(" ou "n=".
-    Pour "Cube", le premier token est utilisé comme Material et le token contenant "nm" (s'il existe) comme Geometry.
-    Sinon, toute la valeur est assignée à Geometry.
-    
-    Retourne un dictionnaire avec les clés "geometry" et "material" contenant les résumés sous forme de chaînes.
-    """
-    expected_keys = [
-        "Environnement",
-        "Cube",
-        "Gap diélectrique / n =",
-        "Fonctionnalisation diélectrique / n =",
-        "Couche métallique",
-        "Substrat"
-    ]
-    geom_lines = []
-    mat_lines = []
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                for key in expected_keys:
-                    if line.startswith(key):
-                        parts = line.split(":", 1)
-                        if len(parts) < 2:
-                            continue
-                        value = parts[1].strip()
-                        if "/" in value:
-                            tokens = [tok.strip() for tok in value.split("/")]
-                            # Supprimer les tokens contenant "n(" ou "n="
-                            tokens = [t for t in tokens if not re.search(r"n\(|n=", t)]
-                            if key == "Cube":
-                                mat_val = tokens[0] if tokens else ""
-                                geom_val = ""
-                                for t in tokens:
-                                    if "nm" in t:
-                                        geom_val = t
-                                        break
-                            else:
-                                mat_val = tokens[0] if tokens else ""
-                                geom_val = tokens[-1] if tokens and "nm" in tokens[-1] else ""
-                        else:
-                            mat_val = ""
-                            geom_val = value
-                        geom_lines.append(f"{key}: {geom_val}".strip())
-                        mat_lines.append(f"{key}: {mat_val}".strip())
-                        break
-    except Exception as e:
-        print(f"Erreur lors de la lecture du fichier expérimental {file_path}: {e}")
-    return {"geometry": "\n".join(geom_lines), "material": "\n".join(mat_lines)}
 
 def build_summary_table(filter_labels=None, sim_files=None, exp_files=None):
-    """
-    Construit le tableau récapitulatif adaptatif pour les configurations de simulation et expérimentales.
-    
-    Paramètres :
-      - filter_labels : (optionnel) liste de labels de simulation à inclure (après transformation).
-      - sim_files : (optionnel) liste de chemins vers des fichiers de simulation (txt). Si fourni, on extrait dynamiquement.
-      - exp_files : (optionnel) liste de chemins vers des fichiers expérimentaux (txt). On extrait les données via parse_experimental_data_summary.
-    
-    Retourne :
-      - config_labels : liste des labels pour chaque spectre (colonne)
-      - geometry_summaries : liste des résumés de géométrie correspondants
-      - material_summaries : liste des résumés de matériaux correspondants
-      - colors : liste des couleurs utilisées pour la mise en forme.
-    """
     config_labels = []
     geometry_summaries = []
     material_summaries = []
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     
-    # Traitement des fichiers de simulation
     if sim_files is not None and len(sim_files) > 0:
         for fpath in sim_files:
             sim_configs = parse_simulation_summary(fpath)
@@ -326,10 +212,8 @@ def build_summary_table(filter_labels=None, sim_files=None, exp_files=None):
                             mat_lines.append(f"{disp_name}: {val}")
                 material_summaries.append("\n".join(mat_lines))
     
-    # Traitement des fichiers expérimentaux
     if exp_files is not None and len(exp_files) > 0:
         for fpath in exp_files:
-            # On filtre également les expérimentaux si filter_labels est défini
             lbl = os.path.basename(fpath)
             if filter_labels is not None and lbl not in filter_labels:
                 continue

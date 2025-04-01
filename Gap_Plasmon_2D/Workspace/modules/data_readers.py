@@ -107,3 +107,88 @@ def read_experimental_data(file_path):
     if not wavelengths or not R_values:
         raise ValueError("Aucune donnée expérimentale n'a été trouvée dans le fichier.")
     return np.array(wavelengths), np.array(R_values)
+
+
+
+
+import ast
+
+'''
+Deux modes de lecture sont supportés pour la construction du tableau :
+  - Mode JSON : Lecture du fichier de configuration (geom_mat_combinations.json) (utilisé dans l'onglet Simulation).
+  - Mode Simulation Summary : Lecture des fichiers texte de simulation afin d'extraire dynamiquement
+    toutes les combinaisons (même lorsqu'un fichier contient plusieurs spectres).
+'''
+
+
+def parse_simulation_summary(file_path):
+    combos = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except Exception as e:
+        print(f"Erreur lors de la lecture de {file_path}: {e}")
+        return combos
+    pattern = re.compile(
+        r"Combo name:\s*(?P<label>.*?)\s*\n"
+        r"(?:.*?\n)*?"
+        r"Geometry:\s*(?P<geometry>\{.*?\})\s*\n"
+        r"(?:.*?\n)*?"
+        r"Material config \(df_config\):\s*(?P<material>\[.*?\])",
+        re.DOTALL
+    )
+    for match in pattern.finditer(content):
+        label = match.group("label").strip().replace(" - ", "\n")
+        geom_str = match.group("geometry").strip()
+        mat_str = match.group("material").strip()
+        try:
+            geometry = ast.literal_eval(geom_str)
+        except Exception:
+            geometry = {}
+        try:
+            material = ast.literal_eval(mat_str)
+        except Exception:
+            material = []
+        combos.append({"label": label, "geometry": geometry, "material": material})
+    return combos
+
+def parse_experimental_data_summary(file_path):
+    expected_keys = [
+        "Environnement",
+        "Cube",
+        "Gap diélectrique / n =",
+        "Fonctionnalisation diélectrique / n =",
+        "Couche métallique",
+        "Substrat"
+    ]
+    geom_lines = []
+    mat_lines = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                for key in expected_keys:
+                    if line.startswith(key):
+                        parts = line.split(":", 1)
+                        if len(parts) < 2:
+                            continue
+                        value = parts[1].strip()
+                        if "/" in value:
+                            tokens = [tok.strip() for tok in value.split("/")]
+                            if key == "Cube":
+                                mat_val = tokens[0]
+                                geom_val = tokens[-1] if "nm" in tokens[-1] else ""
+                            else:
+                                mat_val = tokens[0]
+                                geom_val = tokens[-1] if "nm" in tokens[-1] else ""
+                        else:
+                            mat_val = ""
+                            geom_val = value
+                        geom_lines.append(f"{key}: {geom_val}".strip())
+                        mat_lines.append(f"{key}: {mat_val}".strip())
+                        break
+    except Exception as e:
+        print(f"Erreur lors de la lecture du fichier expérimental {file_path}: {e}")
+    return {"geometry": "\n".join(geom_lines), "material": "\n".join(mat_lines)}

@@ -293,33 +293,33 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     # Onglet 1 : Simulation
     # ===============================
     sim_lambda_min = widgets.FloatText(value=450.0, description="λ min (nm):",
-                                       layout=widgets.Layout(width='150px'),
-                                       style={'description_width': 'initial'})
+                                    layout=widgets.Layout(width='150px'),
+                                    style={'description_width': 'initial'})
     sim_lambda_max = widgets.FloatText(value=1000.0, description="λ max (nm):",
-                                       layout=widgets.Layout(width='150px'),
-                                       style={'description_width': 'initial'})
-    sim_n_points = widgets.IntSlider(value=200, min=50, max=1000, step=10, description="Nb points:",
-                                     layout=widgets.Layout(width='200px'),
-                                     style={'description_width': 'initial'})
-    sim_n_mod = widgets.IntSlider(value=10, min=1, max=100, step=1, description="Modes:",
-                                  layout=widgets.Layout(width='200px'),
-                                  style={'description_width': 'initial'})
+                                    layout=widgets.Layout(width='150px'),
+                                    style={'description_width': 'initial'})
+    sim_n_points = widgets.IntText(value=200, description="Nb points:",
+                                layout=widgets.Layout(width='200px'),
+                                style={'description_width': 'initial'})
+    sim_n_mod = widgets.IntText(value=10, description="Modes:",
+                                layout=widgets.Layout(width='200px'),
+                                style={'description_width': 'initial'})
     sim_run_button = widgets.Button(description="Lancer la simulation", button_style="success",
                                     tooltip="Lance la simulation")
     sim_mode_radio = widgets.RadioButtons(options=["Nouvelle figure", "Même figure"],
-                                          value="Nouvelle figure",
-                                          description="Plot mode:",
-                                          style={'description_width': 'initial'})
-    
+                                        value="Nouvelle figure",
+                                        description="Plot mode:",
+                                        style={'description_width': 'initial'})
+
     sim_controls = widgets.VBox([
         widgets.HTML("<h3>Simulation</h3>"),
         widgets.HBox([sim_lambda_min, sim_lambda_max]),
         widgets.HBox([sim_n_points, sim_n_mod]),
         widgets.HBox([sim_mode_radio, sim_run_button])
     ])
-    
+
     sim_output = widgets.Output(layout=widgets.Layout(border="2px solid #ccc", padding="10px", min_height="400px"))
-    
+
     def on_sim_run_clicked(b):
         with sim_output:
             sim_output.clear_output(wait=True)
@@ -346,9 +346,10 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             sim_output.clear_output(wait=True)
             display(fig)
             plt.close(fig)
-    
+
     sim_run_button.on_click(on_sim_run_clicked)
     sim_tab = widgets.VBox([sim_controls, sim_output])
+
     
     # ===============================
     # Onglet 2 : Plot (liste déroulante unique)

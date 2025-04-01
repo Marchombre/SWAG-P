@@ -143,7 +143,7 @@ def reflectance(geometry, wave, materials, n_mod):
             P_current = P_diel
 
     else:
-        # (b) La somme des épaisseurs latérales dépasse l'épaisseur du gap.
+        # (b) La somme des épaisseurs latérales est égale ou dépasse l'épaisseur du gap.
         # On traite la partie diponible du reso en grating env vers reso avant de traiter les couches latérales.
         P_reso, V_reso = grating(k0, a0, polarization, perm_env, perm_reso, n, pos_reso)
         # P_current désigne le milieu en cours (initialement, c'est la sortie du nanocube)
