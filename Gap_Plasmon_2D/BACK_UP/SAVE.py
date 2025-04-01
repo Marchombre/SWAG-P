@@ -414,3 +414,104 @@ def reflectance(geometry, wave, materials, n_mod):
     Rdown *= abs(S_common[n + n_mod, n + n_mod])**2
 
     return Rup, Rdown
+
+
+
+
+
+
+
+
+# Plotter n_mine VS n_Pauline for double checking
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Définir la plage de longueurs d'onde (en nm)
+lambda_range = np.linspace(450, 1000, 200)
+
+
+# Charger le fichier JSON
+with open(json_combined_path, "r", encoding="utf-8") as f:
+    materials_data = json.load(f)
+
+# --- Méthode Pauline ---
+from swag_ITO_thickAu import nk_ITO, epsAgbb, epsAubb, epsAlbb
+
+# --- Méthode via build_material_configuration_dynamic ---
+from Material_Configuration import build_material_configuration_dynamic
+
+# Pour créer un DataFrame de configuration pour un matériau standard ou custom,
+# on définit une fonction utilitaire qui retourne un DataFrame d'une seule ligne.
+def create_df_for_material(role, material_type, material_value):
+    """
+    role: chaîne utilisée comme clé dans la configuration dynamique
+    material_type: "Standard" ou "Custom"
+    material_value: pour Standard, le nom du matériau (ex: "Au", "Ag", "ITO");
+                      pour Custom, l'expression (ex: "1.45**2")
+    """
+    if material_type.lower() == "custom":
+        mat_dict = {"type": "Custom", "expression": material_value}
+    else:
+        mat_dict = {"type": "Standard", "material": material_value}
+    # Construire un DataFrame d'une seule ligne
+    return pd.DataFrame({"key": [role], "material": [mat_dict]})
+
+# --- Calculs et comparaison pour chaque matériau ---
+
+results = {}  # Dictionnaire pour stocker les 2 méthodes pour chaque matériau
+
+# 1) ITO
+# Pauline: on utilise nk_ITO et on calcule ε = (nk_ITO)²
+eps_Pauline_ITO = np.array([nk_ITO(lam)[2]**2 for lam in lambda_range])
+# Modules build_material_configuration_dynamic : pour ITO, avec un rôle par exemple "perm_sub"
+df_ITO = create_df_for_material("perm_sub", "Standard", "ITO")
+eps_mine_ITO = np.array([build_material_configuration_dynamic(df_ITO, lam, json_combined_path)["perm_sub"]
+                         for lam in lambda_range])
+results["ITO"] = (eps_Pauline_ITO, eps_mine_ITO)
+
+# 2) Ag
+eps_Pauline_Ag = np.array([epsAgbb(lam) for lam in lambda_range])
+# Our: on crée une configuration avec rôle "perm_reso" et matériau "Ag"
+df_Ag = create_df_for_material("perm_reso", "Standard", "Silver")
+eps_mine_Ag = np.array([build_material_configuration_dynamic(df_Ag, lam, json_combined_path)["perm_reso"]
+                        for lam in lambda_range])
+results["Silver"] = (eps_Pauline_Ag, eps_mine_Ag)
+
+# 3) Au
+eps_Pauline_Au = np.array([epsAubb(lam) for lam in lambda_range])
+# Our: on crée une configuration avec rôle "perm_metalliclayer" et matériau "Au"
+df_Au = create_df_for_material("perm_metalliclayer", "Standard", "Gold")
+eps_mine_Au = np.array([build_material_configuration_dynamic(df_Au, lam, json_combined_path)["perm_metalliclayer"]
+                        for lam in lambda_range])
+results["Gold"] = (eps_Pauline_Au, eps_mine_Au)
+
+# 4) Al
+eps_Pauline_Al = np.array([epsAlbb(lam) for lam in lambda_range])
+# Our: on crée une configuration avec rôle "perm_metalliclayer" et matériau "Al"
+df_Al = create_df_for_material("perm_accroche", "Standard", "Aluminium")
+eps_mine_Al = np.array([build_material_configuration_dynamic(df_Al, lam, json_combined_path)["perm_accroche"]
+                        for lam in lambda_range])
+results["Aluminium"] = (eps_Pauline_Al, eps_mine_Al)
+
+# --- Tracé des comparaisons ---
+fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+material_names = ["ITO", "Silver", "Gold", "Aluminium"]
+
+for ax, mat in zip(axs.flatten(), material_names):
+    eps_f, eps_o = results[mat]
+    # Tracer la partie réelle
+    ax.plot(lambda_range, np.real(np.sqrt(eps_f)), 'b--', label="Re(ε) - Pauline")
+    ax.plot(lambda_range, np.real(np.sqrt(eps_o)), 'r-', label="Re(ε) - mine")
+    # Tracer la partie imaginaire
+    ax.plot(lambda_range, np.imag(np.sqrt(eps_f)), 'g--', label="Im(ε) - Pauline")
+    ax.plot(lambda_range, np.imag(np.sqrt(eps_o)), 'k-', label="Im(ε) - mine")
+    ax.set_title(f"{mat}")
+    ax.set_xlabel("Longueur d'onde (nm)")
+    ax.set_ylabel("ε")
+    ax.legend(fontsize=8)
+    ax.grid(True)
+
+plt.suptitle("ε(λ) via build_material_configuration_dynamic double checking with Pauline's works", fontsize=14)
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+plt.show()

@@ -52,8 +52,6 @@ def plot_combined_Rup_vs_exp(sim_summary_file, exp_file, exp_file2):
     print(f"Figure saved in: {fig_path}")
 
 if __name__ == "__main__":
-    # Exemple d'utilisation : adaptez les chemins ci-dessous selon votre structure réelle.
-    # Les données se trouvent dans le sous-dossier "Summary_Simulation" du dossier notebooks.
     sim_summary_file = "/chemin/vers/notebooks/Summary_Simulation/simulation_summary_exemple.txt"
     exp_file = "/chemin/vers/notebooks/Summary_Simulation/Data_structure1.txt"
     exp_file2 = "/chemin/vers/notebooks/Summary_Simulation/Data_structure2.txt"

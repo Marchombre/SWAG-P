@@ -100,7 +100,7 @@ def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path, geo
                     mat_lines.append(f"{disp_name}: {val}")
         material_summaries.append("\n".join(mat_lines))
     
-    title = "Simulation Reflectance"
+    title = "Simulation Reflectance spectra"
     fig = plt.figure(figsize=(10, 10))
     gs = fig.add_gridspec(2, 1, height_ratios=[3, 2.5])
     ax1 = fig.add_subplot(gs[0])
@@ -158,7 +158,7 @@ def run_simulation_all_combos(lambda_range, wave, n_mod, json_combined_path, geo
     figures_dir = os.path.join(workspace_dir, "Figures")
     if not os.path.exists(figures_dir):
         os.makedirs(figures_dir)
-    fig_path = os.path.join(figures_dir, f"reflectance_{re.sub(r'[^A-Za-z0-9_]', '', title)}.png")
+    fig_path = os.path.join(figures_dir, f"{re.sub(r'[^A-Za-z0-9_]', '', title)}.png")
     plt.savefig(fig_path, bbox_inches="tight")
     print(f"Figure saved in: {fig_path}")
     

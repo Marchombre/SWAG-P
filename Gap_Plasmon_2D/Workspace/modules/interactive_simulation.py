@@ -2,12 +2,15 @@
 """
 Module: interactive_simulation.py
 
-Cette application propose deux onglets :
+Cette application propose trois onglets :
   1. "Simulation" : Permet de lancer une simulation de spectres (avec réglage de λ min, λ max, nb points, nb modes)
      et d'afficher la figure de reflectance. La figure affiche un tableau complet issu du JSON.
      
   2. "Plot" : Expose directement, via une liste déroulante unique, l'ensemble des spectres disponibles (simulés et expérimentaux).
-     L'utilisateur peut sélectionner les spectres à tracer, le graphique et le tableau récapitulatif se mettent à jour en fonction.
+     L'utilisateur peut sélectionner les spectres à tracer, et le graphique ainsi que le tableau récapitulatif se mettent à jour en fonction.
+     
+  3. "Difference" : Permet de sélectionner deux spectres (de référence et à comparer) et d'afficher la différence
+     (spectre cible moins spectre de référence) dans un affichage moderne et sophistiqué.
 """
 
 import os
@@ -18,6 +21,7 @@ import ipywidgets as widgets
 import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import display
+from datetime import datetime
 
 from simulate_and_plot import run_simulation_all_combos, ordered_params, load_json_config
 from data_readers import read_all_combos, read_experimental_data
@@ -37,18 +41,6 @@ def list_exp_data_files(exp_data_dir):
 
 # --- Fonctions de parsing (identiques à vos fonctions existantes) ---
 def parse_simulation_summary(file_path):
-    """
-    Extrait toutes les combinaisons d'un fichier de simulation texte.
-    
-    Pour chaque bloc, recherche :
-      - "Combo name:" suivi du label,
-      - "Geometry:" suivi d'un dictionnaire Python,
-      - "Material config (df_config):" suivi d'une liste.
-    
-    Utilise une expression régulière non-gourmande avec DOTALL pour capturer même avec des lignes intermédiaires.
-    
-    Retourne une liste de dictionnaires avec les clés : 'label', 'geometry', 'material'.
-    """
     combos = []
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -84,22 +76,6 @@ def parse_simulation_summary(file_path):
     return combos
 
 def parse_experimental_data_summary(file_path):
-    """
-    Extrait un résumé structuré à partir d'un fichier expérimental.
-    
-    Le fichier exp contient des lignes telles que :
-       Environnement : Air / n=1 
-       Cube : Argent / n(lambda) / 30 nm
-       Gap diélectrique / n = 1.45 / 2 nm
-       Fonctionnalisation diélectrique / n = 1.45 / 1 nm
-       Couche métallique : Or / n(lambda) / 10 nm
-       Substrat : ITO / n(lambda) / 200 nm
-    
-    Pour chaque ligne, si le séparateur "/" est présent, le premier token est pris pour Material
-    et le dernier (contenant "nm") pour Geometry. Sinon, toute la valeur est affectée à Geometry.
-    
-    Retourne un dictionnaire avec les clés "geometry" et "material" contenant les résumés sous forme de chaînes.
-    """
     expected_keys = [
         "Environnement",
         "Cube",
@@ -124,7 +100,6 @@ def parse_experimental_data_summary(file_path):
                         value = parts[1].strip()
                         if "/" in value:
                             tokens = [tok.strip() for tok in value.split("/")]
-                            # Pour "Cube", on prend le premier token pour Material et le dernier pour Geometry
                             if key == "Cube":
                                 mat_val = tokens[0]
                                 geom_val = tokens[-1] if "nm" in tokens[-1] else ""
@@ -141,39 +116,57 @@ def parse_experimental_data_summary(file_path):
         print(f"Erreur lors de la lecture du fichier expérimental {file_path}: {e}")
     return {"geometry": "\n".join(geom_lines), "material": "\n".join(mat_lines)}
 
+# --- Gestion des labels pour les fichiers de simulation ---
+def get_simulation_label(base_label, file_path, label_to_tag):
+    """
+    Calcule un nouveau label pour un spectre issu d'un fichier de simulation.
+    
+    Le nom du fichier est supposé suivre le format:
+      simulation_summary_RCWA_<version>_<material_str_clean>.txt
+      
+    Seule la partie <version> (le premier mot après 'simulation_summary_RCWA_') est utilisée pour
+    distinguer les spectres issus de fichiers différents ayant le même base_label.
+    
+    Si plusieurs fichiers ont la même version, un indice numérique supplémentaire est ajouté.
+    """
+    fname = os.path.basename(file_path)
+    tag = os.path.splitext(fname)[0]  # Retire l'extension
+    prefix = "simulation_summary_RCWA_"
+    version = ""
+    if tag.startswith(prefix):
+        remainder = tag[len(prefix):]  # Par exemple "V1_materialStrClean"
+        parts = remainder.split("_", 1)  # On ne conserve que le premier élément
+        if parts:
+            version = parts[0]  # Par exemple "V1" ou "V2"
+    # On utilise label_to_tag comme dictionnaire de suivi par base_label et par version
+    if base_label not in label_to_tag:
+        label_to_tag[base_label] = {}
+    if version not in label_to_tag[base_label]:
+        label_to_tag[base_label][version] = 1
+        return f"{base_label} ({version})" if version else base_label
+    else:
+        label_to_tag[base_label][version] += 1
+        count = label_to_tag[base_label][version]
+        return f"{base_label} ({version} {count})"
+
+
 # --- Fonction de construction du tableau récapitulatif ---
 def build_combined_summary_table(filter_labels=None, sim_files=None, exp_files=None):
-    """
-    Construit le tableau récapitulatif combiné pour les spectres affichés.
-    
-    Pour chaque fichier de simulation, les configurations sont extraites via parse_simulation_summary.
-    Pour chaque fichier expérimental, le résumé est extrait via parse_experimental_data_summary.
-    
-    Retourne :
-      - config_labels : liste des labels pour chaque spectre (colonne),
-      - geometry_summaries : liste des résumés de géométrie,
-      - material_summaries : liste des résumés de matériaux,
-      - colors : liste des couleurs pour la mise en forme.
-    (filter_labels s'applique ici uniquement pour les simulations.)
-    """
     config_labels = []
     geometry_summaries = []
     material_summaries = []
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    
+    label_to_tag = {}
     # Traitement des fichiers de simulation
     if sim_files is not None and len(sim_files) > 0:
-        sim_seen = set()  # pour éviter les doublons
         for fpath in sim_files:
             sim_configs = parse_simulation_summary(fpath)
             for cfg in sim_configs:
-                lbl = cfg.get("label", "Unknown")
-                if filter_labels is not None and lbl not in filter_labels:
+                base_label = cfg.get("label", "Unknown")
+                if filter_labels is not None and base_label not in filter_labels:
                     continue
-                if lbl in sim_seen:
-                    continue
-                sim_seen.add(lbl)
-                config_labels.append(lbl)
+                new_label = get_simulation_label(base_label, fpath, label_to_tag)
+                config_labels.append(new_label)
                 geom = cfg.get("geometry", {})
                 geom_lines = []
                 for key, disp_name in ordered_params:
@@ -201,53 +194,45 @@ def build_combined_summary_table(filter_labels=None, sim_files=None, exp_files=N
                         if val:
                             mat_lines.append(f"{disp_name}: {val}")
                 material_summaries.append("\n".join(mat_lines))
-    
-    # Traitement des fichiers expérimentaux (toujours ajoutés)
+    # Traitement des fichiers expérimentaux (sans indice de provenance)
     if exp_files is not None and len(exp_files) > 0:
-        exp_seen = set()
         for fpath in exp_files:
-            if fpath in exp_seen:
-                continue
-            exp_seen.add(fpath)
             exp_data = parse_experimental_data_summary(fpath)
             base_lbl = os.path.basename(fpath)
-            lbl = base_lbl
-            count = 1
-            while lbl in config_labels:
-                lbl = f"{base_lbl} ({count})"
-                count += 1
-            config_labels.append(lbl)
+            config_labels.append(base_lbl)
             geometry_summaries.append(exp_data.get("geometry", ""))
             material_summaries.append(exp_data.get("material", ""))
-    
     return config_labels, geometry_summaries, material_summaries, colors
 
 # --- Fonction pour rassembler l'ensemble des spectres et leurs résumés ---
 def get_all_spectra_and_summaries(summary_dir, exp_data_dir):
-    """
-    Parcourt l'ensemble des fichiers de simulation et expérimentaux pour construire :
-      - spectra: dictionnaire {label: (wl, R)} pour chaque spectre,
-      - summaries: dictionnaire {label: (geometry_summary, material_summary)}.
-    
-    Pour les simulations, on utilise read_all_combos et parse_simulation_summary.
-    Pour les expérimentaux, on utilise read_experimental_data et parse_experimental_data_summary.
-    """
     spectra = {}
     summaries = {}
+    label_to_tag = {}
     # Simulations
     sim_files = list_sim_summary_files(summary_dir)
     for fpath in sim_files:
         combos = read_all_combos(fpath)  # {label: (wl, R)}
         sim_configs = parse_simulation_summary(fpath)
         for combo_label, (wl, R) in combos.items():
-            label_key = combo_label.replace(" - ", "\n")
-            if label_key in spectra:
-                continue
-            spectra[label_key] = (wl, R)
+            base_label = combo_label.replace(" - ", "\n")
+            if base_label in spectra:
+                new_label = get_simulation_label(base_label, fpath, label_to_tag)
+            else:
+                fname = os.path.basename(fpath)
+                tag = os.path.splitext(fname)[0]
+                prefix = "simulation_summary_RCWA_"
+                if tag.startswith(prefix):
+                    remainder = tag[len(prefix):]
+                    parts = remainder.split("_", 1)
+                    tag = parts[0] if parts else ""
+                label_to_tag[base_label] = {tag: 1}
+                new_label = f"{base_label} ({tag})" if tag else base_label
+            spectra[new_label] = (wl, R)
             found = False
             for cfg in sim_configs:
                 cfg_label = cfg.get("label", "Unknown").replace(" - ", "\n")
-                if cfg_label == label_key:
+                if cfg_label == base_label:
                     geom = cfg.get("geometry", {})
                     geom_lines = []
                     for key, disp_name in ordered_params:
@@ -275,37 +260,34 @@ def get_all_spectra_and_summaries(summary_dir, exp_data_dir):
                             if val:
                                 mat_lines.append(f"{disp_name}: {val}")
                     mat_summary = "\n".join(mat_lines)
-                    summaries[label_key] = (geom_summary, mat_summary)
+                    summaries[new_label] = (geom_summary, mat_summary)
                     found = True
                     break
             if not found:
-                summaries[label_key] = ("", "")
+                summaries[new_label] = ("", "")
     # Expérimentaux
     exp_files = list_exp_data_files(exp_data_dir)
     for fpath in exp_files:
         data = read_experimental_data(fpath)
         if data:
             base_lbl = os.path.basename(fpath)
-            label = base_lbl
-            count = 1
-            while label in spectra:
-                label = f"{base_lbl} ({count})"
-                count += 1
-            spectra[label] = data
+            spectra[base_lbl] = data
             exp_data = parse_experimental_data_summary(fpath)
             geom_summary = exp_data.get("geometry", "")
             mat_summary = exp_data.get("material", "")
-            summaries[label] = (geom_summary, mat_summary)
+            summaries[base_lbl] = (geom_summary, mat_summary)
     return spectra, summaries
 
 # --- Création de l'interface interactive ---
 def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     """
-    Crée l'interface interactive avec deux onglets :
+    Crée l'interface interactive avec trois onglets :
       - Onglet "Simulation" : Lance la simulation via JSON et affiche la figure complète (graphique + tableau complet).
       - Onglet "Plot" : Expose directement, via une liste déroulante unique, l'ensemble des spectres disponibles (simulés et expérimentaux).
          L'utilisateur peut sélectionner les spectres à tracer, et le graphique ainsi que le tableau récapitulatif se mettent à jour en fonction.
-         La liste déroulante s'actualise dynamiquement lors du passage à cet onglet.
+      - Onglet "Difference" : Permet de sélectionner deux spectres (de référence et à comparer) et d'afficher la différence
+         (spectre cible moins spectre de référence) dans un affichage moderne et sophistiqué.
+         La liste déroulante s'actualise dynamiquement lors du passage à l'onglet.
     """
     # ===============================
     # Onglet 1 : Simulation
@@ -371,7 +353,6 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     # ===============================
     # Onglet 2 : Plot (liste déroulante unique)
     # ===============================
-    # Widget unique pour sélectionner les spectres disponibles
     spectra_select = widgets.SelectMultiple(
         options=[], 
         description="Spectres disponibles:",
@@ -379,7 +360,6 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         layout=widgets.Layout(width='80%', height='150px')
     )
     
-    # Bouton pour tracer les spectres sélectionnés
     plot_button = widgets.Button(
         description="Tracer", button_style="info",
         tooltip="Tracer les spectres sélectionnés"
@@ -387,11 +367,9 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     
     plot_output = widgets.Output(layout=widgets.Layout(border="2px solid #ccc", padding="10px", min_height="400px"))
     
-    # Dictionnaires globaux pour conserver les données extraites
     plotted_lines = {}   # {label: (wl, R)}
     summaries = {}       # {label: (geom_summary, mat_summary)}
     
-    # Fonction de mise à jour des spectres disponibles
     def update_spectra():
         all_spectra, all_summaries = get_all_spectra_and_summaries(summary_dir, exp_data_dir)
         spectra_select.options = list(all_spectra.keys())
@@ -399,7 +377,6 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         plotted_lines = all_spectra
         summaries = all_summaries
     
-    # Au démarrage, on met à jour la liste (mais elle sera rafraîchie dynamiquement lors du changement d'onglet)
     update_spectra()
     
     def on_plot_button_clicked(b):
@@ -408,14 +385,9 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             selected_labels = list(plotted_lines.keys())
             spectra_select.value = tuple(selected_labels)
         
-        if len(plotted_lines) > 0:
-            fig = plt.figure(figsize=(10, 10))
-            gs = fig.add_gridspec(2, 1, height_ratios=[3, 3])
-            ax_plot = fig.add_subplot(gs[0])
-            ax_table = fig.add_subplot(gs[1])
-        else:
-            fig, ax_plot = plt.subplots(figsize=(10, 6))
-            ax_table = None
+        fig = plt.figure(figsize=(10, 10))
+        ax_plot = fig.add_axes([0.1, 0.55, 0.8, 0.4])
+        ax_table = fig.add_axes([0.05, 0.05, 0.9, 0.4])
         
         for label in selected_labels:
             x, y = plotted_lines[label]
@@ -426,57 +398,54 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         ax_plot.legend()
         ax_plot.grid(True)
         
-        if ax_table is not None:
-            config_labels = []
-            geom_summaries = []
-            mat_summaries = []
-            for label in selected_labels:
-                config_labels.append(label)
-                geom, mat = summaries.get(label, ("", ""))
-                geom_summaries.append(geom)
-                mat_summaries.append(mat)
-            ax_table.axis("off")
-            if config_labels:
-                n_configs = len(config_labels)
-                row_labels = ["Geometry", "Material"]
-                table_data = [geom_summaries, mat_summaries]
-                table = ax_table.table(
-                    cellText=table_data,
-                    colLabels=config_labels,
-                    rowLabels=row_labels,
-                    loc="center",
-                    cellLoc="left"
-                )
-                table.auto_set_font_size(False)
-                table.set_fontsize(8)
-                table.auto_set_column_width(col=list(range(n_configs)))
-                for (row, col), cell in table.get_celld().items():
-                    if row == -1:
-                        cell.set_facecolor("#40466e")
-                        cell.set_text_props(weight="bold", color="white", fontsize=10, ha="center")
-                    elif col == -1:
-                        cell.set_facecolor("#40466e")
-                        cell.set_text_props(weight="bold", color="white", fontsize=10)
-                    else:
-                        cell.set_facecolor("whitesmoke")
-                        cell.set_edgecolor("lightgray")
-                        cell.set_linewidth(0.5)
-                for (row, col), cell in table.get_celld().items():
-                    if row >= 0 and col >= 0:
-                        cell.get_text().set_color(plt.rcParams['axes.prop_cycle'].by_key()['color'][col % len(plt.rcParams['axes.prop_cycle'].by_key()['color'])])
-                for (row, col), cell in table.get_celld().items():
-                    if row == -1 and col >= 0:
-                        cell.set_height(0.07)
-                row_heights = {}
-                for (row, col), cell in table.get_celld().items():
-                    if row >= 0:
-                        txt = cell.get_text().get_text()
-                        nb_lines = txt.count("\n") + 1
-                        row_heights[row] = max(row_heights.get(row, 0), nb_lines)
-                for (row, col), cell in table.get_celld().items():
-                    if row in row_heights:
-                        cell.set_height(0.04 * row_heights[row])
-                fig.tight_layout(rect=[0, 0, 1, 0.95])
+        config_labels = []
+        geom_summaries = []
+        mat_summaries = []
+        for label in selected_labels:
+            config_labels.append(label)
+            geom, mat = summaries.get(label, ("", ""))
+            geom_summaries.append(geom)
+            mat_summaries.append(mat)
+        ax_table.axis("off")
+        if config_labels:
+            n_configs = len(config_labels)
+            fontsize = 10 if n_configs <= 5 else max(10 - (n_configs - 5), 4)
+            table = ax_table.table(
+                cellText=[geom_summaries, mat_summaries],
+                colLabels=config_labels,
+                rowLabels=["Geometry", "Material"],
+                loc="center",
+                cellLoc="left"
+            )
+            table.auto_set_font_size(False)
+            table.set_fontsize(fontsize)
+            table.auto_set_column_width(col=list(range(len(config_labels))))
+            for (row, col), cell in table.get_celld().items():
+                if row == -1:
+                    cell.set_facecolor("#40466e")
+                    cell.set_text_props(weight="bold", color="white", fontsize=fontsize, ha="center")
+                elif col == -1:
+                    cell.set_facecolor("#40466e")
+                    cell.set_text_props(weight="bold", color="white", fontsize=fontsize)
+                else:
+                    cell.set_facecolor("whitesmoke")
+                    cell.set_edgecolor("lightgray")
+                    cell.set_linewidth(0.5)
+            for (row, col), cell in table.get_celld().items():
+                if row >= 0 and col >= 0:
+                    cell.get_text().set_color(plt.rcParams['axes.prop_cycle'].by_key()['color'][col % len(plt.rcParams['axes.prop_cycle'].by_key()['color'])])
+            for (row, col), cell in table.get_celld().items():
+                if row == -1 and col >= 0:
+                    cell.set_height(0.07)
+            row_heights = {}
+            for (row, col), cell in table.get_celld().items():
+                if row >= 0:
+                    txt = cell.get_text().get_text()
+                    nb_lines = txt.count("\n") + 1
+                    row_heights[row] = max(row_heights.get(row, 0), nb_lines)
+            for (row, col), cell in table.get_celld().items():
+                if row in row_heights:
+                    cell.set_height(0.04 * row_heights[row])
         
         with plot_output:
             plot_output.clear_output(wait=True)
@@ -493,15 +462,96 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     
     plot_tab = widgets.VBox([plot_controls, plot_output])
     
+    # ===============================
+    # Onglet 3 : Difference
+    # ===============================
+    diff_ref_dropdown = widgets.Dropdown(
+        options=[],
+        description="Référence:",
+        style={'description_width': 'initial'},
+        layout=widgets.Layout(width='80%')
+    )
+    diff_target_dropdown = widgets.Dropdown(
+        options=[],
+        description="À comparer:",
+        style={'description_width': 'initial'},
+        layout=widgets.Layout(width='80%')
+    )
+    diff_button = widgets.Button(
+        description="Tracer la différence", button_style="warning",
+        tooltip="Tracer la différence entre les deux spectres sélectionnés"
+    )
+    diff_output = widgets.Output(layout=widgets.Layout(border="2px solid #ccc", padding="10px", min_height="400px"))
+    
+    def update_diff_options():
+        spectra_all, _ = get_all_spectra_and_summaries(summary_dir, exp_data_dir)
+        options = list(spectra_all.keys())
+        diff_ref_dropdown.options = options
+        diff_target_dropdown.options = options
+    update_diff_options()
+    
+    def on_diff_button_clicked(b):
+        ref_label = diff_ref_dropdown.value
+        target_label = diff_target_dropdown.value
+        if not ref_label or not target_label:
+            with diff_output:
+                diff_output.clear_output()
+                print("Veuillez sélectionner les deux spectres.")
+            return
+        spectra_all, _ = get_all_spectra_and_summaries(summary_dir, exp_data_dir)
+        ref_data = spectra_all.get(ref_label)
+        target_data = spectra_all.get(target_label)
+        if ref_data is None or target_data is None:
+            with diff_output:
+                diff_output.clear_output()
+                print("Données introuvables pour l'un des spectres.")
+            return
+        wl1, R1 = ref_data
+        wl2, R2 = target_data
+        if np.array_equal(wl1, wl2):
+            common_wl = wl1
+            diff_R = np.array(R2) - np.array(R1)
+        else:
+            common_wl = wl1
+            diff_R = np.array(np.interp(wl1, wl2, R2)) - np.array(R1)
+        
+        fig = plt.figure(figsize=(10, 6))
+        ax = fig.add_axes([0.1, 0.15, 0.8, 0.75])
+        ax.plot(common_wl, diff_R, label=f"Diff: {target_label} - {ref_label}", color="blue")
+        ax.axhline(0, color="black", linestyle="--", linewidth=1)
+        ax.set_xlabel("Wavelength (nm)")
+        ax.set_ylabel("Différence de reflectance")
+        ax.set_title(f"Différence: {target_label} - {ref_label}")
+        ax.legend()
+        ax.grid(True)
+        
+        with diff_output:
+            diff_output.clear_output(wait=True)
+            display(fig)
+            plt.close(fig)
+    
+    diff_button.on_click(on_diff_button_clicked)
+    
+    diff_controls = widgets.VBox([
+        widgets.HTML("<h3>Difference</h3>"),
+        diff_ref_dropdown,
+        diff_target_dropdown,
+        diff_button
+    ])
+    
+    diff_tab = widgets.VBox([diff_controls, diff_output])
+    
     tabs = widgets.Tab()
-    tabs.children = [sim_tab, plot_tab]
+    tabs.children = [sim_tab, plot_tab, diff_tab]
     tabs.set_title(0, "Simulation")
     tabs.set_title(1, "Plot")
+    tabs.set_title(2, "Difference")
     
-    # Actualisation dynamique de la liste déroulante lorsque l'onglet Plot est sélectionné
     def on_tab_change(change):
-        if change['new'] == 1:  # Si l'onglet Plot devient actif
+        if change['new'] == 1:
             update_spectra()
+        elif change['new'] == 2:
+            update_diff_options()
     
     tabs.observe(on_tab_change, names='selected_index')
     

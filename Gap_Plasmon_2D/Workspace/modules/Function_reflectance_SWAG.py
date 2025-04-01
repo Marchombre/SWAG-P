@@ -105,7 +105,7 @@ def reflectance(geometry, wave, materials, n_mod):
 
 
     if sum_lat < thick_gap:
-        # (a) Les couches latérales sont entièrement contenues dans le gap.
+        # (a) Les couches latérales diel + func + mol sont entièrement contenues dans le gap.
         
         P_reso, V_reso = grating(k0, a0, polarization, perm_env, perm_reso, n, pos_reso)
         # P_current désigne le milieu en cours (initialement, c'est la sortie du nanocube)
@@ -115,7 +115,7 @@ def reflectance(geometry, wave, materials, n_mod):
         S = c_bas(S, V_reso, thick_reso)
             
         leftover_gap = thick_gap - sum_lat
-        # D'abord, si le gap n'est pas complètement consommé, propager la portion de gap "libre"
+        # D'abord, si le gap n'est pas complètement "consommé", propager la portion de gap "libre"
         
         if leftover_gap > 0:
             P_gap, V_gap = grating(k0, a0, polarization, perm_env, perm_gap, n, pos_reso)

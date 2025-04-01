@@ -106,7 +106,7 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
     filtered_parts = [part for part in suffix_parts if part]
     material_str_clean = "_".join(filtered_parts)
 
-    summary_filename = os.path.join(summary_dir, f"simulation_summary_RCWA_V1{material_str_clean}.txt")
+    summary_filename = os.path.join(summary_dir, f"simulation_summary_RCWA_V1_{material_str_clean}.txt")
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     lines = []
     lines.append("Simulation Summary - All Geometry/Material Combos")
