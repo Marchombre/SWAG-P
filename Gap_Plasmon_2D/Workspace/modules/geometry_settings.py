@@ -86,7 +86,8 @@ def draw_layer(ax, x, y, w, h, color, label, hatch=None):
     """
     if h <= 0:
         return
-    rect = patches.Rectangle((x, y), w, h, edgecolor='black', facecolor=color, hatch=hatch)
+    # Ici, on peut conserver un contour fin si souhaité, ou le supprimer en définissant edgecolor à None.
+    rect = patches.Rectangle((x, y), w, h, edgecolor=None, facecolor=color, hatch=hatch)
     ax.add_patch(rect)
     if label and h > 0:
         ax.text(x + w/2, y + h/2, label, ha="center", va="center", fontsize=9)
@@ -148,7 +149,8 @@ def create_geometry_widget():
     button_update = widgets.Button(description="Update", layout=widgets.Layout(width='120px'))
     button_delete = widgets.Button(description="Delete", button_style='danger', layout=widgets.Layout(width='120px'))
     
-    output_area = widgets.Output(layout=widgets.Layout(border='1px solid gray', padding='10px'))
+    # Suppression de la bordure pour output_area
+    output_area = widgets.Output(layout=widgets.Layout(padding='10px'))
     
     load_geometry_configs()
     
@@ -234,7 +236,8 @@ def create_geometry_widget():
     case_label_widget = widgets.Label(value="")
     
     # Drawing zone (zone de travail réduite)
-    fig_output = widgets.Output(layout=widgets.Layout(flex='1', height='700px', border='1px solid black', padding='10px'))
+    # Suppression de la bordure ici en retirant "border='1px solid black'"
+    fig_output = widgets.Output(layout=widgets.Layout(flex='1', height='700px', padding='10px'))
     
     def draw_structure(_=None):
         with fig_output:
@@ -258,7 +261,6 @@ def create_geometry_widget():
             # Displayed thickness for Substrate
             disp_sub   = displayed_thickness(t_sub)
             # For Superstrate, we force it to fill to the top (y = p)
-            # Let disp_super be displayed thickness (for reference) but it won't affect the top position.
             disp_super = displayed_thickness(t_super)
             
             # Compute vertical positions for lower layers:
@@ -295,10 +297,9 @@ def create_geometry_widget():
             
             # For Superstrate, force it to fill exactly up to the top of the cell
             y_super_top = p
-            y_super_bottom = y_inter_top  # the lower edge of the superstrate is exactly the top of the intermediate zone
+            y_super_bottom = y_inter_top
             
-            # In lateral columns, we add a filler if needed to reach y_super_bottom,
-            # so that the lateral environment (labeled "Superstrate") is present.
+            # Lateral filler calculation
             lateral_filler = max(0, y_super_bottom - (y_inter_bottom + lat_height_scaled))
             
             # Determine Case: if (t_diel+t_func+t_mol) < t_gap then Case A, else Case B
@@ -324,7 +325,7 @@ def create_geometry_widget():
             draw_layer(ax, central_x, y_gap_bottom, w_reso, scale * t_gap, "lightgreen", "Gap (polymer)")
             draw_layer(ax, central_x, y_cube_bottom, w_reso, t_reso, "orange", "Nanocube")
             
-            # Draw Lateral columns in correct order: Dielectric, Functionalisation, Molecule
+            # Draw Lateral columns: Dielectric, Functionalisation, Molecule
             y_curr_left = y_inter_bottom
             thickness_poly_scaled = scale * t_diel
             draw_layer(ax, left_x,  y_curr_left, lateral_width, thickness_poly_scaled, "green", "Dielectric")
@@ -341,14 +342,12 @@ def create_geometry_widget():
             draw_layer(ax, right_x, y_curr_left, lateral_width, thickness_mol_scaled, "violet", "Molecule")
             y_curr_left += thickness_mol_scaled
 
-            # Lateral filler: if needed, fill up to y_super_bottom in lateral columns
             if lateral_filler > 0:
                 draw_layer(ax, left_x,  y_curr_left, lateral_width, lateral_filler, "lightblue", "Superstrate \n (environement)")
                 draw_layer(ax, right_x, y_curr_left, lateral_width, lateral_filler, "lightblue", "Superstrate \n (environement)")
             
-            # Draw Superstrate in central column (fill exactly from y_super_bottom to p)
+            # Draw Superstrate in central column
             draw_layer(ax, 0, y_super_bottom, p, p - y_super_bottom, "lightblue", "Superstrate (environement)")
-            # Draw hatch band on top of Superstrate
             draw_layer(ax, 0, p - band_height, p, band_height, "none", "", hatch='///')
             
             ax.set_xlim(0, p)
