@@ -26,6 +26,22 @@ from datetime import datetime
 from simulate_and_plot import run_simulation_all_combos, ordered_params, load_json_config
 from data_readers import read_all_combos, read_experimental_data
 
+import io, base64
+from IPython.display import HTML
+
+def create_download_link(fig, filename="figure.png"):
+    """
+    Sauvegarde la figure dans un buffer et retourne un widget HTML
+    proposant de télécharger l'image au format PNG.
+    """
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    buf.seek(0)
+    b64 = base64.b64encode(buf.read()).decode("utf-8")
+    href = f'<a download="{filename}" href="data:image/png;base64,{b64}" target="_blank">Télécharger l\'image</a>'
+    return HTML(href)
+
+
 # --- Fonctions utilitaires pour lister les fichiers ---
 def list_sim_summary_files(summary_dir):
     pattern = os.path.join(summary_dir, "simulation_summary*.txt")
@@ -39,7 +55,7 @@ def list_exp_data_files(exp_data_dir):
     files.sort()
     return files
 
-# --- Fonctions de parsing (identiques à vos fonctions existantes) ---
+# --- Fonctions de parsing ---
 def parse_simulation_summary(file_path):
     combos = []
     try:
@@ -130,15 +146,14 @@ def get_simulation_label(base_label, file_path, label_to_tag):
     Si plusieurs fichiers ont la même version, un indice numérique supplémentaire est ajouté.
     """
     fname = os.path.basename(file_path)
-    tag = os.path.splitext(fname)[0]  # Retire l'extension
+    tag = os.path.splitext(fname)[0]
     prefix = "simulation_summary_RCWA_"
     version = ""
     if tag.startswith(prefix):
-        remainder = tag[len(prefix):]  # Par exemple "V1_materialStrClean"
-        parts = remainder.split("_", 1)  # On ne conserve que le premier élément
+        remainder = tag[len(prefix):]
+        parts = remainder.split("_", 1)
         if parts:
-            version = parts[0]  # Par exemple "V1" ou "V2"
-    # On utilise label_to_tag comme dictionnaire de suivi par base_label et par version
+            version = parts[0]
     if base_label not in label_to_tag:
         label_to_tag[base_label] = {}
     if version not in label_to_tag[base_label]:
@@ -149,7 +164,6 @@ def get_simulation_label(base_label, file_path, label_to_tag):
         count = label_to_tag[base_label][version]
         return f"{base_label} ({version} {count})"
 
-
 # --- Fonction de construction du tableau récapitulatif ---
 def build_combined_summary_table(filter_labels=None, sim_files=None, exp_files=None):
     config_labels = []
@@ -157,7 +171,6 @@ def build_combined_summary_table(filter_labels=None, sim_files=None, exp_files=N
     material_summaries = []
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     label_to_tag = {}
-    # Traitement des fichiers de simulation
     if sim_files is not None and len(sim_files) > 0:
         for fpath in sim_files:
             sim_configs = parse_simulation_summary(fpath)
@@ -194,7 +207,6 @@ def build_combined_summary_table(filter_labels=None, sim_files=None, exp_files=N
                         if val:
                             mat_lines.append(f"{disp_name}: {val}")
                 material_summaries.append("\n".join(mat_lines))
-    # Traitement des fichiers expérimentaux (sans indice de provenance)
     if exp_files is not None and len(exp_files) > 0:
         for fpath in exp_files:
             exp_data = parse_experimental_data_summary(fpath)
@@ -209,10 +221,9 @@ def get_all_spectra_and_summaries(summary_dir, exp_data_dir):
     spectra = {}
     summaries = {}
     label_to_tag = {}
-    # Simulations
     sim_files = list_sim_summary_files(summary_dir)
     for fpath in sim_files:
-        combos = read_all_combos(fpath)  # {label: (wl, R)}
+        combos = read_all_combos(fpath)
         sim_configs = parse_simulation_summary(fpath)
         for combo_label, (wl, R) in combos.items():
             base_label = combo_label.replace(" - ", "\n")
@@ -265,7 +276,6 @@ def get_all_spectra_and_summaries(summary_dir, exp_data_dir):
                     break
             if not found:
                 summaries[new_label] = ("", "")
-    # Expérimentaux
     exp_files = list_exp_data_files(exp_data_dir)
     for fpath in exp_files:
         data = read_experimental_data(fpath)
@@ -293,33 +303,30 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     # Onglet 1 : Simulation
     # ===============================
     sim_lambda_min = widgets.FloatText(value=450.0, description="λ min (nm):",
-                                    layout=widgets.Layout(width='150px'),
-                                    style={'description_width': 'initial'})
+                                        layout=widgets.Layout(width='150px'),
+                                        style={'description_width': 'initial'})
     sim_lambda_max = widgets.FloatText(value=1000.0, description="λ max (nm):",
-                                    layout=widgets.Layout(width='150px'),
-                                    style={'description_width': 'initial'})
+                                        layout=widgets.Layout(width='150px'),
+                                        style={'description_width': 'initial'})
     sim_n_points = widgets.IntText(value=200, description="Nb points:",
-                                layout=widgets.Layout(width='200px'),
-                                style={'description_width': 'initial'})
+                                   layout=widgets.Layout(width='200px'),
+                                   style={'description_width': 'initial'})
     sim_n_mod = widgets.IntText(value=10, description="Modes:",
                                 layout=widgets.Layout(width='200px'),
                                 style={'description_width': 'initial'})
     sim_run_button = widgets.Button(description="Lancer la simulation", button_style="success",
                                     tooltip="Lance la simulation")
-    sim_mode_radio = widgets.RadioButtons(options=["Nouvelle figure", "Même figure"],
-                                        value="Nouvelle figure",
-                                        description="Plot mode:",
-                                        style={'description_width': 'initial'})
 
+    # Suppression du widget sim_mode_radio et de son inclusion dans les contrôles
     sim_controls = widgets.VBox([
         widgets.HTML("<h3>Simulation</h3>"),
         widgets.HBox([sim_lambda_min, sim_lambda_max]),
         widgets.HBox([sim_n_points, sim_n_mod]),
-        widgets.HBox([sim_mode_radio, sim_run_button])
+        widgets.HBox([sim_run_button])
     ])
 
     sim_output = widgets.Output(layout=widgets.Layout(border="2px solid #ccc", padding="10px", min_height="400px"))
-
+        
     def on_sim_run_clicked(b):
         with sim_output:
             sim_output.clear_output(wait=True)
@@ -345,12 +352,14 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                 fig.add_subplot(111)
             sim_output.clear_output(wait=True)
             display(fig)
+            # Ajout du lien de téléchargement
+            download_link = create_download_link(fig, filename=f"simulation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            display(download_link)
             plt.close(fig)
 
     sim_run_button.on_click(on_sim_run_clicked)
     sim_tab = widgets.VBox([sim_controls, sim_output])
 
-    
     # ===============================
     # Onglet 2 : Plot (liste déroulante unique)
     # ===============================
@@ -379,7 +388,7 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         summaries = all_summaries
     
     update_spectra()
-    
+
     def on_plot_button_clicked(b):
         selected_labels = list(spectra_select.value)
         if not selected_labels:
@@ -451,8 +460,11 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         with plot_output:
             plot_output.clear_output(wait=True)
             display(fig)
+            # Ajout du lien de téléchargement
+            download_link = create_download_link(fig, filename=f"plot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            display(download_link)
             plt.close(fig)
-    
+
     plot_button.on_click(on_plot_button_clicked)
     
     plot_controls = widgets.VBox([
@@ -490,7 +502,7 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         diff_ref_dropdown.options = options
         diff_target_dropdown.options = options
     update_diff_options()
-    
+
     def on_diff_button_clicked(b):
         ref_label = diff_ref_dropdown.value
         target_label = diff_target_dropdown.value
@@ -529,8 +541,11 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         with diff_output:
             diff_output.clear_output(wait=True)
             display(fig)
+            # Ajout du lien de téléchargement
+            download_link = create_download_link(fig, filename=f"difference_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            display(download_link)
             plt.close(fig)
-    
+
     diff_button.on_click(on_diff_button_clicked)
     
     diff_controls = widgets.VBox([
@@ -559,7 +574,3 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     app_layout = widgets.VBox([tabs])
     return app_layout
 
-# Exemple d'utilisation dans un notebook :
-# from interactive_simulation import create_advanced_app
-# app = create_advanced_app(json_combined_path, summary_dir, exp_data_dir)
-# display(app)
