@@ -3,7 +3,7 @@
 import numpy as np
 from Functions_RCWA import cascade, c_bas, interface, homogene, grating
 
-### SWAG Reflectance Function
+### SWAG Reflectance Function version 1
 
 def reflectance(geometry, wave, materials, n_mod):  
     period = geometry["period"]

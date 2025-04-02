@@ -1,19 +1,187 @@
 {
   "ALL_COMBINED_CONFIGS": [
     {
-      "config_name": "Geom_S1_diel=0_M=2_F=1 - Mat_S1_Tf=1_Pf=None_Pd=1.45**2",
+      "config_name": "Geom_S1_func=1 - Mat_S1_func=1.45**2",
       "geometry": {
-        "config_name": "Geom_S1_diel=0_M=2_F=1",
+        "config_name": "Geom_S1_func=1",
         "geometry": {
           "thick_super": 200.0,
           "thick_reso": 30.0,
           "width_reso": 30.0,
           "thick_gap": 3.0,
-          "thick_mol": 2.0,
+          "thick_mol": 0.0,
           "thick_func": 1.0,
           "thick_diel": 0.0,
           "thick_metalliclayer": 10.0,
           "thick_accroche": 0.0,
+          "thick_sub": 200.0,
+          "period": 100.2153
+        }
+      },
+      "material": {
+        "config_name": "Mat_S1_func=1.45**2",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_gap",
+            "material": {
+              "type": "Custom",
+              "expression": "1.45**2"
+            }
+          },
+          {
+            "key": "perm_diel",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_func",
+            "material": {
+              "type": "Custom",
+              "expression": "1.45**2"
+            }
+          },
+          {
+            "key": "perm_mol",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "Standard",
+              "material": "Silver"
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "Standard",
+              "material": "Gold"
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "Standard",
+              "material": "ITO"
+            }
+          }
+        ],
+        "RI_OVERRIDES": {}
+      }
+    },
+    {
+      "config_name": "Geom_S2_func=1 - Mat_S1_diel=1.45**2",
+      "geometry": {
+        "config_name": "Geom_S2_func=1",
+        "geometry": {
+          "thick_super": 200.0,
+          "thick_reso": 30.0,
+          "width_reso": 30.0,
+          "thick_gap": 3.0,
+          "thick_mol": 0.0,
+          "thick_func": 1.0,
+          "thick_diel": 0.0,
+          "thick_metalliclayer": 10.0,
+          "thick_accroche": 3.0,
+          "thick_sub": 200.0,
+          "period": 100.2153
+        }
+      },
+      "material": {
+        "config_name": "Mat_S1_diel=1.45**2",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_gap",
+            "material": {
+              "type": "Custom",
+              "expression": "1.45**2"
+            }
+          },
+          {
+            "key": "perm_diel",
+            "material": {
+              "type": "Custom",
+              "expression": "1.45**2"
+            }
+          },
+          {
+            "key": "perm_func",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_mol",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "Standard",
+              "material": "Silver"
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "Standard",
+              "material": "Gold"
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "Standard",
+              "material": "ITO"
+            }
+          }
+        ],
+        "RI_OVERRIDES": {}
+      }
+    },
+    {
+      "config_name": "Geom_S2_Mol=1 - Mat_S1_Tf=1_Pf=None_Pd=1.45**2",
+      "geometry": {
+        "config_name": "Geom_S2_Mol=1",
+        "geometry": {
+          "thick_super": 200.0,
+          "thick_reso": 30.0,
+          "width_reso": 30.0,
+          "thick_gap": 3.0,
+          "thick_mol": 1.0,
+          "thick_func": 0.0,
+          "thick_diel": 0.0,
+          "thick_metalliclayer": 10.0,
+          "thick_accroche": 3.0,
           "thick_sub": 200.0,
           "period": 100.2153
         }

@@ -9,3 +9,4 @@ voila
 PyQt6
 PyMoosh
 ipyevents
+ipykernel

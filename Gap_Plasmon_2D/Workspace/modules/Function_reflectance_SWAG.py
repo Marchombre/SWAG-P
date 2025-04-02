@@ -3,6 +3,8 @@
 import numpy as np
 from Functions_RCWA import cascade, c_bas, interface, homogene, grating
 
+### SWAG Reflectance Function version 2
+
 def reflectance(geometry, wave, materials, n_mod):
     """
     Calcule la réflectance (Rup, Rdown) en tenant compte de :
