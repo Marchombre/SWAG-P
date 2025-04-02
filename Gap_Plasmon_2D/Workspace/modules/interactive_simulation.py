@@ -314,8 +314,8 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     sim_n_mod = widgets.IntText(value=10, description="Modes:",
                                 layout=widgets.Layout(width='200px'),
                                 style={'description_width': 'initial'})
-    sim_run_button = widgets.Button(description="Lancer la simulation", button_style="success",
-                                    tooltip="Lance la simulation")
+    sim_run_button = widgets.Button(description="Run simulation", button_style="success",
+                                    tooltip="Run simulation")
 
     # Suppression du widget sim_mode_radio et de son inclusion dans les contrôles
     sim_controls = widgets.VBox([

@@ -9,7 +9,8 @@ import re
 
 from Material_Configuration import build_material_configuration_dynamic
 #from Function_reflectance_SWAG_V1 import reflectance
-from Function_reflectance_SWAG import reflectance
+#from Function_reflectance_SWAG import reflectance
+from Function_reflectance_SWAG_V2bis import reflectance
 
 def simulate_reflectance_single(lambda_range, geometry, wave, df_config, json_combined_path, n_mod, ri_overrides=None):
     """
@@ -106,7 +107,7 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
     filtered_parts = [part for part in suffix_parts if part]
     material_str_clean = "_".join(filtered_parts)
 
-    summary_filename = os.path.join(summary_dir, f"simulation_summary_RCWA_V2_{material_str_clean}.txt")
+    summary_filename = os.path.join(summary_dir, f"simulation_summary_RCWA_V2bis_{material_str_clean}.txt")
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     lines = []
     lines.append("Simulation Summary - All Geometry/Material Combos")

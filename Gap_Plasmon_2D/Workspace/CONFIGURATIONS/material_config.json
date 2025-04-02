@@ -521,6 +521,137 @@
         }
       ],
       "RI_OVERRIDES": {}
+    },
+    {
+      "config_name": "Mat_S1_d0.5_f0.5_m0",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "Standard",
+            "material": "Silver"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "Standard",
+            "material": "Gold"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Standard",
+            "material": "ITO"
+          }
+        }
+      ],
+      "RI_OVERRIDES": {}
+    },
+    {
+      "config_name": "Mat_S1_d1_f0_m0",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "Standard",
+            "material": "Silver"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "Standard",
+            "material": "Gold"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Standard",
+            "material": "ITO"
+          }
+        }
+      ],
+      "RI_OVERRIDES": {}
     }
   ]
 }
