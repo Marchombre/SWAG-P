@@ -7,12 +7,14 @@ import os, json
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
+from psutil import wait_procs
 
 # Default configuration (real values used for reflectance calculations remain unchanged)
 geometry_config = {
     "thick_super": 200,        # Real Superstrate thickness
     "thick_reso": 30,          # Real Nanocube height
     "width_reso": 30,          # Real Nanocube width
+    "width_pvp" : 2,           # Real pvp width
     "thick_gap": 3,            # Real Gap (polymer) thickness
     "thick_mol": 0.5,          # Real Molecule thickness
     "thick_func": 1,           # Real Functionalisation thickness
@@ -27,6 +29,7 @@ geometry_limits = {
     "thick_super": (0, 300),
     "thick_reso": (0, 100),
     "width_reso": (0, 100),
+    "width_pvp" : (0, 10),
     "thick_gap": (0, 30),
     "thick_mol": (0, 5),
     "thick_func": (0, 5),
@@ -101,6 +104,7 @@ def create_geometry_widget():
         ("thick_super", "Superstrate"),
         ("thick_reso", "Nanocube height"),
         ("width_reso", "Nanocube width"),
+        ("width_pvp", "PVP width"),
         ("thick_gap", "Gap (polymer)"),
         ("thick_mol", "Molecule"),
         ("thick_func", "Functionalisation"),
@@ -250,6 +254,7 @@ def create_geometry_widget():
             t_super      = geometry_sliders["thick_super"].value
             t_reso       = geometry_sliders["thick_reso"].value
             w_reso       = geometry_sliders["width_reso"].value
+            w_p          = geometry_sliders["width_pvp"].value
             t_gap        = geometry_sliders["thick_gap"].value
             t_mol        = geometry_sliders["thick_mol"].value
             t_func       = geometry_sliders["thick_func"].value

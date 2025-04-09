@@ -282,6 +282,7 @@ class MaterialSelectorTabbedNotebook:
                 "perm_func": {"type": "None"},
                 "perm_mol": {"type": "None"},
                 "perm_sub": {"type": "Standard", "material": "ITO"},
+                "perm_pvp": {"type": "Custom", "expression": "1.50**2"},
                 "perm_reso": {"type": "Standard", "material": "Silver"},
                 "perm_metalliclayer": {"type": "Standard", "material": "Gold"},
                 "perm_accroche": {"type": "None"},
@@ -294,6 +295,7 @@ class MaterialSelectorTabbedNotebook:
                 "perm_diel": {"type": "Custom", "expression": "1.45**2"},
                 "perm_func": {"type": "None"},
                 "perm_mol": {"type": "None"},
+                "perm_pvp": {"type": "Custom", "expression": "1.50**2"},
                 "perm_reso": {"type": "Standard", "material": "Silver"},
                 "perm_metalliclayer": {"type": "Standard", "material": "Gold"},
                 "perm_accroche": {"type": "Standard", "material": "Aluminium"},
@@ -613,6 +615,7 @@ DEFAULT_ROLES = [
     "perm_func",
     "perm_mol",
     "perm_reso",
+    "perm_pvp",
     "perm_metalliclayer",
     "perm_accroche",
     "perm_sub"

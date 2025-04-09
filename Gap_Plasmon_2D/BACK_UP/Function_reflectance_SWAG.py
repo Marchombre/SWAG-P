@@ -24,12 +24,8 @@ def reflectance(geometry, wave, materials, n_mod):
     # 1. Paramètres géométriques (normalisés par "period")
     # ---------------------------------
     period = geometry["period"]
-    
-    width_pvp = geometry["width_pvp"] / period
-    thick_pvp = geometry["thick_pvp"] / period            # PVP horizontal haut et bas du Nanocube (Core-shell)
-    width_side_pvp = geometry["width_side_pvp"] / period
-    thick_side_pvp = geometry["thick_side_pvp"] / period  # PVP vertical droite et gauche du Nanocube (Core-shell)
-    
+    width_PVP = geometry["width_PVP"] / period
+    thick_PVP = geometry["thick_PVP"] / period       # PVP autour du Nanocube (Core-shell)
     width_reso = geometry["width_reso"] / period
     thick_reso = geometry["thick_reso"] / period       # Nanocube (résonateur)
     thick_gap  = geometry["thick_gap"]  / period         # Gap (polymère)
@@ -53,7 +49,7 @@ def reflectance(geometry, wave, materials, n_mod):
 
     # Permittivités (matériaux)
     perm_env   = materials["perm_env"]             # Environnement (au-dessus du nanocube et sur les côtés)
-    perm_pvp   = materials["perm_pvp"]             # PVP autour du nanocube
+    perm_PVP   = materials["perm_PVP"]             # PVP autour du nanocube
     perm_reso  = materials["perm_reso"]            # Nanocube (résonateur)
     perm_gap   = materials["perm_gap"]              # Gap (polymère)
     perm_diel  = materials["perm_diel"]             # Couche latérale : diélectrique
@@ -61,167 +57,191 @@ def reflectance(geometry, wave, materials, n_mod):
     perm_mol   = materials["perm_mol"]               # Couche latérale : moléculaire
     perm_metal = materials["perm_metalliclayer"]     # Couche métallique
     perm_acc   = materials["perm_accroche"]          # Couche d'accroche
-    perm_sub   = materials["perm_sub"] 
-    
-    # Substrat
-    # ========= POSITION POUR LE GRATING =========
-    # Pour le nanocube recouvert de PVP (core-shell), on définit une matrice blocs à 2 lignes et 3 colonnes.
-    # Chaque ligne est de la forme [largeur, offset, delta_eps].
-    # Bloc 0 (shell) : transition de l'environnement vers le PVP
-    # Bloc 1 (core)  : transition du PVP vers le nanocube (résonateur)
-    blocs_core_shell = np.array([
-        [width_pvp,  (1 - width_pvp) / 2,  perm_pvp - perm_env],
-        [width_reso, (1 - width_reso) / 2, perm_reso - perm_pvp]
-    ])
+    perm_sub   = materials["perm_sub"]               # Substrat
 
-    # Pour les interfaces latérales (lorsqu'on est dans la zone de la couche de PVP seule, sans nanocube),
-    # on définit un profil horizontal simple à un seul bloc :
-    pos_pvp = np.array([[width_pvp, (1 - width_pvp) / 2, perm_pvp - perm_env]])
+    # Position pour le grating (définit la fraction du motif horizontal)
+    pos_reso = np.array([[width_reso, (1 - width_reso) / 2]])
+    n = 2 * n_mod + 1  # Nombre de modes, avec n_mod modes de chaque côté de l’ordre nul, on a au total 2 * n_mod + 1 modes.
 
-    # Nombre de modes
-    n = 2 * n_mod + 1
-
-    # ========= CONSTANTES RCWA =========
+    # ---------------------------------
+    # 3. Constantes RCWA
+    # ---------------------------------
     k0 = 2 * np.pi / wavelength
     a0 = k0 * np.sin(angle * np.pi / 180)
 
-    # ========= INITIALISATION DE LA MATRICE S =========
-    # La matrice S représente l’état initial de la propagation (lorsque l'on est dans l'environnement ou superstrat)
+    # ---------------------------------
+    # 4. Initialisation de la matrice S (provenant de l'environnement)
+    # ---------------------------------
+    # Cette matrice S représente l’état initial de la propagation 
+    # (on l’utilise pour accumuler les effets de chaque couche via les cascades).
     Pup, Vup = homogene(k0, a0, polarization, perm_env, n)
     S = np.block([
-        [np.zeros((n, n), dtype=complex), np.eye(n, dtype=complex)],
-        [np.eye(n, dtype=complex),        np.zeros((n, n), dtype=complex)]
+        [np.zeros((n, n), dtype=np.complex128), np.eye(n, dtype=np.complex128)],
+        [np.eye(n, dtype=np.complex128),        np.zeros((n, n), dtype=np.complex128)]
     ])
 
-    # ========= GESTION DU GAP ET DES COUCHES LATÉRALES =========
-    # Le gap se trouve strictement sous le nanocube (la zone centrale).
-    # La somme des épaisseurs latérales (diel, func, mol) est donnée par :
+
+    # ---------------------------------
+    # 5. Gestion du gap et des couches latérales
+    # Le gap est strictement sous le nanocube et sa largeur est égale à celle du nanocube.
+    # Les couches latérales (diel, func, mol) modulent horizontalement le gap et le nanocube via grating.
+    # On considère deux cas :
+    
+    #   (a) Si la somme des épaisseurs latérales est < gap, elles s'insèrent entièrement dans le gap.
+            # On commence donc par un grating de l'environnement vers le resonateur, puis on cascade vers le gap.
+            # Puis la partie selon z de gap disponible non collé aux couches diel, func et mol, 
+            # est alors traité en grating environnement vers gap.
+            # Ensuite, on traite simplement en grating les couches latérales mol, func et diel vers le gap avec les cascades, 
+            # interfaces et c_bas associés. Attention à bien tenir compte des cas où l'épaisseur 
+            # d'une couche diel, func ou mol est nulle.
+            
+    #   (b) Si la somme est égale ou dépasse l'épaisseur du gap, on commence donc par un grating de l'environnement 
+            # vers le resonateur en tenant compte de la longueur de l'interface selon l'axe z environnement/nanocube 
+            # disponible. Ensuite on traite en grating toute les couches latérals mol et/ou func et/ou diel, ou tout du moins 
+            # leur portions disponnibles, vers le nanocube avec les cascades, interfaces et c_bas associés.
+            # Ensuite, on traite simplement en grating toute les couches latérals mol et/ou func et/ou diel, ou tout du moins 
+            # leur portions disponnibles vers le gap avec les cascades, interfaces et c_bas associés.
+            # Attention à bien tenir compte des cas où l'épaisseur d'une couche diel, func ou mol est nulle.
+    #      
+    # ---------------------------------
     sum_lat = thick_diel + thick_func + thick_mol
 
-    # On considère deux cas distincts, suivant que la somme des épaisseurs latérales est
-    # inférieure ou supérieure à l'épaisseur du gap.
+
     if sum_lat < thick_gap:
-        # ----------------
-        # (a) Les couches latérales se trouvent entièrement dans le gap.
-        # Tout d'abord, on traite la région du nanocube recouvert (core-shell) :
-        # On utilise la matrice blocs "blocs_core_shell" pour obtenir la transition horizontale complète
-        P_core, V_core = grating(k0, a0, polarization, perm_env, perm_reso, n, blocs_core_shell)
-        P_current = P_core
-        S = cascade(S, interface(Pup, P_core))
-        # La propagation verticale dans le nanocube (core) s'effectue sur une épaisseur thick_reso
-        S = c_bas(S, V_core, thick_reso)
+        # (a) Les couches latérales diel + func + mol sont entièrement contenues dans le gap.
         
-        # Ensuite, le gap "libre" (non consommé par les couches latérales) a une épaisseur :
+        P_reso, V_reso = grating(k0, a0, polarization, perm_env, perm_reso, n, pos_reso)
+        # P_current désigne le milieu en cours (initialement, c'est la sortie du nanocube)
+        P_current = P_reso
+        
+        S = cascade(S, interface(Pup, P_reso))
+        S = c_bas(S, V_reso, thick_reso)
+            
         leftover_gap = thick_gap - sum_lat
+        # D'abord, si le gap n'est pas complètement "consommé", propager la portion de gap "libre"
+        
         if leftover_gap > 0:
-            # On réalise ici un grating pour l'interface environnement -> gap.
-            # Comme cette interface est située dans une région qui ne rencontre pas le nanocube,
-            # on utilise le profil horizontal correspondant à l'environnement (ou éventuellement celui du PVP si approprié)
-            # Ici, nous utilisons pos_pvp[0:1, :] pour obtenir une matrice à une seule ligne.
-            P_gap, V_gap = grating(k0, a0, polarization, perm_env, perm_gap, n, pos_pvp[0:1, :])
+            P_gap, V_gap = grating(k0, a0, polarization, perm_env, perm_gap, n, pos_reso)
             S = cascade(S, interface(P_current, P_gap))
             S = c_bas(S, V_gap, leftover_gap)
             P_current = P_gap
-        
-        # Puis, on ajoute successivement les couches latérales.
-        # Pour chaque type de couche latérale, on effectue le grating de l'interface (du matériau latéral vers le gap)
-        # en considérant que, dans la zone latérale, le PVP est présent (on utilise pos_pvp).
-        
+        # Puis, on ajoute successivement les couches latérales via grating
+                
         if thick_mol > 0:
-            P_mol, V_mol = grating(k0, a0, polarization, perm_mol, perm_gap, n, pos_pvp)
+            P_mol, V_mol = grating(k0, a0, polarization, perm_mol, perm_gap, n, pos_reso)
             S = cascade(S, interface(P_current, P_mol))
             S = c_bas(S, V_mol, thick_mol)
             P_current = P_mol
 
         if thick_func > 0:
-            P_func, V_func = grating(k0, a0, polarization, perm_func, perm_gap, n, pos_pvp)
+            P_func, V_func = grating(k0, a0, polarization, perm_func, perm_gap, n, pos_reso)
             S = cascade(S, interface(P_current, P_func))
             S = c_bas(S, V_func, thick_func)
             P_current = P_func
-
+                          
         if thick_diel > 0:
-            P_diel, V_diel = grating(k0, a0, polarization, perm_diel, perm_gap, n, pos_pvp)
+            P_diel, V_diel = grating(k0, a0, polarization, perm_diel, perm_gap, n, pos_reso)
             S = cascade(S, interface(P_current, P_diel))
             S = c_bas(S, V_diel, thick_diel)
             P_current = P_diel
 
     else:
-        # ----------------
-        # (b) La somme des épaisseurs latérales est supérieure ou égale à l'épaisseur du gap.
-        # Dans ce cas, l'interface initiale environnement -> nanocube (core-shell) se fait avec une
-        # propagation effective réduite de (sum_lat - thick_gap).
-        P_core, V_core = grating(k0, a0, polarization, perm_env, perm_reso, n, blocs_core_shell)
-        P_current = P_core
-        S = cascade(S, interface(Pup, P_core))
-        S = c_bas(S, V_core, (thick_reso + thick_pvp) - (sum_lat - thick_gap))
-                    
-        leftover_gap = thick_gap
-        # Traitement des couches latérales se fait en deux temps pour chaque couche,
-        # si l'épaisseur de la couche latérale dépasse la portion de gap disponible.
+        # (b) La somme des épaisseurs latérales est égale ou dépasse l'épaisseur du gap.
+        # On traite la partie diponible du reso en grating env vers reso avant de traiter les couches latérales.
+        P_reso, V_reso = grating(k0, a0, polarization, perm_env, perm_reso, n, pos_reso)
+        # P_current désigne le milieu en cours (initialement, c'est la sortie du nanocube)
+        P_current = P_reso
         
+        S = cascade(S, interface(Pup, P_reso))
+        S = c_bas(S, V_reso, thick_reso - (sum_lat - thick_gap))
+                
+        leftover_gap = thick_gap
+                    
+        # Traitement de la couche moléculaire
         if thick_mol > 0:
             if thick_mol < leftover_gap:
-                P_mol, V_mol = grating(k0, a0, polarization, perm_mol, perm_gap, n, pos_pvp[0:1, :])
+                P_mol, V_mol = grating(k0, a0, polarization, perm_mol, perm_gap, n, pos_reso)
                 S = cascade(S, interface(P_current, P_mol))
                 S = c_bas(S, V_mol, thick_mol)
                 P_current = P_mol
                 leftover_gap -= thick_mol
                 thick_mol = 0
             else:
-                P_mol, V_mol = grating(k0, a0, polarization, perm_mol, perm_gap, n, pos_pvp[0:1, :])
+                P_mol, V_mol = grating(k0, a0, polarization, perm_mol, perm_gap, n, pos_reso)
                 S = cascade(S, interface(P_current, P_mol))
                 S = c_bas(S, V_mol, leftover_gap)
-                P_current = P_mol
+                P_current = P_mol  # <-- Pour mettre à jour pour refléter 
+                # l’état après cette propagation avant de traiter la portion excédentaire.      
+                
+                # 2) Pour la portion excédentaire, calculer un nouveau grating avec le nanocube
                 exc_mol = thick_mol - leftover_gap
-                P_mol_new, V_mol_new = grating(k0, a0, polarization, perm_mol, perm_reso, n, pos_pvp[0:1, :])
+                # La permitivité du nanocube est décrite par perm_reso
+                P_mol_new, V_mol_new = grating(k0, a0, polarization, perm_mol, perm_reso, n, pos_reso)
                 S = cascade(S, interface(P_current, P_mol_new))
                 S = c_bas(S, V_mol_new, exc_mol)
+                # Mise à jour : la couche est entièrement traitée et le gap est épuisé
                 P_current = P_mol_new
                 thick_mol = 0
                 leftover_gap = 0
-
+                                    
+        # Traitement de la couche de fonctionnalisation
         if thick_func > 0:
             if thick_func < leftover_gap:
-                P_func, V_func = grating(k0, a0, polarization, perm_func, perm_gap, n, pos_pvp[0:1, :])
+                P_func, V_func = grating(k0, a0, polarization, perm_func, perm_gap, n, pos_reso)
                 S = cascade(S, interface(P_current, P_func))
                 S = c_bas(S, V_func, thick_func)
                 P_current = P_func
                 leftover_gap -= thick_func
                 thick_func = 0
             else:
-                P_func, V_func = grating(k0, a0, polarization, perm_func, perm_gap, n, pos_pvp[0:1, :])
+                # 1) Insérer dans le gap la portion disponible                
+                P_func, V_func = grating(k0, a0, polarization, perm_func, perm_gap, n, pos_reso)
                 S = cascade(S, interface(P_current, P_func))
                 S = c_bas(S, V_func, leftover_gap)
-                P_current = P_func
+                P_current = P_func  # <-- Pour mettre à jour pour refléter 
+                # l’état après cette propagation avant de traiter la portion excédentaire
+                                
+                # 2) Pour la portion excédentaire, calculer un nouveau grating avec le nanocube
                 exc_func = thick_func - leftover_gap
-                P_func_new, V_func_new = grating(k0, a0, polarization, perm_func, perm_reso, n, pos_pvp[0:1, :])
+                # On suppose que la partie latérale du nanocube est décrite par perm_reso
+                P_func_new, V_func_new = grating(k0, a0, polarization, perm_func, perm_reso, n, pos_reso)
                 S = cascade(S, interface(P_current, P_func_new))
                 S = c_bas(S, V_func_new, exc_func)
+                # Mise à jour : la couche est entièrement traitée et le gap est épuisé
                 P_current = P_func_new
                 thick_func = 0
                 leftover_gap = 0
-
+                                
+                
+                    
+        # Traitement de la couche diélectrique
         if thick_diel > 0:
             if thick_diel < leftover_gap:
-                P_diel, V_diel = grating(k0, a0, polarization, perm_diel, perm_gap, n, pos_pvp[0:1, :])
+                # La couche entière s'insère dans le gap
+                P_diel, V_diel = grating(k0, a0, polarization, perm_diel, perm_gap, n, pos_reso)
                 S = cascade(S, interface(P_current, P_diel))
                 S = c_bas(S, V_diel, thick_diel)
                 P_current = P_diel
                 leftover_gap -= thick_diel
                 thick_diel = 0
             else:
-                P_diel, V_diel = grating(k0, a0, polarization, perm_diel, perm_gap, n, pos_pvp[0:1, :])
+                # 1) Insérer dans le gap la portion disponible
+                P_diel, V_diel = grating(k0, a0, polarization, perm_diel, perm_gap, n, pos_reso)
                 S = cascade(S, interface(P_current, P_diel))
                 S = c_bas(S, V_diel, leftover_gap)
-                P_current = P_diel
+                P_current = P_diel  # <-- Pour mettre à jour pour refléter 
+                # l’état après cette propagation avant de traiter la portion excédentaire
+                
+                # 2) Pour la portion excédentaire, calculer un nouveau grating avec le nanocube
                 exc_diel = thick_diel - leftover_gap
-                P_diel_new, V_diel_new = grating(k0, a0, polarization, perm_diel, perm_reso, n, pos_pvp[0:1, :])
+                # On suppose que la partie latérale du nanocube est décrite par perm_reso
+                P_diel_new, V_diel_new = grating(k0, a0, polarization, perm_diel, perm_reso, n, pos_reso)
                 S = cascade(S, interface(P_current, P_diel_new))
                 S = c_bas(S, V_diel_new, exc_diel)
+                # Mise à jour : la couche est entièrement traitée et le gap est épuisé
                 P_current = P_diel_new
                 thick_diel = 0
                 leftover_gap = 0
-
                 
                 
 

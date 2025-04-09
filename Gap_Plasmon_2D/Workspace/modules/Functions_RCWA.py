@@ -67,16 +67,71 @@ def step(a, b, w, x0, n):
     T = toeplitz(l, m)
     return T
 
-def grating(k0, a0, pol, e1, e2, n, blocs):
-    '''Generates the Fourier matrix for a grating consisting of blocks of material e2 in a medium e1.'''
+
+
+
+def grating(k0, a0, pol, e1, n, blocs):
+    """
+    Génère la matrice de Fourier pour un profil de permittivité défini par une superposition 
+    de fonctions "step" (fonction en escalier) dans un milieu de base d'indice e1.
+    
+    Le profil effectif est donné par :
+        eps(x) = e1 + somme_k [ delta_eps[k] * F_k(x) ]
+    où F_k(x) est la fonction définie par une "step" caractérisée par :
+      - une largeur (blocs[k,0]),
+      - un décalage (blocs[k,1])
+    et delta_eps[k] (blocs[k,2]) est l'amplitude de la transition de permittivité.
+    
+    Par exemple, pour modéliser un nanocube recouvert de PVP (core‑shell), on peut définir :
+      - Bloc 0 (shell) : 
+            largeur = largeur de la zone du revêtement PVP (width_pvp)
+            offset  = (1 - width_pvp) / 2      (pour centrer horizontalement)
+            delta_eps[0] = perm_pvp – perm_env
+      - Bloc 1 (core) :
+            largeur = largeur du nanocube (width_reso)
+            offset  = (1 - width_reso) / 2
+            delta_eps[1] = perm_reso – perm_pvp
+    Ainsi, dans la région du core, la somme donne : 
+            e1 + (perm_pvp – perm_env) + (perm_reso – perm_pvp) = perm_reso.
+    
+    Pour le calcul de la transformée de Fourier inverse de 1/eps, on utilise :
+         1/eps(x) = 1/e1 + somme_k [1/(eps_eff_{k+1}) - 1/(eps_eff_k)] * F_k(x)
+    avec eps_eff_0 = e1 et eps_eff_{k+1} = eps_eff_k + delta_eps[k].
+    
+    Entrées :
+      - k0 : nombre d'onde dans le vide.
+      - a0 : constante liée à l'angle d'incidence.
+      - pol : polarisation (0 pour TE, 1 pour TM par exemple).
+      - e1 : permittivité du milieu de base (par exemple, l'environnement).
+      - n : nombre de modes.
+      - blocs : matrice de dimension (n_blocs, 3) où chaque ligne représente un bloc
+                [largeur, offset, delta_eps] qui définit la contribution locale.
+    
+    Sorties :
+      - P : matrice des coefficients de Fourier pour le champ.
+      - L : valeurs associées (par exemple, propagateurs modaux).
+    """
     n_blocs = blocs.shape[0]
     nmod = int(n / 2)
-    M1 = e1 * np.eye(n, dtype=complex)
-    M2 = 1 / e1 * np.eye(n, dtype=complex)
+    eps_eff = e1  # Permittivité effective initiale = milieu de base.
+    M1 = e1 * np.eye(n, dtype=complex)    # Matrice associée à eps(x).
+    M2 = (1/e1) * np.eye(n, dtype=complex)  # Matrice associée à 1/eps(x).
+
+    # Pour chaque bloc, on ajoute la contribution de la fonction step.
     for k in range(n_blocs):
-        M1 = M1 + step(0, e2 - e1, blocs[k, 0], blocs[k, 1], n)
-        M2 = M2 + step(0, 1 / e2 - 1 / e1, blocs[k, 0], blocs[k, 1], n)
+        delta_eps = blocs[k, 2]
+        # Ajout de la contribution pour eps(x).
+        M1 = M1 + step(0, delta_eps, blocs[k, 0], blocs[k, 1], n)
+        # On calcule la nouvelle permittivité effective.
+        eps_next = eps_eff + delta_eps
+        # Contribution pour 1/eps(x) : différence entre 1/eps_next et 1/eps_eff.
+        M2 = M2 + step(0, 1/eps_next - 1/eps_eff, blocs[k, 0], blocs[k, 1], n)
+        eps_eff = eps_next  # Mise à jour pour le bloc suivant.
+
+    # Construction de la matrice alpha (liée aux composantes angulaires).
     alpha = np.diag(a0 + 2 * np.pi * np.arange(-nmod, nmod + 1)) + 0j
+
+    # Selon la polarisation, on construit la matrice M et on résout le problème aux valeurs propres.
     if pol == 0:
         M = alpha * alpha - k0**2 * M1
         L, E = np.linalg.eig(M)
@@ -91,6 +146,8 @@ def grating(k0, a0, pol, e1, e2, n, blocs):
         L = (1 - 2 * (np.imag(L) < -1e-15)) * L
         P = np.block([[E], [np.matmul(np.matmul(M2, E), np.diag(L))]])
     return P, L
+
+
 
 def homogene(k0, a0, pol, epsilon, n):
     nmod = int(n / 2)

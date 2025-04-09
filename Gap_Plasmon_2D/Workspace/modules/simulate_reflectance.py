@@ -9,8 +9,8 @@ import re
 
 from Material_Configuration import build_material_configuration_dynamic
 #from Function_reflectance_SWAG_V1 import reflectance
-#from Function_reflectance_SWAG import reflectance
-from Function_reflectance_SWAG_V2bis import reflectance
+from Function_reflectance_SWAG import reflectance
+#from Function_reflectance_SWAG_V2bis import reflectance
 
 def simulate_reflectance_single(lambda_range, geometry, wave, df_config, json_combined_path, n_mod, ri_overrides=None):
     """
