@@ -13,13 +13,16 @@ Cette application propose trois onglets :
 """
 
 import os
+import glob
+import re
+import ast
 import io, base64
 import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import ipywidgets as widgets
-from IPython.display import HTML, display
+from IPython.display import HTML, display, clear_output
 from datetime import datetime
 
 # Construction des chemins
@@ -33,13 +36,19 @@ data_dir         = os.path.join(workspace_dir, "data")
 json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
 # Importations internes
-from simulate_and_plot import ordered_params, run_simulation_one_combo
+from simulate_and_plot import run_simulation_all_combos, ordered_params, run_simulation_one_combo
 from data_readers import (
+    read_all_combos,
+    read_experimental_data,
+    parse_simulation_summary,
+    parse_experimental_data_summary,
     list_sim_summary_files,
+    list_exp_data_files,
+    get_simulation_label,
     get_all_spectra_and_summaries
 )
-from convergence_analysis import create_multi_convergence_widget
-from Saving_Functions import save_simulation_summary, save_figure, get_material_str_clean
+from convergence_analysis import compute_convergence, create_multi_convergence_widget
+from simulate_reflectance import simulate_reflectance_single
 
 # --- Téléchargement de la figure ---
 def create_download_link(fig, filename="figure.png"):
@@ -217,13 +226,10 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     def on_sim_run_clicked(b):
         with sim_output:
             sim_output.clear_output(wait=True)
-            # Affichage d'un spinner pendant la simulation
             spinner = widgets.HTML(
                 "<div style='text-align: center;'><img src='https://i.gifer.com/ZZ5H.gif' width='50px'/><br><em>Simulation en cours...</em></div>"
             )
             display(spinner)
-            
-            # Récupération des paramètres
             lam_min = sim_lambda_min.value
             lam_max = sim_lambda_max.value
             n_points = sim_n_points.value
@@ -231,27 +237,22 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             wave = {"angle": 0, "polarization": 1}
             lam_range = np.linspace(lam_min, lam_max, n_points)
             colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-            
-            # Préparation de la figure
+            # Création d'une figure globale qui contiendra le graphique et le tableau
             fig = plt.figure(figsize=(12, 10))
+
+            # Ajout d'un axe pour le tracé du graphique de simulation
             ax_plot = fig.add_axes([0.1, 0.50, 0.9, 0.49])
+            # Ajout d'un axe pour le tableau récapitulatif
             ax_table = fig.add_axes([0.1, 0.10, 0.9, 0.40])
-            
-            # Initialisation des listes pour le tracé et le tableau ainsi que du dictionnaire des détails de simulation
+
             config_labels = []
             geom_summaries = []
             mat_summaries = []
-            simulation_details = {}
-            
-            # Pour chaque configuration sélectionnée, lancer la simulation et collecter les courbes et résumés
+
             for idx, cfg in enumerate(sim_config_selector.value):
-                Rup, details = run_simulation_one_combo(lam_range, wave, n_mod, cfg, json_combined_path)
-                # Stockage des détails pour la sauvegarde
-                simulation_details[cfg["config_name"]] = details
-                # Tracé du spectre
+                Rup, _ = run_simulation_one_combo(lam_range, wave, n_mod, cfg, json_combined_path)
                 ax_plot.plot(lam_range, Rup, label=cfg["config_name"], color=colors[idx % len(colors)])
                 config_labels.append(cfg["config_name"])
-                
                 # Construction du résumé de géométrie
                 geom = cfg.get("geometry", {}).get("geometry", {})
                 geom_lines = []
@@ -259,7 +260,6 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                     if key in geom:
                         geom_lines.append(f"{disp_name}: {geom[key]}")
                 geom_summaries.append("\n".join(geom_lines))
-                
                 # Construction du résumé matière
                 mat_list = cfg.get("material", {}).get("MATERIALS_CONFIG", [])
                 mat_lines = []
@@ -282,22 +282,24 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                         if val:
                             mat_lines.append(f"{disp_name}: {val}")
                 mat_summaries.append("\n".join(mat_lines))
-            
-            # Configuration de l'axe du tracé
+
             ax_plot.set_xlabel("Wavelength (nm)")
             ax_plot.set_ylabel("Reflectance")
             ax_plot.set_title("Simulation")
             ax_plot.legend()
             ax_plot.grid(True)
-            # Désactivation de l'affichage des axes dans l'axe qui contiendra le tableau
+            # Désactive l'affichage des axes sur l'axe qui contiendra le tableau
             ax_table.axis("off")
-            
-            # Ajustement des noms pour le tableau (ajout d'un saut de ligne si nécessaire)
+
+            # Modification pour insérer un saut de ligne dans les noms de spectres.
+            # Pour chaque nom, dès qu'on trouve "Mat_", on le remplace par "\nMat_"
             config_labels = [label.replace("Mat_", "\nMat_") for label in config_labels]
-            
+
             if config_labels:
                 n_configs = len(config_labels)
+                # Détermine la taille de la police
                 fontsize = 8 if n_configs <= 5 else max(8 - (n_configs - 5), 3)
+                # Création du tableau dans l'axe ax_table
                 table = ax_table.table(
                     cellText=[geom_summaries, mat_summaries],
                     colLabels=config_labels,
@@ -305,9 +307,12 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                     loc="center",
                     cellLoc="left"
                 )
+                # Désactive l'ajustement automatique de la taille de police et définit la taille manuellement
                 table.auto_set_font_size(False)
                 table.set_fontsize(fontsize)
+                # Ajuste la largeur des colonnes en fonction du contenu
                 table.auto_set_column_width(col=list(range(len(config_labels))))
+                
                 # Personnalisation des cellules d'en-tête
                 for (row, col), cell in table.get_celld().items():
                     if row == -1:
@@ -320,30 +325,27 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                         cell.set_facecolor("whitesmoke")
                         cell.set_edgecolor("lightgray")
                         cell.set_linewidth(0.5)
-                # Appliquer les couleurs aux textes des cellules du corps
+                
+                # Applique les couleurs du cycle aux textes des cellules du corps
                 for (row, col), cell in table.get_celld().items():
-                    if row >= 0 and col >= 0:
+                    if row >= 0 and col >= 0:  # Exclut les en-têtes
                         cell.get_text().set_color(colors[col % len(colors)])
-                # Ajustement dynamique de la hauteur des cellules
+                
+                # Mise à jour dynamique de la hauteur des cellules
                 row_heights = {}
+                # Parcourt chaque cellule du corps pour déterminer le nombre de lignes de texte
                 for (row, col), cell in table.get_celld().items():
                     if row >= 0:
                         txt = cell.get_text().get_text()
-                        nb_lines = txt.count("\n") + 1
+                        nb_lines = txt.count("\n") + 1  # Le nombre de lignes est le nombre de sauts de ligne + 1
                         row_heights[row] = max(row_heights.get(row, 0), nb_lines)
+                # Applique la hauteur à chaque cellule en fonction du nombre de lignes détectées
                 for (row, col), cell in table.get_celld().items():
                     if row in row_heights:
                         cell.set_height(0.04 * row_heights[row])
             
-            ax_table.figure.canvas.draw_idle()  # Mise à jour du tableau
+            ax_table.figure.canvas.draw_idle()  # Mise à jour immédiate du canvas
             
-            # Appel des fonctions de sauvegarde avec les résultats obtenus
-            save_simulation_summary(simulation_details, lam_range, wave, n_mod, summary_dir)
-            figures_dir = os.path.join(workspace_dir, "Figures")
-            material_str_clean = get_material_str_clean(simulation_details)
-            save_figure(fig, "Simulation Reflectance Spectra", figures_dir, material_str_clean)
-            
-            # Affichage final de la figure et du lien de téléchargement
             sim_output.clear_output(wait=True)
             display(fig)
             download_link = create_download_link(fig, filename=f"simulation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")

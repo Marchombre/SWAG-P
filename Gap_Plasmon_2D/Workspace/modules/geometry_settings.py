@@ -117,15 +117,30 @@ def create_geometry_widget():
     for key, label in ordered_params:
         default = geometry_config.get(key, 0)
         min_val, max_val = geometry_limits.get(key, (0, 200))
+        
+        if key =="period":
+            description_str = label + ":"
+        else:
+            description_str = label + " (nm):"
+        # Create a FloatSlider for each parameter
+        # with a FloatText linked to it
         slider = widgets.FloatSlider(
             value=default, min=min_val, max=max_val, step=0.1,
-            description=label + " :",
+            description=description_str,
             continuous_update=False,
             layout=widgets.Layout(width='350px'),
             style={'description_width': '180px'}
         )
         float_text = widgets.FloatText(value=default, layout=widgets.Layout(width='100px'))
         widgets.jslink((slider, 'value'), (float_text, 'value'))
+        
+        # Empêche les valeurs négatives pour les épaisseurs
+        def validate_positive(change):
+            if change['new'] < 0:
+                change['owner'].value = 0
+                
+        float_text.observe(validate_positive, names='value')
+        
         geometry_sliders[key] = slider
         slider_widgets.append(widgets.HBox([slider, float_text]))
     

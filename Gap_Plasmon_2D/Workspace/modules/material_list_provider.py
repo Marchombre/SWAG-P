@@ -64,3 +64,5 @@ def get_available_materials_extended(json_path, data_dir):
                 materials.add(name)
     
     return sorted(materials)
+
+
