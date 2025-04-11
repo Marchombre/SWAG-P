@@ -273,7 +273,7 @@ def create_geometry_widget():
             t_func       = geometry_sliders["thick_func"].value
             t_diel       = geometry_sliders["thick_diel"].value
             t_metal      = geometry_sliders["thick_metalliclayer"].value
-            t_XIAOYI    = geometry_sliders["thick_XIAOYI"].value
+            t_XIAOYI     = geometry_sliders["thick_XIAOYI"].value
             t_acc        = geometry_sliders["thick_accroche"].value
             t_sub        = geometry_sliders["thick_sub"].value
 
