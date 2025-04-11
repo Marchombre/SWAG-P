@@ -259,11 +259,14 @@ def create_geometry_widget():
     fig_output = widgets.Output(layout=widgets.Layout(flex='1', height='700px', padding='10px'))
     
     
+    
     def draw_structure(_=None):
         with fig_output:
             clear_output(wait=True)
             
-            # Récupération des paramètres réels via les sliders
+            scale = 4  # scaling factor for display only
+            
+            # Retrieve geometry from sliders
             p            = geometry_sliders["period"].value
             t_super      = geometry_sliders["thick_super"].value
             t_reso       = geometry_sliders["thick_reso"].value
@@ -277,139 +280,112 @@ def create_geometry_widget():
             t_acc        = geometry_sliders["thick_accroche"].value
             t_sub        = geometry_sliders["thick_sub"].value
 
-            # Paramètres d'affichage pour les couches fixes
-            disp_sub   = displayed_thickness(t_sub)   # Affichage réduit du Substrate
-            disp_super = displayed_thickness(t_super)   # Affichage réduit du Superstrate
-
-            # Hauteur totale du dessin (nous utilisons ici p comme dimension du carré)
-            hauteur_totale = p
-
-            # Hauteur disponible pour les couches intermédiaires
-            hauteur_dispo = hauteur_totale - (disp_sub + disp_super)
+            # Displayed thickness for Substrate
+            disp_sub   = displayed_thickness(t_sub)
+            # For Superstrate, we force it to fill to the top (y = p)
+            disp_super = displayed_thickness(t_super)
+            # For Metallic layer
+            disp_metal = displayed_thickness(t_metal)
             
-            # --- Partie centrale (empilement vertical) ---
-            # Ces couches sont celles qui seront normalisées pour occuper "hauteur_dispo"
-            # L'ordre vertical est : Accroche, XIAOYI, Metallic, Gap, Nanocube
-            somme_centrale = t_acc + t_XIAOYI + t_metal + t_gap + t_reso
             
-            # Facteur de normalisation pour la partie centrale
-            facteur_centrale = hauteur_dispo / somme_centrale if somme_centrale > 0 else 1
-            
-            # Calcul des épaisseurs affichées pour la partie centrale
-            disp_acc    = t_acc     * facteur_centrale
-            disp_XIAOYI = t_XIAOYI  * facteur_centrale
-            disp_metal  = t_metal   * facteur_centrale
-            disp_gap    = t_gap     * facteur_centrale
-            disp_reso   = t_reso    * facteur_centrale
-            
-            # Recalcule les positions verticales pour la partie centrale
+            # Compute vertical positions for lower layers:
             y_sub_bottom = 0
             y_sub_top    = y_sub_bottom + disp_sub
+            band_height  = min(0.05 * p, disp_sub, disp_super)
             
             y_acc_bottom = y_sub_top
+            disp_acc = scale * t_acc  # Accroche scaled for display
             y_acc_top    = y_acc_bottom + disp_acc
             
             y_XIAOYI_bottom = y_acc_top
-            y_XIAOYI_top    = y_XIAOYI_bottom + disp_XIAOYI
+            y_XIAOYI_top    = y_XIAOYI_bottom + t_XIAOYI
             
             y_metal_bottom = y_XIAOYI_top
             y_metal_top    = y_metal_bottom + disp_metal
+        
             
-            y_inter_bottom = y_metal_top  # début de la zone centrale "Gap + Cube"
+            # Intermediate zone (central column): Gap (scaled) + Nanocube (real)
+            central_height = scale * t_gap + t_reso
+            y_inter_bottom = y_metal_top
+            y_inter_top    = y_inter_bottom + central_height
+            
             y_gap_bottom   = y_inter_bottom
-            y_gap_top      = y_gap_bottom + disp_gap
-            
+            y_gap_top      = y_gap_bottom + scale * t_gap
             y_cube_bottom  = y_gap_top
-            y_cube_top     = y_cube_bottom + disp_reso
-
-            # Le superstrate occupe le reste (en haut)
-            y_super_bottom = y_cube_top
-            y_super_top    = hauteur_totale
-
-            # --- Partie latérale (colonnes gauche et droite) ---
-            # Pour les colonnes latérales, nous voulons conserver les proportions entre Dielectric, Functionalisation et Molecule.
-            # On peut utiliser le même facteur de normalisation que la partie centrale pour simplifier.
-            somme_laterale = t_diel + t_func + t_mol
-            facteur_lateral = facteur_centrale  # On réutilise le même facteur pour garder l'homogénéité
+            y_cube_top     = y_cube_bottom + t_reso
             
-            disp_dielectric = t_diel * facteur_lateral
-            disp_func       = t_func   * facteur_lateral
-            disp_mol        = t_mol    * facteur_lateral
+            # Lateral columns: order is Dielectric, then Functionalisation, then Molecule
+            sum_lat = t_diel + t_func + t_mol
+            lat_height_scaled = scale * sum_lat
+            lat_filler = max(0, central_height - lat_height_scaled)
             
-            # La somme totale affichée sur les colonnes latérales
-            hauteur_laterale = disp_dielectric + disp_func + disp_mol
+            central_x     = (p - w_reso) / 2
+            lateral_width = (p - w_reso) / 2
+            left_x  = 0
+            right_x = central_x + w_reso
             
-            # Pour aligner les colonnes latérales avec la partie centrale,
-            # on part du même point de départ vertical que le début des couches dynamiques.
-            y_lat_start = y_inter_bottom
-            y_lat_end   = y_lat_start + hauteur_laterale
-            # S'il y a un espace restant (filler) entre la fin des colonnes latérales et le début du superstrate, on le calcule
-            lateral_filler = max(0, y_super_bottom - y_lat_end)
+            # For Superstrate, force it to fill exactly up to the top of the cell
+            y_super_top = p
+            y_super_bottom = y_inter_top
             
-            # --- Détermination du cas (Case A ou Case B) ---
-            if (t_diel + t_func + t_mol) < t_gap:
+            # Lateral filler calculation
+            lateral_filler = max(0, y_super_bottom - (y_inter_bottom + lat_height_scaled))
+            
+            # Determine Case: if (t_diel+t_func+t_mol) < t_gap then Case A, else Case B
+            if sum_lat < t_gap:
                 case_str = "Case A"
             else:
                 case_str = "Case B"
             case_label_widget.value = f"Case: {case_str}"
             
-            # --- Définition des coordonnées latérales ---
-            central_x     = (p - w_reso) / 2  # zone centrale du cube
-            lateral_width = (p - w_reso) / 2
-            left_x  = 0
-            right_x = central_x + w_reso
-            
-            # --- Dessin ---
+            # Figure with reduced overall size for better widget visibility
             fig, ax = plt.subplots(figsize=(6,6))
-            ax.set_title("Schematics (visualisation uniquement) - " + case_label_widget.value, fontsize=10, pad=5)
+            ax.set_title("Schematics (not to scale) - " + case_label_widget.value, fontsize=10, pad=5)
             
-            # Substrate : zone inférieure fixe
+            # Draw Substrate and its hatch band
             draw_layer(ax, 0, y_sub_bottom, p, disp_sub, "brown", "Substrate")
-            # Bande de hachures sur le substrate
-            bande_height = min(0.05 * p, disp_sub, disp_super)
-            draw_layer(ax, 0, y_sub_bottom, p, bande_height, "none", "", hatch='///')
+            draw_layer(ax, 0, y_sub_bottom, p, band_height, "none", "", hatch='///')
             
-            # Partie centrale (Accroche, XIAOYI, Metallic, Gap, Nanocube)
+            # Draw Accroche and Metallic layers
             draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "gold", "Accroche")
-            draw_layer(ax, 0, y_XIAOYI_bottom, p, disp_XIAOYI, "purple", "XIAOYI")
-            draw_layer(ax, 0, y_metal_bottom, p, disp_metal, "silver", "Metallic")
+            draw_layer(ax, 0, y_metal_bottom, p, t_metal, "silver", "Metallic")
+            draw_layer(ax, 0, y_XIAOYI_bottom, p, t_XIAOYI, "purple", "XIAOYI")
             
-            # Zone centrale : Gap et Nanocube (affichés dans la colonne centrale)
-            draw_layer(ax, central_x, y_gap_bottom, w_reso, disp_gap, "lightgreen", "Gap (polymer)")
-            draw_layer(ax, central_x, y_cube_bottom, w_reso, disp_reso, "orange", "Nanocube")
+            # Draw Central column: Gap (polymer) then Nanocube
+            draw_layer(ax, central_x, y_gap_bottom, w_reso, scale * t_gap, "lightgreen", "Gap (polymer)")
+            draw_layer(ax, central_x, y_cube_bottom, w_reso, t_reso, "orange", "Nanocube")
             
-            # Colonnes latérales (Dielectric, Functionalisation, Molecule)
-            y_curr_left = y_lat_start
-            draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_dielectric, "green", "Dielectric")
-            draw_layer(ax, right_x, y_curr_left, lateral_width, disp_dielectric, "green", "Dielectric")
-            y_curr_left += disp_dielectric
+            # Draw Lateral columns: Dielectric, Functionalisation, Molecule
+            y_curr_left = y_inter_bottom
+            thickness_poly_scaled = scale * t_diel
+            draw_layer(ax, left_x,  y_curr_left, lateral_width, thickness_poly_scaled, "green", "Dielectric")
+            draw_layer(ax, right_x, y_curr_left, lateral_width, thickness_poly_scaled, "green", "Dielectric")
+            y_curr_left += thickness_poly_scaled
 
-            draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_func, "pink", "Functionalisation")
-            draw_layer(ax, right_x, y_curr_left, lateral_width, disp_func, "pink", "Functionalisation")
-            y_curr_left += disp_func
+            thickness_func_scaled = scale * t_func
+            draw_layer(ax, left_x,  y_curr_left, lateral_width, thickness_func_scaled, "pink", "Functionalisation")
+            draw_layer(ax, right_x, y_curr_left, lateral_width, thickness_func_scaled, "pink", "Functionalisation")
+            y_curr_left += thickness_func_scaled
 
-            draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_mol, "violet", "Molecule")
-            draw_layer(ax, right_x, y_curr_left, lateral_width, disp_mol, "violet", "Molecule")
-            y_curr_left += disp_mol
+            thickness_mol_scaled = scale * t_mol
+            draw_layer(ax, left_x,  y_curr_left, lateral_width, thickness_mol_scaled, "violet", "Molecule")
+            draw_layer(ax, right_x, y_curr_left, lateral_width, thickness_mol_scaled, "violet", "Molecule")
+            y_curr_left += thickness_mol_scaled
 
-            # Ajout d'un filler latéral si besoin pour occuper l'espace restant
             if lateral_filler > 0:
-                draw_layer(ax, left_x,  y_curr_left, lateral_width, lateral_filler, "lightblue", "Environnement")
-                draw_layer(ax, right_x, y_curr_left, lateral_width, lateral_filler, "lightblue", "Environnement")
+                draw_layer(ax, left_x,  y_curr_left, lateral_width, lateral_filler, "lightblue", "Superstrate \n (environement)")
+                draw_layer(ax, right_x, y_curr_left, lateral_width, lateral_filler, "lightblue", "Superstrate \n (environement)")
             
-            # Superstrate (zone supérieure fixe)
-            draw_layer(ax, 0, y_super_bottom, p, hauteur_totale - y_super_bottom, "lightblue", "Superstrate\n(environnement)")
-            draw_layer(ax, 0, hauteur_totale - bande_height, p, bande_height, "none", "", hatch='///')
+            # Draw Superstrate in central column
+            draw_layer(ax, 0, y_super_bottom, p, p - y_super_bottom, "lightblue", "Superstrate (environement)")
+            draw_layer(ax, 0, p - band_height, p, band_height, "none", "", hatch='///')
             
-            # Ajustements des axes
             ax.set_xlim(0, p)
             ax.set_ylim(0, p)
             ax.set_aspect('equal', adjustable='box')
             ax.margins(0)
             
             plt.show()
-
-
 
     # Observe slider changes
     for sld in geometry_sliders.values():

@@ -1,72 +1,7 @@
 {
   "ALL_CONFIGS": [
     {
-      "config_name": "Mat_S1_func=1.45**2",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Standard",
-            "material": "ITO"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S1_diel=1.45**2",
+      "config_name": "Mat_S1",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
@@ -103,606 +38,27 @@
         {
           "key": "perm_reso",
           "material": {
-            "type": "Standard",
-            "material": "Silver"
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Werner-DFT",
+            "data": "main/Ag/nk/Werner-DFT.yml"
           }
         },
         {
           "key": "perm_metalliclayer",
           "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Standard",
-            "material": "ITO"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S2_diel=1.45**2",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "Standard",
-            "material": "Aluminium"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Custom",
-            "expression": "1.50**2"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S2_func=1.45**2",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "Standard",
-            "material": "Aluminium"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Custom",
-            "expression": "1.50**2"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S1_Mol=1.45**2",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Standard",
-            "material": "ITO"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S2_Mol=1.45**2",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "Standard",
-            "material": "Aluminium"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Custom",
-            "expression": "1.50**2"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S1_Tf=1_Pf=None_Pd=1.45**2",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Standard",
-            "material": "ITO"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S2_Tf=1_Pf=None_Pd=1.45**2",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "Standard",
-            "material": "Aluminium"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Custom",
-            "expression": "1.50**2"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S1_d0.5_f0.5_m0",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Standard",
-            "material": "ITO"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "Mat_S1_d1_f0_m0",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "Standard",
-            "material": "Silver"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "Standard",
-            "material": "Gold"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Standard",
-            "material": "ITO"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "test",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "None"
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Werner-DFT",
+            "data": "main/Au/nk/Werner-DFT.yml"
           }
         },
         {
           "key": "perm_XIAOYI",
           "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
+            "type": "None"
           }
         },
         {
@@ -714,7 +70,309 @@
         {
           "key": "perm_sub",
           "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "SiO2",
+            "page": "Rodriguez-de_Marcos",
+            "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+          }
+        }
+      ],
+      "RI_OVERRIDES": {
+        "perm_reso": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Ag",
+          "page": "Werner-DFT",
+          "data": "main/Ag/nk/Werner-DFT.yml"
+        },
+        "perm_metalliclayer": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Au",
+          "page": "Werner-DFT",
+          "data": "main/Au/nk/Werner-DFT.yml"
+        },
+        "perm_sub": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "SiO2",
+          "page": "Rodriguez-de_Marcos",
+          "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+        }
+      }
+    },
+    {
+      "config_name": "Mat_S2",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
             "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.50**2"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Werner-DFT",
+            "data": "main/Ag/nk/Werner-DFT.yml"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Werner-DFT",
+            "data": "main/Au/nk/Werner-DFT.yml"
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "SiO2",
+            "page": "Rodriguez-de_Marcos",
+            "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+          }
+        }
+      ],
+      "RI_OVERRIDES": {
+        "perm_reso": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Ag",
+          "page": "Werner-DFT",
+          "data": "main/Ag/nk/Werner-DFT.yml"
+        },
+        "perm_metalliclayer": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Au",
+          "page": "Werner-DFT",
+          "data": "main/Au/nk/Werner-DFT.yml"
+        },
+        "perm_sub": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "SiO2",
+          "page": "Rodriguez-de_Marcos",
+          "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+        }
+      }
+    },
+    {
+      "config_name": "Mat_S3",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.60**2"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Werner-DFT",
+            "data": "main/Ag/nk/Werner-DFT.yml"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Werner-DFT",
+            "data": "main/Au/nk/Werner-DFT.yml"
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "SiO2",
+            "page": "Rodriguez-de_Marcos",
+            "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+          }
+        }
+      ],
+      "RI_OVERRIDES": {
+        "perm_reso": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Ag",
+          "page": "Werner-DFT",
+          "data": "main/Ag/nk/Werner-DFT.yml"
+        },
+        "perm_metalliclayer": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Au",
+          "page": "Werner-DFT",
+          "data": "main/Au/nk/Werner-DFT.yml"
+        },
+        "perm_sub": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "SiO2",
+          "page": "Rodriguez-de_Marcos",
+          "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+        }
+      }
+    },
+    {
+      "config_name": "Mat_Structure 1",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "Standard",
+            "material": "Air"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "Standard",
+            "material": "Silver"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "Standard",
+            "material": "Gold"
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Standard",
+            "material": "ITO"
           }
         }
       ],

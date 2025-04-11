@@ -23,10 +23,10 @@ import time
 
 import ipywidgets as widgets
 from IPython.display import display
-
 from simulate_reflectance import simulate_reflectance_single
 
-def compute_convergence(lambda_fixed, n_mode_max, geometry, wave, df_config, json_combined_path, ri_overrides, tolerance=1e-3, n_step=1, progress_bar=None):
+
+def compute_convergence(lambda_fixed, n_mode_max, geometry, wave, df_config, json_combined_path, ri_overrides, tolerance, n_step, stable_required, progress_bar=None):
     """
     Calcule la convergence de Rup pour une longueur d'onde fixe en faisant varier n_mode.
     
@@ -38,15 +38,17 @@ def compute_convergence(lambda_fixed, n_mode_max, geometry, wave, df_config, jso
         df_config (pd.DataFrame): Configuration des matériaux.
         json_combined_path (str): Chemin vers le JSON combiné.
         ri_overrides (dict): Remplacements pour l'indice de réfraction.
-        tolerance (float): Seuil de variation pour définir la convergence (par défaut 1e-3).
-        n_step (int): Pas de variation pour n_mode (par défaut 1).
+        tolerance (float): Seuil de variation pour définir la convergence.
+        n_step (int): Pas de variation pour n_mode.
+        stable_required (int): Nombre d'itérations consécutives (en dessous de la tolérance)
+                               requis pour considérer que la convergence est stable.
         progress_bar (ipywidgets widget): Optionnel, barre de progression à mettre à jour.
     
     Returns:
         n_modes (np.array): Tableau des valeurs de n_mode testées.
         Rup_vals (list): Liste des valeurs de Rup calculées pour chaque n_mode.
         optimal_n_mode (int): Valeur optimale de n_mode, c'est-à-dire le premier n_mode
-                              pour lequel la différence avec la valeur précédente est < tolerance.
+                              pour lequel la variation se maintient < tolerance sur stable_required itérations.
     """
     n_modes = np.arange(1, n_mode_max + 1, n_step)
     Rup_vals = []
@@ -59,26 +61,37 @@ def compute_convergence(lambda_fixed, n_mode_max, geometry, wave, df_config, jso
         # simulate_reflectance_single attend une liste de longueurs d'onde ; ici, un seul élément
         Rup, _ = simulate_reflectance_single([lambda_fixed], geometry, wave_updated, df_config, json_combined_path, n_mod=n, ri_overrides=ri_overrides)
         Rup_vals.append(Rup[0])
-        # Mise à jour de la barre de progression globale si fournie (incrémentation cumulative)
         if progress_bar is not None:
             progress_bar.value += 1
-            # Court délai pour permettre à l'interface de se rafraîchir
             time.sleep(0.01)
     
-    # Calcul des différences successives
     diffs = np.abs(np.diff(Rup_vals))
-    optimal_n_mode = n_mode_max
+    optimal_n_mode = n_mode_max  # Valeur par défaut si aucune stabilité n'est détectée
+    stable_count = 0
+    
     for i, d in enumerate(diffs):
         if d < tolerance:
-            optimal_n_mode = int(n_modes[i+1])
-            break
-    
+            stable_count += 1
+            if stable_count >= stable_required:
+                optimal_n_mode = int(n_modes[i+1])
+                break
+        else:
+            stable_count = 0
+            
     return n_modes, Rup_vals, optimal_n_mode
 
 
 
 
 # --- Widget de convergence ---
+
+stable_required_widget = widgets.IntText(
+    value=3, 
+    description="Stable required:", 
+    layout=widgets.Layout(width='150px')
+)
+
+
 def create_multi_convergence_widget(json_combined_path, all_configs):
     """
     Crée un widget pour tracer la convergence de Rup en fonction de n_mode pour une ou plusieurs configurations.
@@ -103,7 +116,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         layout=widgets.Layout(width='150px')
     )
     n_mode_max_widget = widgets.IntText(
-        value=200, 
+        value=100, 
         description="n_mode max:", 
         layout=widgets.Layout(width='150px')
     )
@@ -129,7 +142,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
 
     # Répartition des champs numériques sur deux lignes.
     row1 = widgets.HBox([lambda_fixed_widget, n_mode_max_widget])
-    row2 = widgets.HBox([n_mode_step_widget, tolerance_widget])
+    row2 = widgets.HBox([n_mode_step_widget, tolerance_widget, stable_required_widget])
     numeric_controls = widgets.VBox([row1, row2])
 
     # Création du bouton "Tracer convergence"
@@ -168,16 +181,16 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         layout=widgets.Layout(width='450px')
     )
 
+
     def Conv_computation(b):
-        # Efface les sorties précédentes
         conv_output.clear_output()
         optimal_label.value = ""
         
-        # Récupération des paramètres saisis
         lambda_fixed = lambda_fixed_widget.value
         n_mode_max   = n_mode_max_widget.value
         n_mode_step  = n_mode_step_widget.value
         tol          = tolerance_widget.value
+        stable_required = stable_required_widget.value  # Nouvelle récupération
         
         selected_configs = conv_config_selector.value
         if not selected_configs:
@@ -189,27 +202,24 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         fig, ax = plt.subplots(figsize=(7.5, 4))
         optimal_texts = []
         
-        # Calcul du nombre total d'itérations pour la barre de progression globale
         iterations_per_config = len(np.arange(1, n_mode_max + 1, n_mode_step))
         overall_progress_bar.max = len(selected_configs) * iterations_per_config
         overall_progress_bar.value = 0
 
-        # Pour chaque configuration, calculer et tracer la convergence en utilisant la barre de progression globale.
         for idx, cfg in enumerate(selected_configs):
             geometry_cfg = cfg["geometry"]["geometry"]
             material_config_list = cfg["material"]["MATERIALS_CONFIG"]
             df_config = pd.DataFrame(material_config_list)
             ri_overrides = cfg["material"].get("RI_OVERRIDES", {})
             
-            # Passage de la barre de progression globale pour mise à jour cumulative
             n_modes, Rup_vals, optimal_n_mode = compute_convergence(
                 lambda_fixed, n_mode_max, geometry_cfg, {"angle": 0, "polarization": 1},
                 df_config, json_combined_path, ri_overrides, tolerance=tol, n_step=n_mode_step,
-                progress_bar=overall_progress_bar
+                stable_required=stable_required, progress_bar=overall_progress_bar
             )
             
             color = colors[idx % len(colors)]
-            ax.plot(n_modes, Rup_vals, marker='o', label=cfg["config_name"], color=color)
+            ax.plot(n_modes, Rup_vals, label=cfg["config_name"], color=color)
             optimal_texts.append(f'<span style="color:{color};">{cfg["config_name"]}: optimal n_mode = {optimal_n_mode}</span>')
         
         ax.set_xlabel("n_mode")
@@ -223,6 +233,9 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         with conv_output:
             display(fig)
             plt.close(fig)
+
+
+
     
     plot_button.on_click(Conv_computation)
     

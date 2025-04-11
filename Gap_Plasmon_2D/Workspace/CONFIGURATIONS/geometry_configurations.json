@@ -1,194 +1,222 @@
 {
   "ALL_GEOMETRY_CONFIGS": [
     {
-      "config_name": "Geom_S1_func=1",
+      "config_name": "c30_g2_m10",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 30.0,
         "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 0.0,
-        "thick_func": 1.0,
-        "thick_diel": 0.0,
-        "thick_metalliclayer": 10.0,
-        "thick_accroche": 0.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S1_diel=1",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
+        "thick_gap": 2.0,
         "thick_mol": 0.0,
         "thick_func": 0.0,
-        "thick_diel": 1.0,
+        "thick_diel": 2.0,
         "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
       }
     },
     {
-      "config_name": "Geom_S2_func=1",
+      "config_name": "c30_g6_m10",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 30.0,
         "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 0.0,
-        "thick_func": 1.0,
-        "thick_diel": 0.0,
-        "thick_metalliclayer": 10.0,
-        "thick_accroche": 3.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S2_diel=1",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
+        "thick_gap": 6.0,
         "thick_mol": 0.0,
         "thick_func": 0.0,
-        "thick_diel": 1.0,
+        "thick_diel": 6.0,
         "thick_metalliclayer": 10.0,
-        "thick_accroche": 3.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S1_Mol=1",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 1.0,
-        "thick_func": 0.0,
-        "thick_diel": 0.0,
-        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
       }
     },
     {
-      "config_name": "Geom_S2_Mol=1",
+      "config_name": "c70_g2_m10",
       "geometry": {
         "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 1.0,
-        "thick_func": 0.0,
-        "thick_diel": 0.0,
-        "thick_metalliclayer": 10.0,
-        "thick_accroche": 3.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S1_diel=0_M=2_F=1",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 2.0,
-        "thick_func": 1.0,
-        "thick_diel": 0.0,
-        "thick_metalliclayer": 10.0,
-        "thick_accroche": 0.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S1_diel=0_M=0_F=1",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 0.0,
-        "thick_func": 1.0,
-        "thick_diel": 0.0,
-        "thick_metalliclayer": 10.0,
-        "thick_accroche": 0.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S2_diel=0_M=0_F=1",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 0.0,
-        "thick_func": 1.0,
-        "thick_diel": 0.0,
-        "thick_metalliclayer": 10.0,
-        "thick_accroche": 3.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S1_d0.5_f0.5_m0",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 0.0,
-        "thick_func": 0.5,
-        "thick_diel": 0.5,
-        "thick_metalliclayer": 10.0,
-        "thick_accroche": 0.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
-      "config_name": "Geom_S1_d1_f0_m0",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
+        "thick_reso": 70.0,
+        "width_reso": 70.0,
+        "thick_gap": 2.0,
         "thick_mol": 0.0,
         "thick_func": 0.0,
-        "thick_diel": 1.0,
+        "thick_diel": 2.0,
         "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
       }
     },
     {
-      "config_name": "test",
+      "config_name": "c70_g6_m10",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 70.0,
+        "width_reso": 70.0,
+        "thick_gap": 6.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 6.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c30_g2_m50",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 2.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 2.0,
+        "thick_metalliclayer": 50.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c30_g6_m50",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 6.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 6.0,
+        "thick_metalliclayer": 50.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c30_g12_m50",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 12.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 12.0,
+        "thick_metalliclayer": 50.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c30_g12_m10",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 12.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 12.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c70_g12_m10",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 70.0,
+        "width_reso": 70.0,
+        "thick_gap": 12.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 12.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c70_g2_m50",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 70.0,
+        "width_reso": 70.0,
+        "thick_gap": 2.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 2.0,
+        "thick_metalliclayer": 50.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c70_g6_m50",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 70.0,
+        "width_reso": 70.0,
+        "thick_gap": 6.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 6.0,
+        "thick_metalliclayer": 50.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c70_g12_m50",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 70.0,
+        "width_reso": 70.0,
+        "thick_gap": 12.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 12.0,
+        "thick_metalliclayer": 50.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Structure 1",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 30.0,
         "width_reso": 30.0,
         "thick_gap": 3.0,
-        "thick_mol": 0.5,
+        "thick_mol": 0.0,
         "thick_func": 1.0,
-        "thick_diel": 1.0,
+        "thick_diel": 0.0,
         "thick_metalliclayer": 10.0,
-        "thick_XIAOYI": 2.0,
-        "thick_accroche": 1.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
       }

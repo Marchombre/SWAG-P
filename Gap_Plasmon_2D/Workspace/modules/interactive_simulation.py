@@ -71,16 +71,16 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     
     # --- Partie Simulation - Haut (deux colonnes) ---
     # Gauche : Contrôles de simulation
-    sim_lambda_min = widgets.FloatText(value=450.0, description="λ min (nm):",
+    sim_lambda_min = widgets.FloatText(value=700.0, description="λ min (nm):",
                                         layout=widgets.Layout(width='150px'),
                                         style={'description_width': 'initial'})
-    sim_lambda_max = widgets.FloatText(value=1000.0, description="λ max (nm):",
+    sim_lambda_max = widgets.FloatText(value=1050.0, description="λ max (nm):",
                                         layout=widgets.Layout(width='150px'),
                                         style={'description_width': 'initial'})
     sim_n_points = widgets.IntText(value=200, description="Points:",
                                     layout=widgets.Layout(width='200px'),
                                     style={'description_width': 'initial'})
-    sim_n_mod = widgets.IntText(value=70, description="Modes:",
+    sim_n_mod = widgets.IntText(value=35, description="Modes:",
                                  layout=widgets.Layout(width='200px'),
                                  style={'description_width': 'initial'})
     sim_run_button = widgets.Button(description="Run simulation", button_style="success",
@@ -104,12 +104,14 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         style={'description_width': 'initial'},
         layout=widgets.Layout(width='500px')
     )
+    
     sim_refresh_button = widgets.Button(description="Refresh", button_style="info",
                                         tooltip="Rafraîchir les fichiers de simulation")
     sim_refresh_button.on_click(lambda b: sim_files_dropdown.set_trait("options", list_sim_summary_files(summary_dir)))
+        
     
-    sim_download_button = widgets.Button(description="Download selected file", button_style="info",
-                                         tooltip="Télécharger le fichier sim sélectionné")
+    sim_download_button = widgets.Button(description="Download", button_style="danger",
+                                         tooltip="Download the selected simulation file")
     sim_download_output = widgets.Output()
     def create_file_download_link(file_path, link_text=None):
         with open(file_path, "rb") as f:
@@ -164,6 +166,33 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         layout=widgets.Layout(width='500px', height='150px'),
         style={'description_width': 'initial'}  # Permet de conserver la largeur par défaut pour la description
     )
+    
+    
+    def load_configs():
+        combos_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
+        if os.path.exists(combos_file):
+            with open(combos_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("ALL_COMBINED_CONFIGS", [])
+        return []
+
+    def refresh_configs(b):
+        global all_configs
+        # Recharge le fichier JSON avec les dernières modifications
+        all_configs = load_configs()
+        # Met à jour les options du sélecteur avec la nouvelle liste de configurations
+        sim_config_selector.options = [(cfg["config_name"], cfg) for cfg in all_configs]
+
+    # Création du bouton de rafraîchissement
+    config_refresh_button = widgets.Button(
+        description="Refresh", 
+        button_style="info",
+        tooltip="Rafraîchir les fichiers de configurations"
+    )
+    # Attache le callback au clic sur le bouton
+    config_refresh_button.on_click(refresh_configs)
+
+   
 
     # Regroupement vertical des contrôles de simulation dans un conteneur VBox.
     # Chaque ligne est soit un HBox (pour afficher plusieurs éléments horizontalement),
@@ -185,8 +214,8 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                 layout=widgets.Layout(justify_content='space-around', margin='5px 0px')
             ),  # Ligne pour le nombre de points et le nombre de modes
             # Pour le bouton Run Simulation, vous pouvez le centrer ou l'aligner à gauche/droite selon vos préférences.
-            widgets.HBox(
-                [sim_run_button],
+            widgets.VBox(
+                [sim_run_button, config_refresh_button],
                 layout=widgets.Layout(justify_content='center', margin='5px 0px')
             ),  # Ligne contenant le bouton de lancement de la simulation.
             sim_config_selector                              # Affichage du sélecteur multiple pour les configurations de simulation.

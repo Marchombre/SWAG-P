@@ -4,6 +4,40 @@ import json
 import ipywidgets as widgets
 from IPython.display import display
 
+
+
+
+def html_sub_to_unicode(text):
+    # Dictionnaire de correspondance pour les chiffres
+    subscripts = {
+        "0": "₀",
+        "1": "₁",
+        "2": "₂",
+        "3": "₃",
+        "4": "₄",
+        "5": "₅",
+        "6": "₆",
+        "7": "₇",
+        "8": "₈",
+        "9": "₉"
+    }
+    # On cherche des occurrences de <sub>...</sub>
+    while "<sub>" in text and "</sub>" in text:
+        start = text.find("<sub>")
+        end = text.find("</sub>", start)
+        if start == -1 or end == -1:
+            break
+        # Texte entre les balises
+        sub_text = text[start + 5:end]  # 5 = len("<sub>")
+        # Conversion caractère par caractère en indice (pour autant que ce soit des chiffres)
+        converted = "".join(subscripts.get(ch, ch) for ch in sub_text)
+        # Remplace toute la balise par le texte converti
+        text = text[:start] + converted + text[end + 6:]  # 6 = len("</sub>")
+    return text
+
+
+
+
 # --- Utility Functions ---
 def load_catalog_full(catalog_file):
     with open(catalog_file, "r", encoding="utf-8") as f:
@@ -51,12 +85,14 @@ class RefractiveIndexArboWidget:
         options = []
         for i, entry in enumerate(self.library):
             if "SHELF" in entry:
-                disp = entry.get("name", entry["SHELF"])
+                raw_disp = entry.get("name", entry["SHELF"])
+                disp = html_sub_to_unicode(raw_disp)
                 options.append((disp, i))
             elif "DIVIDER" in entry:
                 disp = f"—— {entry['DIVIDER']} ——"
                 options.append((disp, None))
         self.shelf_dropdown.options = options
+
 
     def on_shelf_changed(self, change):
         val = change['new']
@@ -69,13 +105,15 @@ class RefractiveIndexArboWidget:
         book_options = []
         for j, bk in enumerate(content):
             if "BOOK" in bk:
-                disp = bk.get("name", bk["BOOK"])
+                raw_disp = bk.get("name", bk["BOOK"])
+                disp = html_sub_to_unicode(raw_disp)
                 book_options.append((disp, j))
             elif "DIVIDER" in bk:
                 disp = f"—— {bk['DIVIDER']} ——"
                 book_options.append((disp, None))
         self.book_dropdown.options = book_options
         self.page_dropdown.options = []
+
 
     def on_book_changed(self, change):
         book_val = change['new']
@@ -90,14 +128,27 @@ class RefractiveIndexArboWidget:
             return
         book_dict = shelf_content[book_val]
         page_options = []
-        for k, pg in enumerate(book_dict.get("content", [])):
+        for pg in book_dict.get("content", []):
             if "PAGE" in pg:
-                disp = pg.get("name", pg["PAGE"])
-                page_options.append((disp, k))
+                # Ici on récupère la valeur d'origine dans le JSON (l'étude)
+                page_val = pg["PAGE"]
+                # Et on choisit d'afficher éventuellement un nom alternatif (s'il existe)
+                raw_disp = pg.get("name", page_val)
+                disp = html_sub_to_unicode(raw_disp)
+                page_options.append((disp, page_val))
             elif "DIVIDER" in pg:
                 disp = f"—— {pg['DIVIDER']} ——"
                 page_options.append((disp, None))
+
         self.page_dropdown.options = page_options
+        # Ajout de la sélection par défaut pour la page
+        if page_options:
+            # On prend la première option ayant une valeur non None
+            for opt in page_options:
+                if opt[1] is not None:
+                    self.page_dropdown.value = opt[1]
+                    break
+
 
     def get_selection(self):
         shelf_val = self.shelf_dropdown.value
@@ -117,55 +168,75 @@ class RefractiveIndexArboWidget:
             return None
         book_key = book_dict["BOOK"]
 
-        page_val = self.page_dropdown.value
-        if page_val is None:
+        # Pour la page, on suppose que la valeur enregistrée (page_dropdown.value)
+        # correspond à la valeur du champ "PAGE" dans le JSON, et non à un index.
+        selected_page_value = self.page_dropdown.value
+        if selected_page_value is None:
             return None
+
+        # On peut éventuellement chercher la correspondance dans le contenu du book
+        # pour récupérer d'autres informations (comme le nom affiché ou des données associées).
+        page_dict = None
         book_content = book_dict.get("content", [])
-        if page_val < 0 or page_val >= len(book_content):
-            return None
-        page_dict = book_content[page_val]
-        if "PAGE" not in page_dict:
-            return None
-        page_key = page_dict["PAGE"]
-        data_field = page_dict.get("data", "")
+        for pg in book_content:
+            if "PAGE" in pg and pg["PAGE"] == selected_page_value:
+                page_dict = pg
+                break
+        if page_dict is None:
+            # Si aucune correspondance n'est trouvée, on retourne quand même la valeur sélectionnée.
+            # Selon votre cas d'usage, vous pourriez aussi retourner None ou lever une exception.
+            page_name = selected_page_value
+        else:
+            page_name = page_dict.get("name", page_dict["PAGE"])
 
         return {
             "shelf": shelf_key,
             "book": book_key,
-            "page": page_key,
-            "data": data_field
+            "page": selected_page_value,  # On sauvegarde la valeur "PAGE" (une chaîne)
+            "data": page_dict.get("data", "") if page_dict else ""
         }
+        
 
     def set_selection(self, selection):
+        # Mise à jour du shelf en recherchant l'index correspondant
+        shelf_index = None
         for i, entry in enumerate(self.library):
             if entry.get("SHELF", "") == selection.get("shelf", ""):
-                self.shelf_dropdown.value = i
+                shelf_index = i
                 break
-        if not hasattr(self, "_set_book_and_page_handler"):
-            def set_book_and_page(change):
-                for option in self.book_dropdown.options:
-                    if option[0] == selection.get("book", "") or (
-                        option[1] is not None and 
-                        self.library[self.shelf_dropdown.value].get("content", [])[option[1]].get("BOOK", "") == selection.get("book", "")
-                    ):
-                        self.book_dropdown.value = option[1]
-                        break
-                if not hasattr(self, "_set_page_handler"):
-                    def set_page(change2):
-                        for option in self.page_dropdown.options:
-                            if option[0] == selection.get("page", ""):
-                                self.page_dropdown.value = option[1]
-                                break
-                    self._set_page_handler = set_page
-                    self.book_dropdown.observe(self._set_page_handler, names="value")
-            self._set_book_and_page_handler = set_book_and_page
-            self.shelf_dropdown.observe(self._set_book_and_page_handler, names="value")
+        if shelf_index is not None:
+            self.shelf_dropdown.value = shelf_index
+            # Forcer la mise à jour des options du dropdown book
+            self.on_shelf_changed({'new': shelf_index})
         else:
-            try:
-                self.shelf_dropdown.unobserve(self._set_book_and_page_handler, names="value")
-            except ValueError:
-                pass
-            self.shelf_dropdown.observe(self._set_book_and_page_handler, names="value")
+            return  # Si le shelf n'est pas trouvé, on arrête ici
+
+        # Mise à jour du dropdown book (on utilise la valeur affichée pour la comparaison)
+        book_value = selection.get("book", "")
+        book_set = False
+        for option in self.book_dropdown.options:
+            # On compare l'option affichée et/ou la valeur dans la structure library
+            if option[0] == book_value or (
+                option[1] is not None and 
+                self.library[self.shelf_dropdown.value].get("content", [])[option[1]].get("BOOK", "") == book_value
+            ):
+                self.book_dropdown.value = option[1]
+                book_set = True
+                break
+        if book_set:
+            # Forcer la mise à jour des options du dropdown page
+            self.on_book_changed({'new': self.book_dropdown.value})
+        else:
+            return  # Si aucun book ne correspond, arrête
+
+        # Mise à jour du dropdown page
+        page_value = selection.get("page", "")
+        for option in self.page_dropdown.options:
+            if option[1] == page_value:
+                self.page_dropdown.value = option[1]
+                break
+
+
 
 # --- Class MaterialRoleWidget ---
 class MaterialRoleWidget:

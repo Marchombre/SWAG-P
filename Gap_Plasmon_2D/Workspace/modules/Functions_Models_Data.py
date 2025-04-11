@@ -97,19 +97,22 @@ def get_n_k(material_name, lam, json_combined_path):
     if material_name not in data:
         raise ValueError(f"Material '{material_name}' is not in the database.")
     material = data[material_name]
-
-    if material["model"] == "expdata":
+    
+    # Normalisation de la chaîne de caractères
+    model = material["model"].strip().lower()
+    
+    if model == "expdata":
         wl = np.array(material["wavelength_list"])
         epsilon_real = np.array(material["permittivities"])
         epsilon_imag = np.array(material.get("permittivities_imag", np.zeros_like(epsilon_real)))
-
+        
         if lam < wl[0] or lam > wl[-1]:
             raise ValueError(f"Wavelength {lam} nm is out of the range [{wl[0]}, {wl[-1]}] nm.")
         
         eps_r = np.interp(lam, wl, epsilon_real)
         eps_i = np.interp(lam, wl, epsilon_imag)
         n_complex = np.sqrt(eps_r + 1.0j * eps_i)
-
+    
         return np.real(n_complex), np.imag(n_complex)
     else:
         raise ValueError(f"Model '{material['model']}' for '{material_name}' is not supported.")
