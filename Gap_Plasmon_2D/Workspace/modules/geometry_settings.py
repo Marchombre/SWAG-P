@@ -18,6 +18,7 @@ geometry_config = {
     "thick_func": 1,           # Real Functionalisation thickness
     "thick_diel": 1,           # Real Polymer thickness
     "thick_metalliclayer": 10, # Real Metallic thickness
+    "thick_XIAOYI": 2,         # Real XIAOYI thickness
     "thick_accroche": 1,       # Real Accroche thickness
     "thick_sub": 200,          # Real Substrate thickness
     "period": 100.2153         # RCWA cell (square)
@@ -32,6 +33,7 @@ geometry_limits = {
     "thick_func": (0, 5),
     "thick_diel": (0, 30),
     "thick_metalliclayer": (0, 50),
+    "thick_XIAOYI": (0, 10),
     "thick_accroche": (0, 20),
     "thick_sub": (0, 300),
     "period": (50, 300)
@@ -106,6 +108,7 @@ def create_geometry_widget():
         ("thick_func", "Functionalisation"),
         ("thick_diel", "Dielectric"),
         ("thick_metalliclayer", "Metallic"),
+        ("thick_XIAOYI", "XIAOYI"),
         ("thick_accroche", "Accroche"),
         ("thick_sub", "Substrate"),
         ("period", "Period")
@@ -270,6 +273,7 @@ def create_geometry_widget():
             t_func       = geometry_sliders["thick_func"].value
             t_diel       = geometry_sliders["thick_diel"].value
             t_metal      = geometry_sliders["thick_metalliclayer"].value
+            t_XIAOYI    = geometry_sliders["thick_XIAOYI"].value
             t_acc        = geometry_sliders["thick_accroche"].value
             t_sub        = geometry_sliders["thick_sub"].value
 
@@ -287,8 +291,12 @@ def create_geometry_widget():
             disp_acc = 4 * t_acc  # Accroche scaled for display
             y_acc_top    = y_acc_bottom + disp_acc
             
-            y_metal_bottom = y_acc_top
+            y_XIAOYI_bottom = y_acc_top
+            y_XIAOYI_top    = y_XIAOYI_bottom + t_XIAOYI
+            
+            y_metal_bottom = y_XIAOYI_top
             y_metal_top    = y_metal_bottom + t_metal
+        
             
             # Intermediate zone (central column): Gap (scaled) + Nanocube (real)
             central_height = scale * t_gap + t_reso
@@ -335,6 +343,7 @@ def create_geometry_widget():
             # Draw Accroche and Metallic layers
             draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "gold", "Accroche")
             draw_layer(ax, 0, y_metal_bottom, p, t_metal, "silver", "Metallic")
+            draw_layer(ax, 0, y_XIAOYI_bottom, p, t_XIAOYI, "purple", "XIAOYI")
             
             # Draw Central column: Gap (polymer) then Nanocube
             draw_layer(ax, central_x, y_gap_bottom, w_reso, scale * t_gap, "lightgreen", "Gap (polymer)")

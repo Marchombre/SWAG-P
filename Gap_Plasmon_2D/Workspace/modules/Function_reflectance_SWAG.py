@@ -35,6 +35,7 @@ def reflectance(geometry, wave, materials, n_mod):
 
     # Couches sous le gap
     thick_metalliclayer = geometry["thick_metalliclayer"] / period
+    thick_XIAOYI        = geometry["thick_XIAOYI"]        / period
     thick_accroche      = geometry["thick_accroche"]      / period
     thick_sub           = geometry["thick_sub"]           / period
 
@@ -53,6 +54,7 @@ def reflectance(geometry, wave, materials, n_mod):
     perm_func  = materials["perm_func"]              # Couche latérale : fonctionnalisation
     perm_mol   = materials["perm_mol"]               # Couche latérale : moléculaire
     perm_metal = materials["perm_metalliclayer"]     # Couche métallique
+    perm_XIAOYI = materials["perm_XIAOYI"]           # Couche XIAOYI
     perm_acc   = materials["perm_accroche"]          # Couche d'accroche
     perm_sub   = materials["perm_sub"]               # Substrat
 
@@ -256,6 +258,23 @@ def reflectance(geometry, wave, materials, n_mod):
         P_metal = homogene(k0, a0, polarization, perm_metal, n)[0]
         S = cascade(S, interface(P_current, P_metal))
         P_current = P_metal
+        
+        
+    # ---------------------------------
+    # 7. Couche XIAOYI
+    # ---------------------------------
+    if thick_XIAOYI > 0:
+        P_XIAOYI, V_XIAOYI = homogene(k0, a0, polarization, perm_XIAOYI, n)
+        S = cascade(S, interface(P_current, P_XIAOYI))
+        S = c_bas(S, V_XIAOYI, thick_XIAOYI)
+        P_current = P_XIAOYI
+    else:
+        # Même si l'épaisseur est nulle, on effectue l'interface
+        P_XIAOYI = homogene(k0, a0, polarization, perm_XIAOYI, n)[0]
+        S = cascade(S, interface(P_current, P_XIAOYI))
+        P_current = P_XIAOYI
+        
+        
 
     # ---------------------------------
     # 8. Couche d'accroche

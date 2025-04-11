@@ -67,7 +67,7 @@ def save_simulation_summary(simulation_details, lambda_range, wave, n_mod, summa
     Retourne le chemin du fichier enregistré.
     """
     material_str_clean = get_material_str_clean(simulation_details)
-    summary_filename = os.path.join(summary_dir, f"simulation_summary_RCWA_V2_{material_str_clean}.txt")
+    summary_filename = os.path.join(summary_dir, f"simulation_summary_RCWA_{material_str_clean}.txt")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     lines = []
     lines.append("Simulation Summary - All Geometry/Material Combos")

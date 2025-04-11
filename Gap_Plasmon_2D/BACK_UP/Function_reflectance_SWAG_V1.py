@@ -22,7 +22,7 @@ def reflectance(geometry, wave, materials, n_mod):
     polarization = wave["polarization"]
 
     perm_env = materials["perm_env"]
-    perm_dielec = materials["perm_dielec"]
+    perm_diel = materials["perm_diel"]
     perm_sub = materials["perm_sub"]
     perm_reso = materials["perm_reso"]
     perm_metalliclayer =  materials["perm_metalliclayer"]
@@ -43,11 +43,11 @@ def reflectance(geometry, wave, materials, n_mod):
         S = cascade(S, interface(Pup, P1))
         S = c_bas(S, V1, thick_reso)
     
-        P2, V2 = grating(k0, a0, polarization, perm_env, perm_dielec, n, pos_reso)
+        P2, V2 = grating(k0, a0, polarization, perm_env, perm_diel, n, pos_reso)
         S = cascade(S, interface(P1, P2))
         S = c_bas(S, V2, thick_gap - (thick_mol + thick_func))
 
-        P3, V3 = homogene(k0, a0, polarization, perm_dielec, n)
+        P3, V3 = homogene(k0, a0, polarization, perm_diel, n)
         S = cascade(S, interface(P2, P3))
         S = c_bas(S, V3, thick_mol + thick_func)
 
@@ -56,11 +56,11 @@ def reflectance(geometry, wave, materials, n_mod):
         S = cascade(S, interface(Pup, P1))
         S = c_bas(S, V1, thick_reso - (thick_mol - (thick_gap - thick_func)))
 
-        P2, V2 = grating(k0, a0, polarization, perm_dielec, perm_reso, n, pos_reso)
+        P2, V2 = grating(k0, a0, polarization, perm_diel, perm_reso, n, pos_reso)
         S = cascade(S, interface(P1, P2))
         S = c_bas(S, V2, thick_mol - (thick_gap - thick_func))
 
-        P3, V3 = homogene(k0, a0, polarization, perm_dielec, n)
+        P3, V3 = homogene(k0, a0, polarization, perm_diel, n)
         S = cascade(S, interface(P2, P3))
         S = c_bas(S, V3, thick_gap)
 

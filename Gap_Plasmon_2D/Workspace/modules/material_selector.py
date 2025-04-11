@@ -284,6 +284,7 @@ class MaterialSelectorTabbedNotebook:
                 "perm_sub": {"type": "Standard", "material": "ITO"},
                 "perm_reso": {"type": "Standard", "material": "Silver"},
                 "perm_metalliclayer": {"type": "Standard", "material": "Gold"},
+                "perm_XIAOYI": {"type": "Standard", "material": "Si"},
                 "perm_accroche": {"type": "None"},
                 "perm_sub": {"type": "Standard", "material": "ITO"}
 
@@ -296,6 +297,7 @@ class MaterialSelectorTabbedNotebook:
                 "perm_mol": {"type": "None"},
                 "perm_reso": {"type": "Standard", "material": "Silver"},
                 "perm_metalliclayer": {"type": "Standard", "material": "Gold"},
+                "perm_XIAOYI": {"type": "Standard", "material": "Si"},
                 "perm_accroche": {"type": "Standard", "material": "Aluminium"},
                 "perm_sub": {"type": "Custom", "expression": "1.50**2"}
             }
@@ -614,6 +616,7 @@ DEFAULT_ROLES = [
     "perm_mol",
     "perm_reso",
     "perm_metalliclayer",
+    "perm_XIAOYI",
     "perm_accroche",
     "perm_sub"
 ]
