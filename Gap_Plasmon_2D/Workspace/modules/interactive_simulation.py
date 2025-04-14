@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import ipywidgets as widgets
-from IPython.display import HTML, display
+from IPython.display import HTML, display, Javascript
 from datetime import datetime
 
 # Construction des chemins
@@ -120,16 +120,31 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         if link_text is None:
             link_text = os.path.basename(file_path)
         return HTML(f'<a download="{os.path.basename(file_path)}" href="data:application/octet-stream;base64,{b64}" target="_blank">{link_text}</a>')
+    
+
     def on_download_clicked(b):
-        with sim_download_output:
-            sim_download_output.clear_output(wait=True)
-            selected_file = sim_files_dropdown.value
-            if selected_file:
-                dl_link = create_file_download_link(selected_file, link_text=f"Download {os.path.basename(selected_file)}")
-                display(dl_link)
-            else:
-                print("Aucun fichier sélectionné.")
+        selected_file = sim_files_dropdown.value
+        if selected_file:
+            with open(selected_file, "rb") as f:
+                data = f.read()
+            b64 = base64.b64encode(data).decode("utf-8")
+            file_name = os.path.basename(selected_file)
+            js_code = f"""
+            var a = document.createElement('a');
+            a.href = "data:application/octet-stream;base64,{b64}";
+            a.download = "{file_name}";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            """
+            display(Javascript(js_code))
+        else:
+            print("Aucun fichier sélectionné.")
+
     sim_download_button.on_click(on_download_clicked)
+
+    
+    
     # Définition d'un conteneur horizontal pour regrouper plusieurs widgets sur la même ligne.
     # Ici, nous plaçons le dropdown des fichiers, le bouton de rafraîchissement,
     # le bouton de téléchargement et la zone de sortie pour le téléchargement.
