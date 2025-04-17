@@ -164,7 +164,7 @@ def get_permittivity_from_txt(material_name, lambda_val_nm, data_dir):
     # Conversion des longueurs d'onde du fichier :
     # Le fichier fournit les wl en micromètres. Pour que l'interpolation se fasse 
     # avec lambda_val_nm (en nanomètres), on convertit wl_data en nm en multipliant par 1000.
-    wl_data = np.array(wl_data) #* 1000
+    wl_data = np.array(wl_data) * 1000
     n_data = np.array(n_data)
     k_data = np.array(k_data)
 

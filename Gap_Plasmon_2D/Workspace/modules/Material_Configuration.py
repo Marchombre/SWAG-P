@@ -1,4 +1,4 @@
-# Material_Configurations.py
+# Material_Configuration.py
 import os
 import re
 import json

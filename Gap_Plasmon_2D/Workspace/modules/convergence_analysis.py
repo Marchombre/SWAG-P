@@ -97,6 +97,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     Crée un widget pour tracer la convergence de Rup en fonction de n_mode pour une ou plusieurs configurations.
     La partie haute comporte :
       - Un sélecteur de configuration.
+      - Un bouton "Refresh Configs" placé à droite du sélecteur permettant de rafraîchir la liste des configurations.
       - Deux lignes de champs numériques (deux par ligne).
       - Une ligne avec la barre de progression située à gauche et le bouton "Tracer convergence" aligné à droite.
     En dessous, le widget affiche le tracé de convergence.
@@ -108,6 +109,27 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         layout=widgets.Layout(width='580px'),
         style={'description_width': 'initial'}
     )
+    
+    # Bouton pour rafraîchir les configurations de convergence
+    refresh_conv_configs_button = widgets.Button(
+        description="Refresh Configs", 
+        button_style="info",
+        tooltip="Rafraîchir les configurations de convergence"
+    )
+    def refresh_conv_configs(b):
+        combos_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CONFIGURATIONS", "geom_mat_combinations.json")
+        new_configs = []
+        if os.path.exists(combos_file):
+            with open(combos_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            new_configs = data.get("ALL_COMBINED_CONFIGS", [])
+        if new_configs:
+            conv_config_selector.options = [(cfg["config_name"], cfg) for cfg in new_configs]
+    refresh_conv_configs_button.on_click(refresh_conv_configs)
+    
+    # On place le sélecteur et le bouton refresh côte à côte.
+    conv_config_selector_box = widgets.HBox([conv_config_selector],
+                                              layout=widgets.Layout(align_items='center'))
 
     # Widgets numériques pour saisir les paramètres de convergence.
     lambda_fixed_widget = widgets.FloatText(
@@ -141,7 +163,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     tolerance_widget.observe(validate_positive, names='value')
 
     # Répartition des champs numériques sur deux lignes.
-    row1 = widgets.HBox([lambda_fixed_widget, n_mode_max_widget])
+    row1 = widgets.HBox([lambda_fixed_widget, n_mode_max_widget, refresh_conv_configs_button])
     row2 = widgets.HBox([n_mode_step_widget, tolerance_widget, stable_required_widget])
     numeric_controls = widgets.VBox([row1, row2])
 
@@ -152,30 +174,28 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         layout=widgets.Layout(width="150px")
     )
     
-    # Création de la barre de progression globale.
+    # Barre de progression
     overall_progress_bar = widgets.IntProgress(
         value=0, 
         min=0, 
-        max=1,  # La valeur max sera définie lors du déclenchement du calcul
+        max=1,  # sera défini lors du déclenchement du calcul
         description='Progress:',
         layout=widgets.Layout(width='400px')
     )
     
-    # Création d'un "spacer" pour séparer la barre et le bouton dans la même ligne.
     spacer = widgets.HBox([], layout=widgets.Layout(flex='1 1 auto'))
     
-    # Création du container qui positionne la barre de progression à gauche et le bouton à droite.
     button_container = widgets.HBox(
         [overall_progress_bar, spacer, plot_button],
         layout=widgets.Layout(width='100%')
     )
     
-    # Widget de sortie pour le tracé de convergence.
+    # Widget de sortie pour afficher le tracé de convergence.
     conv_output = widgets.Output(
         layout=widgets.Layout(border="1px solid lightgray", width='630px', height='400px')
     )
 
-    # Widget HTML pour afficher le n_mode optimal.
+    # Widget pour afficher le n_mode optimal.
     optimal_label = widgets.HTML(
         value="",
         layout=widgets.Layout(width='450px')
@@ -190,7 +210,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         n_mode_max   = n_mode_max_widget.value
         n_mode_step  = n_mode_step_widget.value
         tol          = tolerance_widget.value
-        stable_required = stable_required_widget.value  # Nouvelle récupération
+        stable_required = stable_required_widget.value
         
         selected_configs = conv_config_selector.value
         if not selected_configs:
@@ -240,7 +260,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     plot_button.on_click(Conv_computation)
     
     conv_controls = widgets.VBox([numeric_controls, button_container])
-    widget = widgets.VBox([conv_config_selector, optimal_label, conv_controls, conv_output], 
+    widget = widgets.VBox([conv_config_selector_box, optimal_label, conv_controls, conv_output], 
                           layout=widgets.Layout(width='53%', justify_content='flex-end'))
     
     return widget

@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
 # geometry_settings.py
 
-import dis
+import os, json
 import ipywidgets as widgets
 from IPython.display import clear_output, display
-import os, json
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 
-# Default configuration (real values used for reflectance calculations remain unchanged)
+# Configuration par défaut (les valeurs réelles utilisées pour les calculs de réflectance restent inchangées)
 geometry_config = {
-    "thick_super": 200,        # Real Superstrate thickness
-    "thick_reso": 30,          # Real Nanocube height
-    "width_reso": 30,          # Real Nanocube width
-    "thick_gap": 3,            # Real Gap (polymer) thickness
-    "thick_mol": 0.5,          # Real Molecule thickness
-    "thick_func": 1,           # Real Functionalisation thickness
-    "thick_diel": 1,           # Real Polymer thickness
-    "thick_metalliclayer": 10, # Real Metallic thickness
-    "thick_XIAOYI": 2,         # Real XIAOYI thickness
-    "thick_accroche": 1,       # Real Accroche thickness
-    "thick_sub": 200,          # Real Substrate thickness
-    "period": 100.2153         # RCWA cell (square)
+    "thick_super": 200,        # Épaisseur réelle du Superstrate
+    "thick_reso": 30,          # Hauteur réelle du Nanocube
+    "width_reso": 30,          # Largeur réelle du Nanocube
+    "thick_gap": 3,            # Épaisseur réelle du Gap (polymère)
+    "thick_mol": 0.5,          # Épaisseur réelle de la Molécule
+    "thick_func": 1,           # Épaisseur réelle de la Fonctionnalisation
+    "thick_diel": 1,           # Épaisseur réelle du Polymère
+    "thick_metalliclayer": 10, # Épaisseur réelle du Métallique
+    "thick_XIAOYI": 2,         # Épaisseur réelle du XIAOYI
+    "thick_accroche": 1,       # Épaisseur réelle de l'Accroche
+    "thick_sub": 200,          # Épaisseur réelle du Substrate
+    "period": 100.2153         # Cellule RCWA (carrée)
 }
 
 geometry_limits = {
@@ -42,13 +41,13 @@ geometry_limits = {
 
 def displayed_thickness(t):
     """
-    Return 1/10 of the real thickness for Substrate and Superstrate display.
+    Retourne 1/10 de l'épaisseur réelle pour l'affichage du Substrate et du Superstrate.
     """
     return t / 10
 
 def get_geometry_save_path():
     """
-    Return the path to the JSON file used to store geometry configurations.
+    Retourne le chemin vers le fichier JSON utilisé pour stocker les configurations géométriques.
     """
     module_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
     workspace_dir = os.path.dirname(module_dir)
@@ -61,7 +60,7 @@ GEOMETRY_CONFIGS = []
 
 def load_geometry_configs():
     """
-    Load all saved geometry configurations from the JSON file, if it exists.
+    Charge les configurations géométriques sauvegardées depuis le fichier JSON, s'il existe.
     """
     global GEOMETRY_CONFIGS
     save_path = get_geometry_save_path()
@@ -74,7 +73,7 @@ def load_geometry_configs():
 
 def save_geometry_configs():
     """
-    Save all current geometry configurations to the JSON file.
+    Sauvegarde l'ensemble des configurations géométriques actuelles dans le fichier JSON.
     """
     save_path = get_geometry_save_path()
     with open(save_path, "w", encoding="utf-8") as f:
@@ -83,13 +82,12 @@ def save_geometry_configs():
 
 def draw_layer(ax, x, y, w, h, color, label, hatch=None):
     """
-    Draw a single rectangular layer on the given Axes 'ax',
-    with an optional label (displayed at the center) and optional hatching.
-    If h <= 0, the layer is not drawn.
+    Dessine une couche rectangulaire sur l'objet Axes 'ax',
+    avec un libellé optionnel (affiché au centre) et éventuellement un motif de hachures.
+    Si h <= 0, la couche n'est pas dessinée.
     """
     if h <= 0:
         return
-    # Ici, on peut conserver un contour fin si souhaité, ou le supprimer en définissant edgecolor à None.
     rect = patches.Rectangle((x, y), w, h, edgecolor=None, facecolor=color, hatch=hatch)
     ax.add_patch(rect)
     if label and h > 0:
@@ -97,8 +95,8 @@ def draw_layer(ax, x, y, w, h, color, label, hatch=None):
 
 def create_geometry_widget():
     """
-    Create an ipywidgets-based interface for adjusting the geometry parameters,
-    saving/loading configurations, and displaying the schematic figure.
+    Crée une interface basée sur ipywidgets pour ajuster les paramètres de la géométrie,
+    sauvegarder/charger les configurations, et afficher le schéma.
     """
     ordered_params = [
         ("thick_super", "Superstrate"),
@@ -122,12 +120,11 @@ def create_geometry_widget():
         default = geometry_config.get(key, 0)
         min_val, max_val = geometry_limits.get(key, (0, 200))
         
-        if key =="period":
+        if key == "period":
             description_str = label + ":"
         else:
             description_str = label + " (nm):"
-        # Create a FloatSlider for each parameter
-        # with a FloatText linked to it
+        # Création d'un slider avec un FloatText lié pour chaque paramètre
         slider = widgets.FloatSlider(
             value=default, min=min_val, max=max_val, step=0.1,
             description=description_str,
@@ -138,17 +135,16 @@ def create_geometry_widget():
         float_text = widgets.FloatText(value=default, layout=widgets.Layout(width='100px'))
         widgets.jslink((slider, 'value'), (float_text, 'value'))
         
-        # Empêche les valeurs négatives pour les épaisseurs
+        # Empêche les valeurs négatives
         def validate_positive(change):
             if change['new'] < 0:
                 change['owner'].value = 0
-                
         float_text.observe(validate_positive, names='value')
         
         geometry_sliders[key] = slider
         slider_widgets.append(widgets.HBox([slider, float_text]))
     
-    # Configuration controls
+    # Widgets de configuration
     config_name_text = widgets.Text(
         value='',
         placeholder='Configuration Name',
@@ -156,6 +152,15 @@ def create_geometry_widget():
         layout=widgets.Layout(width='350px'),
         style={'description_width': '180px'}
     )
+    # Widget pour saisir le nom du compartiment
+    compartment_text = widgets.Text(
+        value='',
+        placeholder='Nom du compartiment',
+        description='Compartiment :',
+        layout=widgets.Layout(width='350px'),
+        style={'description_width': '180px'}
+    )
+    
     button_add = widgets.Button(description="Add Config", layout=widgets.Layout(width='150px'))
     button_save = widgets.Button(description="Save & Quit", button_style='success', layout=widgets.Layout(width='200px'))
     config_dropdown = widgets.Dropdown(
@@ -168,29 +173,57 @@ def create_geometry_widget():
     button_update = widgets.Button(description="Update", layout=widgets.Layout(width='120px'))
     button_delete = widgets.Button(description="Delete", button_style='danger', layout=widgets.Layout(width='120px'))
     
-    # Suppression de la bordure pour output_area
-    output_area = widgets.Output(layout=widgets.Layout(padding='10px'))
+    # Widget de filtrage par compartiment
+    compartment_filter = widgets.Dropdown(
+        options=["Tous"],
+        value="Tous",
+        description="Filtrer Compart.:",
+        layout=widgets.Layout(width='350px'),
+        style={'description_width': '180px'}
+    )
     
+    output_area = widgets.Output(layout=widgets.Layout(padding='10px'))
     load_geometry_configs()
     
-    def update_dropdown_options():
-        options = [(cfg["config_name"], cfg) for cfg in GEOMETRY_CONFIGS]
-        config_dropdown.options = options if options else [("None", None)]
+    def update_dropdown_options(change=None):
+        # Sélection du filtre et reconstruction de la liste en fonction du compartiment sélectionné
+        filtre = compartment_filter.value
+        if filtre == "Tous":
+            filtered_configs = GEOMETRY_CONFIGS
+        else:
+            filtered_configs = [cfg for cfg in GEOMETRY_CONFIGS if cfg.get("compartment", "Défaut") == filtre]
+        new_options = [(f"{cfg['config_name']} ({cfg.get('compartment', 'Défaut')})", cfg) 
+                       for cfg in filtered_configs]
+        if not new_options:
+            new_options = [("None", None)]
+        # Affectation directe pour forcer l'actualisation
+        config_dropdown.options = new_options
+
+        # Reconstruction et affectation de la liste des compartiments disponibles
+        compartments = sorted({cfg.get("compartment", "Défaut") for cfg in GEOMETRY_CONFIGS})
+        comp_options = ["Tous"] + compartments
+        compartment_filter.options = comp_options
+
+    # Mise à jour initiale du dropdown
     update_dropdown_options()
+    # Observer le changement de sélection du compartiment pour rafraîchir la liste
+    compartment_filter.observe(update_dropdown_options, names='value')
     
     def add_geometry_config(_):
         for key, slider in geometry_sliders.items():
             geometry_config[key] = slider.value
         config_name = config_name_text.value.strip() or f"Geometry_{len(GEOMETRY_CONFIGS)+1}"
-        new_config = {"config_name": config_name, "geometry": geometry_config.copy()}
+        compartment = compartment_text.value.strip() or "Défaut"
+        new_config = {"config_name": config_name, "compartment": compartment, "geometry": geometry_config.copy()}
         GEOMETRY_CONFIGS.append(new_config)
         update_dropdown_options()
         save_geometry_configs()
         with output_area:
             clear_output()
-            print("Configuration added:")
+            print("Configuration ajoutée :")
             print(new_config)
         config_name_text.value = ''
+        compartment_text.value = ''
     
     def save_geometry_configs_btn(_):
         path = save_geometry_configs()
@@ -199,43 +232,55 @@ def create_geometry_widget():
             print(f"Configurations saved in {path}")
     
     def load_config(_):
+        """
+        Charge la configuration sélectionnée dans le widget et met à jour les sliders ainsi que
+        les champs de nom et de compartiment.
+        """
         selected = config_dropdown.value
         if selected is None:
             with output_area:
                 clear_output()
-                print("No configuration selected for loading.")
+                print("Aucune configuration sélectionnée pour le chargement.")
             return
+        # Mise à jour des sliders avec les valeurs de la configuration chargée
         for key, value in selected["geometry"].items():
             if key in geometry_sliders:
                 geometry_sliders[key].value = value
+        # Mise à jour des champs de nom et du compartiment
         config_name_text.value = selected["config_name"]
+        compartment_text.value = selected.get("compartment", "Défaut")
         with output_area:
             clear_output()
-            print(f"Configuration '{selected['config_name']}' loaded.")
-    
+            print(f"Configuration '{selected['config_name']}' chargée.")
+
     def update_config(_):
+        """
+        Met à jour la configuration actuellement chargée en récupérant la nouvelle valeur
+        des sliders, du nom et du compartiment, puis enregistre la configuration mise à jour.
+        """
         selected = config_dropdown.value
         if selected is None:
             with output_area:
                 clear_output()
-                print("No configuration selected for updating.")
+                print("Aucune configuration sélectionnée pour la mise à jour.")
             return
         for key, slider in geometry_sliders.items():
             selected["geometry"][key] = slider.value
         new_name = config_name_text.value.strip() or selected["config_name"]
         selected["config_name"] = new_name
+        selected["compartment"] = compartment_text.value.strip() or "Défaut"
         update_dropdown_options()
         save_geometry_configs()
         with output_area:
             clear_output()
-            print(f"Configuration updated: {selected}")
-    
+            print(f"Configuration mise à jour : {selected}")
+
     def delete_config(_):
         selected = config_dropdown.value
         if selected is None:
             with output_area:
                 clear_output()
-                print("No configuration selected for deletion.")
+                print("Aucune configuration sélectionnée pour la suppression.")
             return
         global GEOMETRY_CONFIGS
         GEOMETRY_CONFIGS = [cfg for cfg in GEOMETRY_CONFIGS if cfg["config_name"] != selected["config_name"]]
@@ -243,7 +288,7 @@ def create_geometry_widget():
         save_geometry_configs()
         with output_area:
             clear_output()
-            print(f"Configuration '{selected['config_name']}' deleted.")
+            print(f"Configuration '{selected['config_name']}' supprimée.")
     
     button_add.on_click(add_geometry_config)
     button_save.on_click(save_geometry_configs_btn)
@@ -251,19 +296,17 @@ def create_geometry_widget():
     button_update.on_click(update_config)
     button_delete.on_click(delete_config)
     
-    # Widget to display the case (A or B) outside the drawing
+    # Widget pour afficher le cas (Case A ou Case B) en dehors du dessin
     case_label_widget = widgets.Label(value="")
     
-    # Drawing zone (zone de travail réduite)
-    # Suppression de la bordure ici en retirant "border='1px solid black'"
+    # Zone de dessin (zone de travail réduite)
     fig_output = widgets.Output(layout=widgets.Layout(flex='1', height='700px', padding='10px'))
-    
     
     def draw_structure(_=None):
         with fig_output:
             clear_output(wait=True)
             
-            # Récupération des paramètres réels via les sliders
+            # Récupération des paramètres via les sliders
             p            = geometry_sliders["period"].value
             t_super      = geometry_sliders["thick_super"].value
             t_reso       = geometry_sliders["thick_reso"].value
@@ -281,28 +324,21 @@ def create_geometry_widget():
             disp_sub   = displayed_thickness(t_sub)   # Affichage réduit du Substrate
             disp_super = displayed_thickness(t_super)   # Affichage réduit du Superstrate
 
-            # Hauteur totale du dessin (nous utilisons ici p comme dimension du carré)
+            # Hauteur totale du dessin (on utilise p comme dimension du carré)
             hauteur_totale = p
 
             # Hauteur disponible pour les couches intermédiaires
             hauteur_dispo = hauteur_totale - (disp_sub + disp_super)
             
             # --- Partie centrale (empilement vertical) ---
-            # Ces couches sont celles qui seront normalisées pour occuper "hauteur_dispo"
-            # L'ordre vertical est : Accroche, XIAOYI, Metallic, Gap, Nanocube
             somme_centrale = t_acc + t_XIAOYI + t_metal + t_gap + t_reso
-            
-            # Facteur de normalisation pour la partie centrale
             facteur_centrale = hauteur_dispo / somme_centrale if somme_centrale > 0 else 1
-            
-            # Calcul des épaisseurs affichées pour la partie centrale
             disp_acc    = t_acc     * facteur_centrale
             disp_XIAOYI = t_XIAOYI  * facteur_centrale
             disp_metal  = t_metal   * facteur_centrale
             disp_gap    = t_gap     * facteur_centrale
             disp_reso   = t_reso    * facteur_centrale
             
-            # Recalcule les positions verticales pour la partie centrale
             y_sub_bottom = 0
             y_sub_top    = y_sub_bottom + disp_sub
             
@@ -315,111 +351,93 @@ def create_geometry_widget():
             y_metal_bottom = y_XIAOYI_top
             y_metal_top    = y_metal_bottom + disp_metal
             
-            y_inter_bottom = y_metal_top  # début de la zone centrale "Gap + Cube"
+            y_inter_bottom = y_metal_top  # Début de la zone centrale (Gap + Cube)
             y_gap_bottom   = y_inter_bottom
             y_gap_top      = y_gap_bottom + disp_gap
             
             y_cube_bottom  = y_gap_top
             y_cube_top     = y_cube_bottom + disp_reso
 
-            # Le superstrate occupe le reste (en haut)
             y_super_bottom = y_cube_top
             y_super_top    = hauteur_totale
 
             # --- Partie latérale (colonnes gauche et droite) ---
-            # Pour les colonnes latérales, nous voulons conserver les proportions entre Dielectric, Functionalisation et Molecule.
-            # On peut utiliser le même facteur de normalisation que la partie centrale pour simplifier.
             somme_laterale = t_diel + t_func + t_mol
-            facteur_lateral = facteur_centrale  # On réutilise le même facteur pour garder l'homogénéité
-            
+            facteur_lateral = facteur_centrale
             disp_dielectric = t_diel * facteur_lateral
             disp_func       = t_func   * facteur_lateral
             disp_mol        = t_mol    * facteur_lateral
-            
-            # La somme totale affichée sur les colonnes latérales
             hauteur_laterale = disp_dielectric + disp_func + disp_mol
-            
-            # Pour aligner les colonnes latérales avec la partie centrale,
-            # on part du même point de départ vertical que le début des couches dynamiques.
             y_lat_start = y_inter_bottom
             y_lat_end   = y_lat_start + hauteur_laterale
-            # S'il y a un espace restant (filler) entre la fin des colonnes latérales et le début du superstrate, on le calcule
             lateral_filler = max(0, y_super_bottom - y_lat_end)
             
-            # --- Détermination du cas (Case A ou Case B) ---
+            # Définition du cas (Case A ou Case B)
             if (t_diel + t_func + t_mol) < t_gap:
                 case_str = "Case A"
             else:
                 case_str = "Case B"
             case_label_widget.value = f"Case: {case_str}"
             
-            # --- Définition des coordonnées latérales ---
-            central_x     = (p - w_reso) / 2  # zone centrale du cube
+            # Coordonnées latérales
+            central_x     = (p - w_reso) / 2
             lateral_width = (p - w_reso) / 2
             left_x  = 0
             right_x = central_x + w_reso
             
-            # --- Dessin ---
+            # Dessin
             fig, ax = plt.subplots(figsize=(6,6))
             ax.set_title("Schematics (visualisation uniquement) - " + case_label_widget.value, fontsize=10, pad=5)
             
-            # Substrate : zone inférieure fixe
+            # Substrate (zone inférieure)
             draw_layer(ax, 0, y_sub_bottom, p, disp_sub, "brown", "Substrate")
-            # Bande de hachures sur le substrate
             bande_height = min(0.05 * p, disp_sub, disp_super)
             draw_layer(ax, 0, y_sub_bottom, p, bande_height, "none", "", hatch='///')
             
-            # Partie centrale (Accroche, XIAOYI, Metallic, Gap, Nanocube)
+            # Partie centrale
             draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "gold", "Accroche")
             draw_layer(ax, 0, y_XIAOYI_bottom, p, disp_XIAOYI, "purple", "XIAOYI")
             draw_layer(ax, 0, y_metal_bottom, p, disp_metal, "silver", "Metallic")
-            
-            # Zone centrale : Gap et Nanocube (affichés dans la colonne centrale)
             draw_layer(ax, central_x, y_gap_bottom, w_reso, disp_gap, "lightgreen", "Gap (polymer)")
             draw_layer(ax, central_x, y_cube_bottom, w_reso, disp_reso, "orange", "Nanocube")
             
-            # Colonnes latérales (Dielectric, Functionalisation, Molecule)
+            # Colonnes latérales
             y_curr_left = y_lat_start
             draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_dielectric, "green", "Dielectric")
             draw_layer(ax, right_x, y_curr_left, lateral_width, disp_dielectric, "green", "Dielectric")
             y_curr_left += disp_dielectric
-
             draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_func, "pink", "Functionalisation")
             draw_layer(ax, right_x, y_curr_left, lateral_width, disp_func, "pink", "Functionalisation")
             y_curr_left += disp_func
-
             draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_mol, "violet", "Molecule")
             draw_layer(ax, right_x, y_curr_left, lateral_width, disp_mol, "violet", "Molecule")
             y_curr_left += disp_mol
-
-            # Ajout d'un filler latéral si besoin pour occuper l'espace restant
             if lateral_filler > 0:
                 draw_layer(ax, left_x,  y_curr_left, lateral_width, lateral_filler, "lightblue", "Environnement")
                 draw_layer(ax, right_x, y_curr_left, lateral_width, lateral_filler, "lightblue", "Environnement")
             
-            # Superstrate (zone supérieure fixe)
+            # Superstrate (zone supérieure)
             draw_layer(ax, 0, y_super_bottom, p, hauteur_totale - y_super_bottom, "lightblue", "Superstrate\n(environnement)")
             draw_layer(ax, 0, hauteur_totale - bande_height, p, bande_height, "none", "", hatch='///')
             
-            # Ajustements des axes
             ax.set_xlim(0, p)
             ax.set_ylim(0, p)
             ax.set_aspect('equal', adjustable='box')
             ax.margins(0)
             
             plt.show()
-
-
-
-    # Observe slider changes
+    
+    # Lancer le dessin à chaque modification des sliders
     for sld in geometry_sliders.values():
         sld.observe(draw_structure, names='value')
     
-    draw_structure()  # Initial draw
+    draw_structure()  # Premier dessin
     
     config_controls = widgets.VBox([
         config_name_text,
+        compartment_text,
         widgets.HBox([button_add, button_save]),
+        compartment_filter,
         widgets.HBox([config_dropdown, button_load, button_update, button_delete]),
         output_area
     ])
@@ -431,3 +449,4 @@ def create_geometry_widget():
     return main_ui
 
 geometry_widget = create_geometry_widget()
+

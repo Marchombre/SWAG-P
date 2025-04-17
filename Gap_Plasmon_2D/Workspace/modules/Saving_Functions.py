@@ -57,17 +57,24 @@ def get_material_str_clean(simulation_details):
     filtered_parts = [part for part in suffix_parts if part]
     return "_".join(filtered_parts)
 
-
-def save_simulation_summary(simulation_details, lambda_range, wave, n_mod, summary_dir):
+def save_simulation_summary(simulation_details, lambda_range, wave, n_mod, summary_dir, custom_name=None):
     """
     Enregistre le résumé de simulation dans un fichier texte.
-    Le nom du fichier est construit en utilisant le material_str_clean extrait de simulation_details,
-    lequel inclut l'indice de chaque couche.
+    Si custom_name est fourni et non vide, il est utilisé pour nommer le fichier, 
+    avec le préfixe obligatoire "simulation_summary_RCWA_" ajouté si nécessaire.
+    Sinon, le nom est construit automatiquement à partir du material_str_clean extrait de simulation_details.
     
     Retourne le chemin du fichier enregistré.
     """
-    material_str_clean = get_material_str_clean(simulation_details)
-    summary_filename = os.path.join(summary_dir, f"simulation_summary_RCWA_{material_str_clean}.txt")
+    if custom_name and custom_name.strip() != "":
+        base_custom = custom_name.strip()
+        if not base_custom.startswith("simulation_summary_RCWA_"):
+            base_custom = "simulation_summary_RCWA_" + base_custom
+        base_filename = base_custom
+    else:
+        material_str_clean = get_material_str_clean(simulation_details)
+        base_filename = f"simulation_summary_RCWA_{material_str_clean}"
+    summary_filename = os.path.join(summary_dir, f"{base_filename}.txt")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     lines = []
     lines.append("Simulation Summary - All Geometry/Material Combos")
@@ -83,7 +90,6 @@ def save_simulation_summary(simulation_details, lambda_range, wave, n_mod, summa
         lines.append(str(details["material_config"]))
         lines.append(f"RI Overrides: {details['ri_overrides']}")
         lines.append("Reflectance points (Rup, Rdown):")
-        # Vérification rigoureuse : la longueur de lambda_range doit être égale à celle de Rup et Rdown
         if not (len(lambda_range) == len(details["Rup"]) == len(details["Rdown"])):
             raise ValueError(
                 f"Mismatch in number of points for combo '{combo_name}': "
@@ -98,6 +104,8 @@ def save_simulation_summary(simulation_details, lambda_range, wave, n_mod, summa
         f.write("\n".join(lines))
     print(f"Résumé de la simulation sauvegardé dans : {summary_filename}")
     return summary_filename
+
+
 
 
 

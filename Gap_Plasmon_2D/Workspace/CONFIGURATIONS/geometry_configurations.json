@@ -1,23 +1,6 @@
 {
   "ALL_GEOMETRY_CONFIGS": [
     {
-      "config_name": "c30_g2_m10",
-      "geometry": {
-        "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 2.0,
-        "thick_mol": 0.0,
-        "thick_func": 0.0,
-        "thick_diel": 2.0,
-        "thick_metalliclayer": 10.0,
-        "thick_XIAOYI": 0.0,
-        "thick_accroche": 0.0,
-        "thick_sub": 200.0,
-        "period": 100.2153
-      }
-    },
-    {
       "config_name": "c30_g6_m10",
       "geometry": {
         "thick_super": 200.0,
@@ -32,7 +15,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c30"
     },
     {
       "config_name": "c70_g2_m10",
@@ -49,7 +33,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c70"
     },
     {
       "config_name": "c70_g6_m10",
@@ -66,7 +51,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c70"
     },
     {
       "config_name": "c30_g2_m50",
@@ -83,7 +69,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c30"
     },
     {
       "config_name": "c30_g6_m50",
@@ -100,7 +87,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c30"
     },
     {
       "config_name": "c30_g12_m50",
@@ -117,7 +105,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c30"
     },
     {
       "config_name": "c30_g12_m10",
@@ -134,7 +123,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c30"
     },
     {
       "config_name": "c70_g12_m10",
@@ -151,7 +141,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c70"
     },
     {
       "config_name": "c70_g2_m50",
@@ -168,7 +159,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c70"
     },
     {
       "config_name": "c70_g6_m50",
@@ -185,7 +177,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c70"
     },
     {
       "config_name": "c70_g12_m50",
@@ -202,7 +195,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "c70"
     },
     {
       "config_name": "Structure 1",
@@ -214,6 +208,24 @@
         "thick_mol": 0.0,
         "thick_func": 1.0,
         "thick_diel": 0.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "c30_g2_m10",
+      "compartment": "c30",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 2.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 6.0,
         "thick_metalliclayer": 10.0,
         "thick_XIAOYI": 0.0,
         "thick_accroche": 0.0,

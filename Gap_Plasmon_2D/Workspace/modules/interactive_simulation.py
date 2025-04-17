@@ -41,6 +41,10 @@ from data_readers import (
 from convergence_analysis import create_multi_convergence_widget
 from Saving_Functions import save_simulation_summary, save_figure, get_material_str_clean
 
+
+from Characterization import find_hwhm_points
+
+
 # --- Téléchargement de la figure ---
 def create_download_link(fig, filename="figure.png"):
     buf = io.BytesIO()
@@ -105,7 +109,7 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         layout=widgets.Layout(width='500px')
     )
     
-    sim_refresh_button = widgets.Button(description="Refresh", button_style="info",
+    sim_refresh_button = widgets.Button(description="Refresh files", button_style="info",
                                         tooltip="Rafraîchir les fichiers de simulation")
     sim_refresh_button.on_click(lambda b: sim_files_dropdown.set_trait("options", list_sim_summary_files(summary_dir)))
         
@@ -171,7 +175,16 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             justify_content='flex-start',     # Alignement horizontal (flex-start, center, flex-end, space-between, ...)
             margin='10px 0px 10px 0px'          # Marges (haut, droite, bas, gauche). Ici, 10px en haut et en bas.
         )
-    )                               
+    )       
+    
+    # Nouveau widget pour saisir le nom de la simulation
+    sim_name_widget = widgets.Text(
+        value="",
+        placeholder="Nom de simulation (auto si vide)",
+        description="Sim Name:",
+        layout=widgets.Layout(width='500px'),
+        style={'description_width': 'initial'}
+    )                      
 
     # Création d'un widget de sélection multiple pour choisir une ou plusieurs configurations de simulation.
     # La largeur est fixée à 350px.
@@ -200,7 +213,7 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
 
     # Création du bouton de rafraîchissement
     config_refresh_button = widgets.Button(
-        description="Refresh", 
+        description="Refresh Configs", 
         button_style="info",
         tooltip="Rafraîchir les fichiers de configurations"
     )
@@ -215,7 +228,7 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     sim_controls = widgets.VBox(
         [
             widgets.HTML("<h3>Simulation - Paramètres</h3>"),
-            sim_files_box,  # La première ligne : fichier(s) sélection et boutons associés.
+            sim_name_widget, sim_files_box,  # La première ligne : fichier(s) sélection et boutons associés.
             widgets.HBox(
                 [Download_Refresh_box],
                 layout=widgets.Layout(justify_content='space-around', margin='5px 0px')
@@ -229,6 +242,7 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                 layout=widgets.Layout(justify_content='space-around', margin='5px 0px')
             ),  # Ligne pour le nombre de points et le nombre de modes
             # Pour le bouton Run Simulation, vous pouvez le centrer ou l'aligner à gauche/droite selon vos préférences.
+            
             widgets.VBox(
                 [sim_run_button, config_refresh_button],
                 layout=widgets.Layout(justify_content='center', margin='5px 0px')
@@ -245,8 +259,8 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     # Droite : Contrôles et tracé de convergence
     conv_widget = create_multi_convergence_widget(json_combined_path, all_configs)
     
-    top_section = widgets.HBox([sim_controls, conv_widget])
     
+        
     # --- Partie Simulation - Bas : Zone d'affichage de la simulation ---
     sim_output = widgets.Output(
         layout=widgets.Layout(
@@ -382,7 +396,8 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             ax_table.figure.canvas.draw_idle()  # Mise à jour du tableau
             
             # Appel des fonctions de sauvegarde avec les résultats obtenus
-            save_simulation_summary(simulation_details, lam_range, wave, n_mod, summary_dir)
+            save_simulation_summary(simulation_details, lam_range, wave, n_mod, summary_dir, 
+                                    custom_name=sim_name_widget.value)
             figures_dir = os.path.join(workspace_dir, "Figures")
             material_str_clean = get_material_str_clean(simulation_details)
             save_figure(fig, "Simulation Reflectance Spectra", figures_dir, material_str_clean)
