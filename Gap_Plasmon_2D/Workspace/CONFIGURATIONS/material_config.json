@@ -13,14 +13,22 @@
           "key": "perm_gap",
           "material": {
             "type": "Custom",
-            "expression": "1.45**2"
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
           "key": "perm_diel",
           "material": {
             "type": "Custom",
-            "expression": "1.45**2"
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
@@ -41,8 +49,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Ag",
-            "page": "Werner-DFT",
-            "data": "main/Ag/nk/Werner-DFT.yml"
+            "page": "Jiang",
+            "data": "main/Ag/nk/Jiang.yml",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
@@ -51,8 +63,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Au",
-            "page": "Werner-DFT",
-            "data": "main/Au/nk/Werner-DFT.yml"
+            "page": "McPeak",
+            "data": "main/Au/nk/McPeak.yml",
+            "override": [
+              300.0,
+              1700.0
+            ]
           }
         },
         {
@@ -73,8 +89,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "SiO2",
-            "page": "Rodriguez-de_Marcos",
-            "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+            "page": "Franta",
+            "data": "main/SiO2/nk/Franta.yml",
+            "override": [
+              24.797,
+              125141.0
+            ]
           }
         }
       ],
@@ -83,22 +103,34 @@
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Ag",
-          "page": "Werner-DFT",
-          "data": "main/Ag/nk/Werner-DFT.yml"
+          "page": "Jiang",
+          "data": "main/Ag/nk/Jiang.yml",
+          "override": [
+            300.0,
+            1000.0
+          ]
         },
         "perm_metalliclayer": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Au",
-          "page": "Werner-DFT",
-          "data": "main/Au/nk/Werner-DFT.yml"
+          "page": "McPeak",
+          "data": "main/Au/nk/McPeak.yml",
+          "override": [
+            300.0,
+            1700.0
+          ]
         },
         "perm_sub": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "SiO2",
-          "page": "Rodriguez-de_Marcos",
-          "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+          "page": "Franta",
+          "data": "main/SiO2/nk/Franta.yml",
+          "override": [
+            24.797,
+            125141.0
+          ]
         }
       }
     },
@@ -115,14 +147,22 @@
           "key": "perm_gap",
           "material": {
             "type": "Custom",
-            "expression": "1.45**2"
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
           "key": "perm_diel",
           "material": {
             "type": "Custom",
-            "expression": "1.50**2"
+            "expression": "1.50**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
@@ -143,8 +183,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Ag",
-            "page": "Werner-DFT",
-            "data": "main/Ag/nk/Werner-DFT.yml"
+            "page": "Jiang",
+            "data": "main/Ag/nk/Jiang.yml",
+            "override": [
+              300.0,
+              2000.0
+            ]
           }
         },
         {
@@ -153,8 +197,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Au",
-            "page": "Werner-DFT",
-            "data": "main/Au/nk/Werner-DFT.yml"
+            "page": "McPeak",
+            "data": "main/Au/nk/McPeak.yml",
+            "override": [
+              300.0,
+              1700.0
+            ]
           }
         },
         {
@@ -175,8 +223,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "SiO2",
-            "page": "Rodriguez-de_Marcos",
-            "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+            "page": "Franta",
+            "data": "main/SiO2/nk/Franta.yml",
+            "override": [
+              209.797,
+              1510.797
+            ]
           }
         }
       ],
@@ -185,22 +237,34 @@
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Ag",
-          "page": "Werner-DFT",
-          "data": "main/Ag/nk/Werner-DFT.yml"
+          "page": "Jiang",
+          "data": "main/Ag/nk/Jiang.yml",
+          "override": [
+            300.0,
+            2000.0
+          ]
         },
         "perm_metalliclayer": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Au",
-          "page": "Werner-DFT",
-          "data": "main/Au/nk/Werner-DFT.yml"
+          "page": "McPeak",
+          "data": "main/Au/nk/McPeak.yml",
+          "override": [
+            300.0,
+            1700.0
+          ]
         },
         "perm_sub": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "SiO2",
-          "page": "Rodriguez-de_Marcos",
-          "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+          "page": "Franta",
+          "data": "main/SiO2/nk/Franta.yml",
+          "override": [
+            209.797,
+            1510.797
+          ]
         }
       }
     },
@@ -217,14 +281,22 @@
           "key": "perm_gap",
           "material": {
             "type": "Custom",
-            "expression": "1.45**2"
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
           "key": "perm_diel",
           "material": {
             "type": "Custom",
-            "expression": "1.60**2"
+            "expression": "1.60**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
@@ -245,8 +317,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Ag",
-            "page": "Werner-DFT",
-            "data": "main/Ag/nk/Werner-DFT.yml"
+            "page": "Jiang",
+            "data": "main/Ag/nk/Jiang.yml",
+            "override": [
+              300.0,
+              2000.0
+            ]
           }
         },
         {
@@ -255,8 +331,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Au",
-            "page": "Werner-DFT",
-            "data": "main/Au/nk/Werner-DFT.yml"
+            "page": "McPeak",
+            "data": "main/Au/nk/McPeak.yml",
+            "override": [
+              300.0,
+              1700.0
+            ]
           }
         },
         {
@@ -277,8 +357,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "SiO2",
-            "page": "Rodriguez-de_Marcos",
-            "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+            "page": "Franta",
+            "data": "main/SiO2/nk/Franta.yml",
+            "override": [
+              24.797,
+              125141.0
+            ]
           }
         }
       ],
@@ -287,22 +371,34 @@
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Ag",
-          "page": "Werner-DFT",
-          "data": "main/Ag/nk/Werner-DFT.yml"
+          "page": "Jiang",
+          "data": "main/Ag/nk/Jiang.yml",
+          "override": [
+            300.0,
+            2000.0
+          ]
         },
         "perm_metalliclayer": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Au",
-          "page": "Werner-DFT",
-          "data": "main/Au/nk/Werner-DFT.yml"
+          "page": "McPeak",
+          "data": "main/Au/nk/McPeak.yml",
+          "override": [
+            300.0,
+            1700.0
+          ]
         },
         "perm_sub": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "SiO2",
-          "page": "Rodriguez-de_Marcos",
-          "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+          "page": "Franta",
+          "data": "main/SiO2/nk/Franta.yml",
+          "override": [
+            24.797,
+            125141.0
+          ]
         }
       }
     },

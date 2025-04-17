@@ -249,9 +249,33 @@ class RefractiveIndexArboWidget:
         }
     
     def set_selection(self, selection):
-        shelf_index = next((i for i, entry in enumerate(self.library) if entry.get("SHELF", "") == selection.get("shelf", "")), None)
+        """
+        Attend un dict {shelf, book, page, data} et positionne
+        shelf_dropdown, book_dropdown et page_dropdown.
+        """
+        # 1) shelf
+        shelf_index = next(
+            (i for i, entry in enumerate(self.library)
+             if entry.get("SHELF","") == selection.get("shelf","")),
+            None
+        )
         if shelf_index is not None:
             self.shelf_dropdown.value = shelf_index
+
+        # 2) book (index dans le content de la shelf)
+        if shelf_index is not None and selection.get("book","") != "":
+            shelf_item = self.library[shelf_index].get("content", [])
+            book_index = next(
+                (j for j, bk in enumerate(shelf_item)
+                 if bk.get("BOOK","") == selection.get("book","")),
+                None
+            )
+            if book_index is not None:
+                self.book_dropdown.value = book_index
+
+        # 3) page (valeur égale au code PAGE)
+        if selection.get("page", "") != "":
+            self.page_dropdown.value = selection.get("page")
 
 # ============================================================================
 # Widget pour configurer un matériau comparé (avec override dynamique)
@@ -1040,35 +1064,52 @@ class MaterialSelectorTabbedNotebook:
             json.dump(final_dict, f, indent=2)
         with self.output:
             print(f"All configurations saved in:\n{config_file}")
-    
+            
+            
     def on_load_config(self, b):
         selected = self.config_dropdown.value
         if selected is None:
             with self.output:
                 print("No configuration selected for loading.")
             return
+
+        # (1) Pour chaque rôle, on positionne mode + valeur
         for entry in selected["MATERIALS_CONFIG"]:
             role = entry["key"]
             mat_config = entry["material"]
-            if role in self.role_widgets:
-                widget_role = self.role_widgets[role]
-                widget_role.mode_dropdown.value = mat_config.get("type", "None")
-                if mat_config.get("type", "").lower() == "custom":
-                    widget_role.custom_text.value = mat_config.get("expression", "")
-                elif mat_config.get("type", "").lower() == "standard":
-                    widget_role.standard_dropdown.value = mat_config.get("material", "")
-                elif mat_config.get("type", "").lower() == "refractiveindex":
-                    if hasattr(widget_role.ri_widget, "set_selection"):
-                        sel = {
-                            "shelf": mat_config.get("shelf", ""),
-                            "book": mat_config.get("book", ""),
-                            "page": mat_config.get("page", ""),
-                            "data": mat_config.get("data", "")
-                        }
-                        widget_role.ri_widget.set_selection(sel)
+            widget_role = self.role_widgets.get(role)
+            if widget_role is None:
+                continue
+
+            # a) mode (None, Custom, Standard, RefractiveIndex)
+            widget_role.mode_dropdown.value = mat_config.get("type", "None")
+
+            # b) contenu
+            mtype = widget_role.mode_dropdown.value.lower()
+            if mtype == "custom":
+                widget_role.custom_text.value = mat_config.get("expression", "")
+            elif mtype == "standard":
+                widget_role.standard_dropdown.value = mat_config.get("material", "")
+            elif mtype == "refractiveindex":
+                sel = {
+                    "shelf": mat_config.get("shelf", ""),
+                    "book":  mat_config.get("book", ""),
+                    "page":  mat_config.get("page", ""),
+                    "data":  mat_config.get("data", "")
+                }
+                widget_role.ri_widget.set_selection(sel)
+                # on force le recalcul des sliders λ-min/λ-max
+                widget_role._update_override_refrac()
+
+        # (2) On rafraîchit l’affichage de chaque onglet
+        for widget_role in self.role_widgets.values():
+            widget_role._update_visibility()
+
+        # (3) Mise à jour du nom et message
         self.config_name_text.value = selected["config_name"]
         with self.output:
             print(f"Configuration '{selected['config_name']}' loaded.")
+
     
     def on_update_config(self, b):
         selected = self.config_dropdown.value
