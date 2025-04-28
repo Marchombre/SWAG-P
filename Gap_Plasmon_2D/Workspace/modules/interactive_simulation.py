@@ -86,13 +86,13 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     
     # --- Partie Simulation - Haut (deux colonnes) ---
     # Gauche : Contrôles de simulation
-    sim_lambda_min = widgets.FloatText(value=300.0, description="lam_ min (nm):",
+    sim_lambda_min = widgets.FloatText(value=600.0, description="lam_ min (nm):",
                                         layout=widgets.Layout(width='150px'),
                                         style={'description_width': 'initial'})
-    sim_lambda_max = widgets.FloatText(value=1700.0, description="lam_ max (nm):",
+    sim_lambda_max = widgets.FloatText(value=1000.0, description="lam_ max (nm):",
                                         layout=widgets.Layout(width='150px'),
                                         style={'description_width': 'initial'})
-    sim_n_points = widgets.IntText(value=400, description="Points:",
+    sim_n_points = widgets.IntText(value=200, description="Points:",
                                     layout=widgets.Layout(width='200px'),
                                     style={'description_width': 'initial'})
     sim_n_mod = widgets.IntText(value=10, description="Modes:",
@@ -408,8 +408,12 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             simulation_details = {}
             fwhm_summaries = []
             lam_summaries = []
-            S_lam_summaries  = []    # (lam_dip − lam_max_l) / lam_left & (lam_max_r − lam_dip) / lam_right
-            S_lam_raw = []           # va contenir slope_small + slope_sym (float)
+            
+            S_lam_summaries  = []   
+            # listes numériques pour S_lam
+            S_lam_min_vals = []
+            S_lam_sym_vals = []
+            
             Q_factor = []
             raw_score_summaries = []   # depth*slope/width
             debug_lines = []
@@ -443,25 +447,24 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                                     verbose = True)  # min separation (in points) between maxima
 
 
-
-                # on choisit le max de plus petite amplitude 
+                # On choisit le max de plus petite amplitude 
                 if Rm_l < Rm_r:
                     lam_min  = lam_m_l
                     lam_middle = lam_left
                 else:
                     lam_min  = lam_m_r
                     lam_middle = lam_right
-                    
-                # S_lam: (lam_dip − lam_max_l) / lam_left & (lam_max_r − lam_dip) / lam_right
-                S_lam_min = (lam_min   - lam_dip) / lam_middle
-                S_lam_sym   = (lam_sym   - lam_dip  ) / lam_middle
+                
+                #  on ajoute S_lam
+                S_lam_min_abs = abs((lam_dip   - lam_min) / lam_middle)
+                S_lam_sym_abs = abs((lam_dip   - lam_sym  ) / lam_middle)
+                # Ajout pour mémoriser les valeurs absolues
+                S_lam_min_vals.append(S_lam_min_abs)
+                S_lam_sym_vals.append(S_lam_sym_abs)                
+                
                 
                 color = colors[idx % n_colors]
-
-
                 ax_plot.plot(lam_range, Rup, color=color)
-
-
 
                 if verbose:
                     # barre horizontale au niveau ylev
@@ -537,19 +540,14 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                 mat_summaries.append("\n".join(mat_lines))
                 
                 
+                
                 #  on ajoute la FWHM 
                 fwhm_summaries.append(f"{width:.1f} nm")
-                
                 #  on ajoute lambda
-                lam_summaries.append(f"{lam_dip:.1f} nm")
-
-                S_lam_summaries.append(f"{S_lam_min:.2f} & {S_lam_sym:.2f}")
-                S_lam_raw.append(abs(S_lam_min) + abs(S_lam_sym))
-
-            
-                # on ajoute le Q-factor
+                lam_summaries.append(f"{lam_dip:.1f} nm")    
+                # on ajoute S_lam
+                S_lam_summaries.append(f"{S_lam_min_abs:.3f} & {S_lam_sym_abs:.3f}")                # on ajoute le Q-factor
                 Q_factor.append(f"{(lam_dip / width):.1f}")            
-            
                 # on ajoute le score interne
                 raw_score_summaries.append(f"{raw_score:.2e}")
                 
@@ -592,9 +590,25 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                         #comp_summaries=[comp_summaries   [-1]]
                     )
                     
+            # calculer la configuration optimale 
+            if S_lam_min_vals:
+                # calcul de la distance euclidienne (norme 2) pour chaque couple
+                norms = [np.hypot(a, b) for a, b in zip(S_lam_min_vals, S_lam_sym_vals)]
+                best_idx = int(np.argmin(norms))
+                # on récupère le nom de la config correspondante
+                best_cfg = [cfg['config_name'] for cfg in sim_config_selector.value][best_idx]
+                # on peut aussi afficher les valeurs exactes
+                best_min = S_lam_min_vals[best_idx]
+                best_sym = S_lam_sym_vals[best_idx]
+                debug_lines.append(
+                    f"→ BEST_CONFIG: {best_cfg}  "
+                    f"(S_lam_min={best_min:.3f}, S_lam_sym={best_sym:.3f})"
+                )
+
 
             # On fusionne toutes les lignes en un texte multi-lignes
-            debug_txt = "\n".join(debug_lines)
+            debug_txt = "\n".join(debug_lines)           
+
 
             # === début nouveau bloc de wrapping ===
             wrapper = textwrap.TextWrapper(
@@ -625,13 +639,10 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                     ))
 
 
-
-
             Rn = minmax(raw_score_summaries)
             Qn = minmax([float(q) for q in Q_factor])
-            Sn = minmax(S_lam_raw)
 
-            comp = (Rn + Qn + Sn) / 3.0
+            comp = (Rn + Qn ) / 3.0
             comp_summaries = [f"{c:.3f}" for c in comp]
             
             
@@ -841,6 +852,8 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         mat_summaries      = []
         fwhm_summaries     = []
         lam_summaries      = []
+        S_lam_min_vals     = []
+        S_lam_sym_vals     = []
         S_lam_summaries    = []
         Q_factor_list      = []
         raw_score_list     = []
@@ -867,14 +880,20 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                 dip_prom=0.01, dip_dist=5,
                 peak_dist=5, verbose=True
             )
-            # choix du côté minimal
+            # On choisit le max de plus petite amplitude 
             if Rm_l < Rm_r:
-                lam_min, lam_middle = lam_m_l, lam_left
+                lam_min  = lam_m_l
+                lam_middle = lam_left
             else:
-                lam_min, lam_middle = lam_m_r, lam_right
-            # S_lam
-            S_lam_min = (lam_min - lam_dip) / lam_middle
-            S_lam_sym = (lam_sym - lam_dip) / lam_middle
+                lam_min  = lam_m_r
+                lam_middle = lam_right
+            
+            #  on ajoute S_lam
+            S_lam_min_abs = abs((lam_dip - lam_min)   / lam_middle)
+            S_lam_sym_abs = abs((lam_dip - lam_sym)   / lam_middle)
+            # Ajout pour mémoriser les valeurs absolues
+            S_lam_min_vals.append(S_lam_min_abs)
+            S_lam_sym_vals.append(S_lam_sym_abs)
             
             
             color = colors[idx % n_colors]
@@ -920,9 +939,24 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             mat_summaries.append(summaries[label][1])
             fwhm_summaries.append(f"{width_fwhm:.1f} nm")
             lam_summaries.append(f"{lam_dip:.1f} nm")
-            S_lam_summaries.append(f"{S_lam_min:.2f} & {S_lam_sym:.2f}")
+            S_lam_summaries.append(f"{S_lam_min_abs:.3f} & {S_lam_sym_abs:.3f}") 
             Q_factor_list.append(f"{lam_dip/width_fwhm:.1f}")
             raw_score_list.append(f"{raw_score:.2e}")
+        
+        
+        
+        if S_lam_min_vals:
+            # norme euclidienne sur chaque couple
+            norms = [np.hypot(a, b) for a, b in zip(S_lam_min_vals, S_lam_sym_vals)]
+            best_idx   = int(np.argmin(norms))
+            best_label = config_labels[best_idx]
+            best_min   = S_lam_min_vals[best_idx]
+            best_sym   = S_lam_sym_vals[best_idx]
+            debug_lines.append(
+                f"BEST_CONFIG → {best_label}  "
+                f"(S_lam_min={best_min:.3f}, S_lam_sym={best_sym:.3f})"
+            )
+            
         
         # f) wrapping du debug text
         debug_txt = "\n".join(debug_lines)

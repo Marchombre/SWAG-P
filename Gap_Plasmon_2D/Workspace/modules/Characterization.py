@@ -148,10 +148,13 @@ def find_best_dip_fwhm(wavelength, reflectance,
             # sinon si seulement plat brutal, on le prend
 
         else:
-            peaks_l, _ = find_peaks(R_s[:dip_idx], distance=peak_dist)
-            lm = peaks_l[np.argmax(R_s[peaks_l])] if peaks_l.size else max(0, dip_idx-1)
-            # en dernier recours, on cherche un pic sur le signal lissé R_s
-            # et on choisit celui de plus grande réflectance
+            if dip_idx > 0:
+                lm = int(np.argmax(R[:dip_idx]))
+            else:
+                lm = 0
+
+
+
 
         # — côté droit du dip —
         zc_right = zc[zc > dip_idx]
@@ -206,9 +209,7 @@ def find_best_dip_fwhm(wavelength, reflectance,
             np.concatenate([ flat_right, flat_plateau ])
         )
         
-        
-        # détection de plat brutal; +dip_idx+2 pour repasser à l’indice absolu
-        
+                
         # --- détection des vrais plateaux (slope ≃ 0) ---
         # on prend ici 10% de la pente max comme seuil de “quasi-plat”
         plat_thr = 0.1 * np.nanmax(np.abs(dR_right)) if dR_right.size else 0
@@ -243,10 +244,12 @@ def find_best_dip_fwhm(wavelength, reflectance,
             # sinon plat brutal uniquement
 
         else:
-            rb = dip_idx + 1
-            peaks_r, _ = find_peaks(R_s[rb:], distance=peak_dist)
-            rm = rb + peaks_r[np.argmax(R_s[rb:][peaks_r])] if peaks_r.size else min(len(R_s)-1, dip_idx+1)
-            # dernier recours : pic sur le signal lissé à droite du dip
+            if dip_idx < len(R) - 1:
+                offset = np.argmax(R[dip_idx+1:])
+                rm = int(dip_idx + 1 + offset)
+            else:
+                rm = dip_idx
+
 
         # s’assurer que lm et rm sont bien des entiers scalaires
         lm = int(lm)
@@ -308,13 +311,12 @@ def find_best_dip_fwhm(wavelength, reflectance,
         fwhm = lam_right - lam_left
         widths.append(fwhm)
 
-                # 3e) score = profondeur (au carré) × pente / largeur  
+        # 3e) score = profondeur (au carré) × pente / largeur  
         # ➔ plus le dip est profond, moins la pente plate est pénalisée
         alpha = 2.0     # accentue le rôle de la profondeur
         beta  = 0.5     # /sqrt(fwhm)
         raw_score = (depth**alpha) * (slope**(1.0 - depth)) / (fwhm**beta)
 
-        #raw_score = (depth**0.3) * (slope * (1 + depth**0.3)) / np.sqrt(fwhm)
         scores_list.append(raw_score)
 
         # 3f) mise à jour si meilleur score
