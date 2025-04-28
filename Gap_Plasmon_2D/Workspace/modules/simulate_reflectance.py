@@ -9,6 +9,7 @@ et retourne à la fois les résultats et les détails complets de la simulation.
 
 import os
 import json
+import numpy as np
 import pandas as pd
 from Material_Configuration import build_material_configuration_dynamic
 from Function_reflectance_SWAG import reflectance
@@ -73,28 +74,41 @@ def simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_pat
 
     # Boucle sur chaque configuration pour simuler la réflectance
     for combo in all_combos:
-        combo_name = combo["config_name"]
-        geometry_dict = combo["geometry"]["geometry"]
-        df_config = pd.DataFrame(combo["material"]["MATERIALS_CONFIG"])
+        combo_name   = combo["config_name"]
+        geometry_dict= combo["geometry"]["geometry"]
+        df_config    = pd.DataFrame(combo["material"]["MATERIALS_CONFIG"])
         ri_overrides = combo["material"].get("RI_OVERRIDES", {})
-        Rup, Rdown = simulate_reflectance_single(lambda_range, geometry_dict, wave, df_config, json_combined_path, n_mod, ri_overrides)
-        results[combo_name] = (Rup, Rdown)
-        simulation_details[combo_name] = {
-            "geometry": geometry_dict,
-            "material_config": df_config.to_dict(orient="records"),
-            "ri_overrides": ri_overrides,
-            "Rup": Rup,
-            "Rdown": Rdown
+
+        # simulate_reflectance_single renvoie deux tableaux NumPy de même taille
+        Rup, Rdown = simulate_reflectance_single(
+            lambda_range, geometry_dict, wave,
+            df_config, json_combined_path,
+            n_mod, ri_overrides
+        )
+
+        # convertir en tableaux NumPy pour faire l’opération élément‑par‑élément
+        Rup_arr   = np.array(Rup)
+        Rdown_arr = np.array(Rdown)
+        Absorption = 1.0 - (Rup_arr + Rdown_arr)
+
+        # on enregistre désormais Rup, Rdown ET Absorption
+        results[combo_name] = {
+            "Rup":       Rup,
+            "Rdown":     Rdown,
+            "Absorption": Absorption
         }
+
+        simulation_details[combo_name] = {
+            "geometry":        geometry_dict,
+            "material_config": df_config.to_dict(orient="records"),
+            "ri_overrides":    ri_overrides,
+            "Rup":             Rup,
+            "Rdown":           Rdown,
+            "Absorption":      Absorption
+        }
+
 
     summary_file = save_simulation_summary(simulation_details, lambda_range, wave, n_mod, summary_dir)
     print(f"Résumé de la simulation sauvegardé dans : {summary_file}")
     return results, simulation_details, all_combos
 
-if __name__ == "__main__":
-    # Exemple d'utilisation
-    lambda_range = list(range(400, 701, 10))
-    wave = {"parameter": "valeur_exemple"}
-    n_mod = 3
-    json_combined_path = "chemin/vers/json_combined.json"
-    simulate_reflectance_all_combos(lambda_range, wave, n_mod, json_combined_path)

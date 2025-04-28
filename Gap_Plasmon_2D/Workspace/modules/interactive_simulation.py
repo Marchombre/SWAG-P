@@ -21,6 +21,8 @@ import matplotlib.pyplot as plt
 import ipywidgets as widgets
 from IPython.display import HTML, display, Javascript
 from datetime import datetime
+import textwrap
+
 
 # Construction des chemins
 module_dir       = os.path.dirname(os.path.abspath(__file__))
@@ -32,17 +34,26 @@ configurations_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
 data_dir         = os.path.join(workspace_dir, "data")
 json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
+# chemin du CSV
+auto_modes_path = os.path.join(workspace_dir, 'Convergence', 'optimal_n_modes.csv')
+try:
+    auto_modes_df = pd.read_csv(auto_modes_path, index_col='config_name')
+except Exception:
+    auto_modes_df = None
+
+
 # Importations internes
 from simulate_and_plot import ordered_params, run_simulation_one_combo
 from data_readers import (
     list_sim_summary_files,
     get_all_spectra_and_summaries
 )
+
 from convergence_analysis import create_multi_convergence_widget
 from Saving_Functions import save_simulation_summary, save_figure, get_material_str_clean
+from Characterization import find_best_dip_fwhm, minmax
 
 
-from Characterization import find_hwhm_points
 
 
 # --- Téléchargement de la figure ---
@@ -75,20 +86,34 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     
     # --- Partie Simulation - Haut (deux colonnes) ---
     # Gauche : Contrôles de simulation
-    sim_lambda_min = widgets.FloatText(value=700.0, description="λ min (nm):",
+    sim_lambda_min = widgets.FloatText(value=300.0, description="lam_ min (nm):",
                                         layout=widgets.Layout(width='150px'),
                                         style={'description_width': 'initial'})
-    sim_lambda_max = widgets.FloatText(value=1050.0, description="λ max (nm):",
+    sim_lambda_max = widgets.FloatText(value=1700.0, description="lam_ max (nm):",
                                         layout=widgets.Layout(width='150px'),
                                         style={'description_width': 'initial'})
-    sim_n_points = widgets.IntText(value=200, description="Points:",
+    sim_n_points = widgets.IntText(value=400, description="Points:",
                                     layout=widgets.Layout(width='200px'),
                                     style={'description_width': 'initial'})
-    sim_n_mod = widgets.IntText(value=35, description="Modes:",
+    sim_n_mod = widgets.IntText(value=10, description="Modes:",
                                  layout=widgets.Layout(width='200px'),
                                  style={'description_width': 'initial'})
     sim_run_button = widgets.Button(description="Run simulation", button_style="success",
                                     tooltip="Lancer la simulation")
+    
+    # mode de calcul des modes
+    mode_selection = widgets.RadioButtons(
+        options=[('Fixe', 'fixed'),
+                 ('Personnalisé', 'custom'),
+                 ('Automatique', 'auto')],
+        value='fixed',
+        description='Modes:',
+        style={'description_width': 'initial'}
+    )
+    # boîte qui contiendra, en mode custom, un IntText par config sélectionnée
+    custom_modes_box = widgets.VBox()
+    
+    
     
     # Empêche les valeurs négatives pour les épaisseurs
     def validate_positive(change):
@@ -195,6 +220,55 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
         style={'description_width': 'initial'}  # Permet de conserver la largeur par défaut pour la description
     )
     
+    custom_n_mod_inputs = {}
+    def refresh_custom_modes(*args):
+        if mode_selection.value == 'custom':
+            inputs = []
+            for cfg in sim_config_selector.value:
+                name = cfg['config_name']
+                inp = widgets.IntText(
+                    value=sim_n_mod.value,
+                    description=name,
+                    layout=widgets.Layout(width='300px'),
+                    style={'description_width': 'initial'}
+                )
+                custom_n_mod_inputs[name] = inp
+                inputs.append(inp)
+            custom_modes_box.children = inputs
+        else:
+            custom_modes_box.children = []
+
+    mode_selection.observe(refresh_custom_modes, names='value')
+    sim_config_selector.observe(refresh_custom_modes, names='value')
+    
+    
+    
+    # Checkbox pour activer/désactiver le verbose
+    verbose_toggle = widgets.Checkbox(
+        value=True,
+        description="Verbose",
+        indent=False,
+        layout=widgets.Layout(width='150px'),
+        style={'description_width': 'initial'}
+    )
+
+
+    sim_debug = widgets.Output(
+        layout=widgets.Layout(
+            width='100%',
+            height='200px',
+            overflow_y='auto',
+            border='1px solid darkred',
+            display='block' if verbose_toggle.value else 'none'
+        )
+    )
+    # Masque/affiche et vide le contenu quand on décoche/coché verbose
+    def toggle_sim_debug(change):
+        sim_debug.layout.display = 'block' if change['new'] else 'none'
+        if not change['new']:
+            sim_debug.clear_output()
+    verbose_toggle.observe(toggle_sim_debug, names='value')
+
     
     def load_configs():
         combos_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
@@ -247,7 +321,9 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                 [sim_run_button, config_refresh_button],
                 layout=widgets.Layout(justify_content='center', margin='5px 0px')
             ),  # Ligne contenant le bouton de lancement de la simulation.
-            sim_config_selector                              # Affichage du sélecteur multiple pour les configurations de simulation.
+            sim_config_selector,            # Affichage du sélecteur multiple pour les configurations de simulation.
+            mode_selection, custom_modes_box,
+            verbose_toggle
         ],
         layout=widgets.Layout(
             padding='10px',         # Espace interne autour de ces éléments
@@ -261,7 +337,12 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     
     
         
+        
+        
     # --- Partie Simulation - Bas : Zone d'affichage de la simulation ---
+    
+    
+    
     sim_output = widgets.Output(
         layout=widgets.Layout(
             border="2px solid #ccc",
@@ -285,29 +366,143 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             lam_min = sim_lambda_min.value
             lam_max = sim_lambda_max.value
             n_points = sim_n_points.value
-            n_mod = sim_n_mod.value
+                        
             wave = {"angle": 0, "polarization": 1}
             lam_range = np.linspace(lam_min, lam_max, n_points)
             colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+            n_colors = len(colors)
+
             
-            # Préparation de la figure
-            fig = plt.figure(figsize=(12, 10))
-            ax_plot = fig.add_axes([0.1, 0.50, 0.9, 0.49])
-            ax_table = fig.add_axes([0.1, 0.10, 0.9, 0.40])
+            # détermine n_mod pour chaque config
+            mode = mode_selection.value
+            mode_by_cfg = {}
+            if mode == 'fixed':
+                # même n_mod pour tous
+                for cfg in sim_config_selector.value:
+                    mode_by_cfg[cfg['config_name']] = sim_n_mod.value
+            elif mode == 'custom':
+                # récupère la saisie personnalisée
+                for name, inp in custom_n_mod_inputs.items():
+                    mode_by_cfg[name] = inp.value
+            else:  # auto
+                if auto_modes_df is None:
+                    raise FileNotFoundError(f'Modes auto introuvables: {auto_modes_path}')
+                for cfg in sim_config_selector.value:
+                    name = cfg['config_name']
+                    mode_by_cfg[name] = int(auto_modes_df.loc[name, 'optimal_n_mode'])
             
+            
+            
+            # Configuration de l'axe du tracé
+            # 1) Définition des marges pour 80 % de la largeur
+            left_marges, width_marges = 0.10, 0.80
+            fig      = plt.figure(figsize=(13, 9))
+            ax_plot = fig.add_axes([left_marges, 0.50, width_marges, 0.35])
+            ax_table = fig.add_axes([left_marges, 0.05, width_marges, 0.35])
+            ax_table.axis('off')
+                        
             # Initialisation des listes pour le tracé et le tableau ainsi que du dictionnaire des détails de simulation
             config_labels = []
             geom_summaries = []
             mat_summaries = []
             simulation_details = {}
+            fwhm_summaries = []
+            lam_summaries = []
+            S_lam_summaries  = []    # (lam_dip − lam_max_l) / lam_left & (lam_max_r − lam_dip) / lam_right
+            S_lam_raw = []           # va contenir slope_small + slope_sym (float)
+            Q_factor = []
+            raw_score_summaries = []   # depth*slope/width
+            debug_lines = []
             
             # Pour chaque configuration sélectionnée, lancer la simulation et collecter les courbes et résumés
+            verbose = verbose_toggle.value
+            
+            
             for idx, cfg in enumerate(sim_config_selector.value):
-                Rup, details = run_simulation_one_combo(lam_range, wave, n_mod, cfg, json_combined_path)
-                # Stockage des détails pour la sauvegarde
+                name    = cfg['config_name']
+                n_modes = mode_by_cfg[name]
+                Rup, _, details = run_simulation_one_combo(
+                    lam_range, wave, n_modes, cfg, json_combined_path
+                )
+
+                lam = np.array(lam_range)
+                Rup = np.array(Rup)
+
+                # Enregistrer les détails
                 simulation_details[cfg["config_name"]] = details
-                # Tracé du spectre
-                ax_plot.plot(lam_range, Rup, label=cfg["config_name"], color=colors[idx % len(colors)])
+
+                lam_left, lam_right, width, lam_dip, Rdip, ylev, lam_m_l, Rm_l, \
+                lam_m_r, Rm_r, lam_sym, R_sym, slope, depth, raw_score, dips, scores_list, depths, slopes, widths, \
+                lam_max_ls, R_max_ls, lam_max_rs, R_max_rs, lam_syms, R_syms = \
+                    find_best_dip_fwhm(lam, Rup,
+                                    smooth_win=0, # odd integer ≥ 3: window length for Savitzky–Golay smoothing
+                                    polyorder=0,   # polynomial order for the filter (must be < smooth_win)
+                                    dip_prom=0.01, # min “prominence” (depth) to qualify as a dip
+                                    dip_dist=5,   # min separation (in points) between dips
+                                    peak_dist=5,
+                                    verbose = True)  # min separation (in points) between maxima
+
+
+
+                # on choisit le max de plus petite amplitude 
+                if Rm_l < Rm_r:
+                    lam_min  = lam_m_l
+                    lam_middle = lam_left
+                else:
+                    lam_min  = lam_m_r
+                    lam_middle = lam_right
+                    
+                # S_lam: (lam_dip − lam_max_l) / lam_left & (lam_max_r − lam_dip) / lam_right
+                S_lam_min = (lam_min   - lam_dip) / lam_middle
+                S_lam_sym   = (lam_sym   - lam_dip  ) / lam_middle
+                
+                color = colors[idx % n_colors]
+
+
+                ax_plot.plot(lam_range, Rup, color=color)
+
+
+
+                if verbose:
+                    # barre horizontale au niveau ylev
+                    ax_plot.hlines(ylev, xmin=lam_left, xmax=lam_right,
+                                linewidth=2, color=color,
+                                label='_nolegend_')
+
+                    # croix de dips détectés
+                    ax_plot.scatter(
+                        lam[dips], Rup[dips],
+                        marker='x', s=40,
+                        color=color,
+                        label='_nolegend_'
+                    )
+                    # croix des maxima initiaux
+                    ax_plot.scatter(
+                        lam_max_ls, R_max_ls,
+                        marker='x', s=30,
+                        color=color, label='_nolegend_'
+                    )
+                    ax_plot.scatter(
+                        lam_max_rs, R_max_rs,
+                        marker='x', s=30,
+                        color=color, label='_nolegend_'
+                    )
+                    # croix des points symétriques
+                    ax_plot.scatter(
+                        lam_syms, R_syms,
+                        marker='x', s=30,
+                        color=color, label='_nolegend_'
+                    )
+                    # annotation du dip retenu
+                    ax_plot.scatter([lam_dip], [Rdip],
+                                    marker='o', s=70,
+                                    facecolor='none',
+                                    edgecolor=color,
+                                    linewidths=2,
+                                    label='_nolegend_')
+
+
+    
                 config_labels.append(cfg["config_name"])
                 
                 # Construction du résumé de géométrie
@@ -340,13 +535,113 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
                         if val:
                             mat_lines.append(f"{disp_name}: {val}")
                 mat_summaries.append("\n".join(mat_lines))
+                
+                
+                #  on ajoute la FWHM 
+                fwhm_summaries.append(f"{width:.1f} nm")
+                
+                #  on ajoute lambda
+                lam_summaries.append(f"{lam_dip:.1f} nm")
+
+                S_lam_summaries.append(f"{S_lam_min:.2f} & {S_lam_sym:.2f}")
+                S_lam_raw.append(abs(S_lam_min) + abs(S_lam_sym))
+
             
-            # Configuration de l'axe du tracé
+                # on ajoute le Q-factor
+                Q_factor.append(f"{(lam_dip / width):.1f}")            
+            
+                # on ajoute le score interne
+                raw_score_summaries.append(f"{raw_score:.2e}")
+                
+                            
+                if verbose:
+                    dips_nm  = ", ".join(f"{l:.1f}" for l in lam[dips])
+                    scores_str = ", ".join(f"{s:.3e}" for s in scores_list)
+                    depths_str = ", ".join(f"{d:.3f}"  for d in depths)
+                    slopes_str = ", ".join(f"{s:.3e}" for s in slopes)
+                    widths_str = ", ".join(f"{w:.3f}" for w in widths)
+                
+                    # Ligne unique résumé pour ce spectre
+                    debug_lines.append(
+                        f"{cfg['config_name']}: dips[{dips_nm}]  "
+                        f"dip{lam_dip:.1f}nm  "
+                        f"depths=[{depths_str}]  "
+                        f"depth={depth:.3f}  "
+                        f"slopes=[{slopes_str}]  "
+                        f"slope={slope:.3e}  "
+                        f"FWHMs=[{widths_str}]  "
+                        f"FWHM={width:.1f}  "
+                        f"scores=[{scores_str}]  "
+                        f"score={raw_score:.3e}  "
+                    )   
+                
+                    # sauvegarde **configuration par configuration**
+                    # on utilise [-1] pour ne prendre que la dernière entrée de chaque liste (celle de la config en cours).
+                    save_simulation_summary(
+                        { name: simulation_details[name] },  # un dict à une seule entrée
+                        lam_range,
+                        wave,
+                        n_modes,                             # le n_modes spécifique
+                        summary_dir,
+                        custom_name=name,                   # nom du fichier = nom de la config
+                        fwhm_summaries=[fwhm_summaries[-1]],
+                        lam_summaries=[lam_summaries    [-1]],
+                        S_lam_summaries=[S_lam_summaries[-1]],
+                        Q_factor=[Q_factor               [-1]],
+                        raw_score_summaries=[raw_score_summaries[-1]],
+                        #comp_summaries=[comp_summaries   [-1]]
+                    )
+                    
+
+            # On fusionne toutes les lignes en un texte multi-lignes
+            debug_txt = "\n".join(debug_lines)
+
+            # === début nouveau bloc de wrapping ===
+            wrapper = textwrap.TextWrapper(
+                width=150,             # nombre max de caractères par ligne
+                break_long_words=True,
+                replace_whitespace=False
+            )
+            wrapped = []
+            for line in debug_txt.splitlines():
+                # wrapper.wrap renvoie [] si line == ""
+                wrapped.extend(wrapper.wrap(line) or [""])
+            # on écrase debug_txt par sa version "coupée"
+            debug_txt = "\n".join(wrapped)
+            # === fin bloc de wrapping ===
+
+            # Affiche le debug dans le widget sim_debug
+            sim_debug.clear_output()
+            if verbose:
+                with sim_debug:
+                    # debug_txt contient déjà le texte “wrapped”
+                    display(widgets.Textarea(
+                        value=debug_txt,
+                        layout=widgets.Layout(
+                            width='100%',
+                            height='200px',
+                            overflow_y='auto'
+                        )
+                    ))
+
+
+
+
+            Rn = minmax(raw_score_summaries)
+            Qn = minmax([float(q) for q in Q_factor])
+            Sn = minmax(S_lam_raw)
+
+            comp = (Rn + Qn + Sn) / 3.0
+            comp_summaries = [f"{c:.3f}" for c in comp]
+            
+            
+            
+            # FINALISATION DU TRACÉ
             ax_plot.set_xlabel("Wavelength (nm)")
             ax_plot.set_ylabel("Reflectance")
             ax_plot.set_title("Simulation")
-            ax_plot.legend()
             ax_plot.grid(True)
+            
             # Désactivation de l'affichage des axes dans l'axe qui contiendra le tableau
             ax_table.axis("off")
             
@@ -354,14 +649,29 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             config_labels = [label.replace("Mat_", "\nMat_") for label in config_labels]
             
             if config_labels:
+                # 1) nombre de colonnes
                 n_configs = len(config_labels)
+                # 2) taille de police dynamique
                 fontsize = 8 if n_configs <= 5 else max(8 - (n_configs - 5), 3)
                 table = ax_table.table(
-                    cellText=[geom_summaries, mat_summaries],
+                    cellText=[
+                        geom_summaries,
+                        mat_summaries,
+                        fwhm_summaries,
+                        lam_summaries,
+                        S_lam_summaries,
+                        Q_factor,
+                        raw_score_summaries,
+                        #comp_summaries
+                    ],
                     colLabels=config_labels,
-                    rowLabels=["Geometry", "Material"],
-                    loc="center",
-                    cellLoc="left"
+                    rowLabels=[
+                        "Geometry", "Material",
+                        "FWHM", r"$\lambda_0$",
+                        "S_lam L & R", "Q-factor",
+                        "Score interne"#, "Score total"
+                    ],
+                    loc="center", cellLoc="left"
                 )
                 table.auto_set_font_size(False)
                 table.set_fontsize(fontsize)
@@ -395,9 +705,26 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
             
             ax_table.figure.canvas.draw_idle()  # Mise à jour du tableau
             
-            # Appel des fonctions de sauvegarde avec les résultats obtenus
-            save_simulation_summary(simulation_details, lam_range, wave, n_mod, summary_dir, 
-                                    custom_name=sim_name_widget.value)
+
+            # transforme mode_by_cfg en liste alignée sur simulation_details:
+            n_mod_list = [ mode_by_cfg[name] for name in simulation_details.keys() ]
+
+            save_simulation_summary(
+                simulation_details,
+                lam_range,
+                wave,
+                n_mod_list,              # liste de n_modes
+                summary_dir,
+                custom_name=sim_name_widget.value,
+                fwhm_summaries=fwhm_summaries,
+                lam_summaries=lam_summaries,
+                S_lam_summaries=S_lam_summaries,
+                Q_factor=Q_factor,
+                raw_score_summaries=raw_score_summaries,
+                #comp_summaries=comp_summaries
+            )
+
+            
             figures_dir = os.path.join(workspace_dir, "Figures")
             material_str_clean = get_material_str_clean(simulation_details)
             save_figure(fig, "Simulation Reflectance Spectra", figures_dir, material_str_clean)
@@ -414,113 +741,282 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     sim_run_button.on_click(on_sim_run_clicked)
     
     # Assemblage de l'onglet Simulation : partie haute (deux colonnes) + partie basse (figure simulation et tableau)
-    sim_tab = widgets.VBox([widgets.HBox([sim_controls, conv_widget]), sim_output])
+    sim_tab = widgets.VBox([
+        widgets.HBox([sim_controls, conv_widget]),
+        sim_debug,     
+        sim_output
+    ])    
     
-    # --- Onglet Plot ---
+    
+    
+        # --- Onglet Plot ---
+
+    # 1) Widgets
     spectra_select = widgets.SelectMultiple(
-        options=[], 
+        options=[],
         description="Available spectra:",
         style={'description_width': 'initial'},
         layout=widgets.Layout(width='80%', height='150px')
     )
+    plot_verbose_toggle = widgets.Checkbox(
+        value=True,
+        description="Verbose",
+        indent=False,
+        layout=widgets.Layout(width='150px'),
+        style={'description_width': 'initial'}
+    )
+    
+    
+    plot_debug = widgets.Output(
+        layout=widgets.Layout(
+            width='100%',
+            height='200px',
+            overflow_y='auto',
+            border='1px solid darkred',
+            display='block' if plot_verbose_toggle.value else 'none'
+        )
+    )
+    def toggle_plot_debug(change):
+        plot_debug.layout.display = 'block' if change['new'] else 'none'
+        if not change['new']:
+            plot_debug.clear_output()
+    plot_verbose_toggle.observe(toggle_plot_debug, names='value')    
+    
+    
     plot_button = widgets.Button(
         description="Draw", button_style="info",
-        tooltip="Drawing selecting spectra"
+        tooltip="Draw selected spectra"
     )
-    plot_output = widgets.Output(layout=widgets.Layout(border="2px solid #ccc", padding="10px", min_height="400px"))
-    plotted_lines = {}   # {label: (wl, R)}
-    summaries = {}       # {label: (geom_summary, mat_summary)}
+    plot_output = widgets.Output(
+        layout=widgets.Layout(border="2px solid #ccc", padding="10px", min_height="400px")
+    )
+    plot_controls = widgets.VBox([
+        widgets.HTML("<h3>Plot</h3>"),
+        spectra_select,
+        plot_verbose_toggle,
+        plot_button
+    ])
+
+    # 2) Variables partagées
+    plotted_lines = {}    # {label: (wavelength_array, reflectance_array)}
+    summaries     = {}    # {label: (geom_summary, mat_summary)}
+    metrics_all   = {}    # {label: metrics_dict}
+
+    # 3) Fonction de mise à jour des spectres disponibles
+
     def update_spectra():
-        all_spectra, all_summaries = get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params)
-        spectra_select.options = list(all_spectra.keys())
-        nonlocal plotted_lines, summaries
-        plotted_lines = all_spectra
-        summaries = all_summaries
+        nonlocal plotted_lines, summaries, metrics_all
+        spectra, sums, mets = get_all_spectra_and_summaries(
+            summary_dir, exp_data_dir, ordered_params
+        )
+        spectra_select.options = list(spectra.keys())
+        plotted_lines = spectra
+        summaries     = sums
+        metrics_all   = mets
+
+    # appel initial
     update_spectra()
-    
+
+    # 4) Callback de tracé
+
     def on_plot_button_clicked(b):
-        selected_labels = list(spectra_select.value)
-        if not selected_labels:
-            selected_labels = list(plotted_lines.keys())
-            spectra_select.value = tuple(selected_labels)
+        # a) rafraîchir les données
+        update_spectra()
+        verbose = plot_verbose_toggle.value
         
-        fig = plt.figure(figsize=(10, 10))
-        ax_plot = fig.add_axes([0.1, 0.55, 0.8, 0.4])
-        ax_table = fig.add_axes([0.05, 0.05, 0.9, 0.4])
+        # b) marges et création de la figure + axes
+        left_marges, width_marges = 0.10, 0.80
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        n_colors = len(colors)
+
+        fig = plt.figure(figsize=(13, 9))
         
-        for label in selected_labels:
-            x, y = plotted_lines[label]
-            ax_plot.plot(x, y, label=label)
+        ax_plot  = fig.add_axes([left_marges, 0.50, width_marges, 0.35])
+        ax_table = fig.add_axes([left_marges, 0.05, width_marges, 0.35])
+        ax_table.axis('off')
+        
+        # c) préparation des listes
+        config_labels      = []
+        geom_summaries     = []
+        mat_summaries      = []
+        fwhm_summaries     = []
+        lam_summaries      = []
+        S_lam_summaries    = []
+        Q_factor_list      = []
+        raw_score_list     = []
+        debug_lines        = []
+        
+        # d) détermination des labels à tracer
+        labels = list(spectra_select.value) or list(plotted_lines.keys())
+        
+        # e) boucle de tracé et calcul des métriques
+        for idx, label in enumerate(labels):
+            # données
+            wl, R  = plotted_lines[label]
+            lam = np.array(wl)
+            Rup = np.array(R)
+            
+            # calcul dip/FWHM
+            (lam_left, lam_right, width_fwhm, lam_dip, Rdip, ylev,
+            lam_m_l, Rm_l, lam_m_r, Rm_r, lam_sym, R_sym, slope,
+            depth, raw_score, dips, scores_list, depths, slopes,
+            widths, lam_max_ls, R_max_ls, lam_max_rs, R_max_rs,
+            lam_syms, R_syms) = find_best_dip_fwhm(
+                lam, Rup,
+                smooth_win=0, polyorder=0,
+                dip_prom=0.01, dip_dist=5,
+                peak_dist=5, verbose=True
+            )
+            # choix du côté minimal
+            if Rm_l < Rm_r:
+                lam_min, lam_middle = lam_m_l, lam_left
+            else:
+                lam_min, lam_middle = lam_m_r, lam_right
+            # S_lam
+            S_lam_min = (lam_min - lam_dip) / lam_middle
+            S_lam_sym = (lam_sym - lam_dip) / lam_middle
+            
+            
+            color = colors[idx % n_colors]
+
+            # tracé principal
+            ax_plot.plot(lam, Rup, color=color)
+            
+            # tracés conditionnels (verbose)
+            if verbose:
+                ax_plot.hlines(ylev, xmin=lam_left, xmax=lam_right,
+                            linewidth=2, colors=color)
+                ax_plot.scatter(lam[dips], Rup[dips], marker='x', s=40, color=color)
+                ax_plot.scatter(lam_max_ls, R_max_ls, marker='x', s=30, color=color)
+                ax_plot.scatter(lam_max_rs, R_max_rs, marker='x', s=30, color=color)
+                ax_plot.scatter(lam_syms, R_syms, marker='x', s=30, color=color)
+                ax_plot.scatter([lam_dip], [Rdip], marker='o', s=70,
+                                facecolor='none', edgecolor=color, linewidths=2)
+                # ligne debug text
+                dips_nm  = ", ".join(f"{l:.1f}" for l in lam[dips])
+                scores_str = ", ".join(f"{s:.3e}" for s in scores_list)
+                depths_str = ", ".join(f"{d:.3f}"  for d in depths)
+                slopes_str = ", ".join(f"{s:.3e}" for s in slopes)
+                widths_str = ", ".join(f"{w:.3f}" for w in widths)
+            
+                # Ligne unique résumé pour ce spectre
+                debug_lines.append(
+                    f"{label}:  "
+                    f"dips=[{dips_nm}]  "
+                    f"dip{lam_dip:.1f}nm  "
+                    f"depths=[{depths_str}]  "
+                    f"depth={depth:.3f}  "
+                    f"slopes=[{slopes_str}]  "
+                    f"slope={slope:.3e}  "
+                    f"FWHMs=[{widths_str}]  "
+                    f"FWHM={width_fwhm:.1f}  "
+                    f"scores=[{scores_str}]  "
+                    f"score={raw_score:.3e}  "
+                )  
+            
+            # stockage pour le tableau
+            config_labels.append(label)
+            geom_summaries.append(summaries[label][0])
+            mat_summaries.append(summaries[label][1])
+            fwhm_summaries.append(f"{width_fwhm:.1f} nm")
+            lam_summaries.append(f"{lam_dip:.1f} nm")
+            S_lam_summaries.append(f"{S_lam_min:.2f} & {S_lam_sym:.2f}")
+            Q_factor_list.append(f"{lam_dip/width_fwhm:.1f}")
+            raw_score_list.append(f"{raw_score:.2e}")
+        
+        # f) wrapping du debug text
+        debug_txt = "\n".join(debug_lines)
+        wrapper = textwrap.TextWrapper(width=100, break_long_words=True, replace_whitespace=False)
+        wrapped = []
+        for line in debug_txt.splitlines():
+            wrapped.extend(wrapper.wrap(line) or [""])
+        debug_txt = "\n".join(wrapped)
+        
+        # Affiche le debug dans le widget plot_debug
+        plot_debug.clear_output()
+        if verbose:
+            with plot_debug:
+                display(widgets.Textarea(
+                    value=debug_txt,
+                    layout=widgets.Layout(
+                        width='100%',
+                        height='200px',
+                        overflow_y='auto'
+                    )
+                ))
+
+        
+        # h) finalisation du tracé
         ax_plot.set_xlabel("Wavelength (nm)")
         ax_plot.set_ylabel("Reflectance")
         ax_plot.set_title("Spectres combinés")
-        ax_plot.legend()
         ax_plot.grid(True)
         
-        config_labels = []
-        geom_summaries = []
-        mat_summaries = []
-        for label in selected_labels:
-            config_labels.append(label)
-            geom, mat = summaries.get(label, ("", ""))
-            geom_summaries.append(geom)
-            mat_summaries.append(mat)
-        ax_table.axis("off")
+        # i) construction du tableau
+        config_labels = [lbl.replace("Mat_","\nMat_") for lbl in config_labels]
         if config_labels:
-            n_configs = len(config_labels)
-            fontsize = 10 if n_configs <= 5 else max(10 - (n_configs - 5), 4)
+            n = len(config_labels)
+            fontsize = 8 if n <= 5 else max(8 - (n - 5), 3)
             table = ax_table.table(
-                cellText=[geom_summaries, mat_summaries],
+                cellText=[
+                    geom_summaries, mat_summaries,
+                    fwhm_summaries, lam_summaries,
+                    S_lam_summaries, Q_factor_list,
+                    raw_score_list
+                ],
                 colLabels=config_labels,
-                rowLabels=["Geometry", "Material"],
-                loc="center",
-                cellLoc="left"
+                rowLabels=[
+                    "Geometry", "Material", "FWHM", r"$\lambda_0$",
+                    "S_lam L & R", "Q-factor", "Score interne"
+                ],
+                loc="center", cellLoc="left"
             )
             table.auto_set_font_size(False)
             table.set_fontsize(fontsize)
-            table.auto_set_column_width(col=list(range(len(config_labels))))
-            for (row, col), cell in table.get_celld().items():
-                if row == -1:
-                    cell.set_facecolor("#40466e")
-                    cell.set_text_props(weight="bold", color="white", fontsize=fontsize, ha="center")
-                elif col == -1:
+            table.auto_set_column_width(col=list(range(n)))
+            for (r, c), cell in table.get_celld().items():
+                if r == -1 or c == -1:
                     cell.set_facecolor("#40466e")
                     cell.set_text_props(weight="bold", color="white", fontsize=fontsize)
                 else:
                     cell.set_facecolor("whitesmoke")
                     cell.set_edgecolor("lightgray")
                     cell.set_linewidth(0.5)
-            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-            for (row, col), cell in table.get_celld().items():
-                if row >= 0 and col >= 0:
-                    cell.get_text().set_color(colors[col % len(colors)])
-            row_heights = {}
-            for (row, col), cell in table.get_celld().items():
-                if row >= 0:
-                    txt = cell.get_text().get_text()
-                    nb_lines = txt.count("\n") + 1
-                    row_heights[row] = max(row_heights.get(row, 0), nb_lines)
-            for (row, col), cell in table.get_celld().items():
-                if row in row_heights:
-                    cell.set_height(0.04 * row_heights[row])
-        
+                    cell.get_text().set_color(colors[c % len(colors)])
+            heights = {}
+            for (r, c), cell in table.get_celld().items():
+                if r >= 0:
+                    lines = cell.get_text().get_text().count("\n") + 1
+                    heights[r] = max(heights.get(r, 0), lines)
+            for (r, c), cell in table.get_celld().items():
+                if r in heights:
+                    cell.set_height(0.04 * heights[r])
+
+        # j) affichage final et lien
         with plot_output:
             plot_output.clear_output(wait=True)
             display(fig)
-            download_link = create_download_link(fig, filename=f"plot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
-            display(download_link)
+            link = create_download_link(
+                fig,
+                filename=f"plot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            )
+            display(link)
             plt.close(fig)
-            
-            
+
+    # 5) Bind du callback et assemblage du tab
     plot_button.on_click(on_plot_button_clicked)
-    plot_controls = widgets.VBox([
-        widgets.HTML("<h3>Plot</h3>"),
-        spectra_select,
-        plot_button
+    
+    plot_tab = widgets.VBox([
+        plot_controls,
+        plot_debug,     # ← inséré juste ici
+        plot_output
     ])
-    plot_tab = widgets.VBox([plot_controls, plot_output])
+    
+    
+    
     
     # --- Onglet Difference ---
+    
     diff_ref_dropdown = widgets.Dropdown(
         options=[],
         description="Base:",
@@ -540,13 +1036,18 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     diff_output = widgets.Output(layout=widgets.Layout(border="2px solid #ccc", padding="10px", min_height="400px"))
     
     def update_diff_options():
-        spectra_all, _ = get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params)
+        # Ici aussi on doit unpacker les trois, même si on n'utilise que spectra_all
+        spectra_all, _, _ = get_all_spectra_and_summaries(
+            summary_dir, exp_data_dir, ordered_params
+        )
         options = list(spectra_all.keys())
-        diff_ref_dropdown.options = options
+        diff_ref_dropdown.options    = options
         diff_target_dropdown.options = options
+
+
+    # Initialisations
+    update_spectra()
     update_diff_options()
-
-
 
     def on_diff_button_clicked(b):
         ref_label = diff_ref_dropdown.value
@@ -617,7 +1118,3 @@ def create_advanced_app(json_combined_path, summary_dir, exp_data_dir):
     
     app_layout = widgets.VBox([tabs])
     return app_layout
-
-if __name__ == "__main__":
-    app = create_advanced_app(json_combined_path, summary_dir, exp_data_dir)
-    display(app)

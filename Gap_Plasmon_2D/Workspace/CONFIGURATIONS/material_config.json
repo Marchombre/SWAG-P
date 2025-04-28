@@ -49,11 +49,11 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Ag",
-            "page": "Jiang",
-            "data": "main/Ag/nk/Jiang.yml",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
-              300.0,
-              1000.0
+              299.97,
+              999.97
             ]
           }
         },
@@ -63,11 +63,11 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Au",
-            "page": "McPeak",
-            "data": "main/Au/nk/McPeak.yml",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
             "override": [
-              300.0,
-              1700.0
+              299.97,
+              999.97
             ]
           }
         },
@@ -92,8 +92,8 @@
             "page": "Franta",
             "data": "main/SiO2/nk/Franta.yml",
             "override": [
-              24.797,
-              125141.0
+              209.797,
+              6699.797
             ]
           }
         }
@@ -103,22 +103,22 @@
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Ag",
-          "page": "Jiang",
-          "data": "main/Ag/nk/Jiang.yml",
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
-            300.0,
-            1000.0
+            299.97,
+            999.97
           ]
         },
         "perm_metalliclayer": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Au",
-          "page": "McPeak",
-          "data": "main/Au/nk/McPeak.yml",
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
           "override": [
-            300.0,
-            1700.0
+            299.97,
+            999.97
           ]
         },
         "perm_sub": {
@@ -128,8 +128,8 @@
           "page": "Franta",
           "data": "main/SiO2/nk/Franta.yml",
           "override": [
-            24.797,
-            125141.0
+            209.797,
+            6699.797
           ]
         }
       }
@@ -183,11 +183,11 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Ag",
-            "page": "Jiang",
-            "data": "main/Ag/nk/Jiang.yml",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
-              300.0,
-              2000.0
+              247.97,
+              12398.0
             ]
           }
         },
@@ -197,11 +197,11 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Au",
-            "page": "McPeak",
-            "data": "main/Au/nk/McPeak.yml",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
             "override": [
-              300.0,
-              1700.0
+              247.97,
+              6199.2
             ]
           }
         },
@@ -226,8 +226,8 @@
             "page": "Franta",
             "data": "main/SiO2/nk/Franta.yml",
             "override": [
-              209.797,
-              1510.797
+              24.797,
+              125141.0
             ]
           }
         }
@@ -237,22 +237,22 @@
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Ag",
-          "page": "Jiang",
-          "data": "main/Ag/nk/Jiang.yml",
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
-            300.0,
-            2000.0
+            247.97,
+            12398.0
           ]
         },
         "perm_metalliclayer": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Au",
-          "page": "McPeak",
-          "data": "main/Au/nk/McPeak.yml",
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
           "override": [
-            300.0,
-            1700.0
+            247.97,
+            6199.2
           ]
         },
         "perm_sub": {
@@ -262,8 +262,8 @@
           "page": "Franta",
           "data": "main/SiO2/nk/Franta.yml",
           "override": [
-            209.797,
-            1510.797
+            24.797,
+            125141.0
           ]
         }
       }
@@ -317,11 +317,11 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Ag",
-            "page": "Jiang",
-            "data": "main/Ag/nk/Jiang.yml",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
-              300.0,
-              2000.0
+              247.97,
+              12398.0
             ]
           }
         },
@@ -331,11 +331,11 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Au",
-            "page": "McPeak",
-            "data": "main/Au/nk/McPeak.yml",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
             "override": [
-              300.0,
-              1700.0
+              247.97,
+              6199.2
             ]
           }
         },
@@ -371,22 +371,22 @@
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Ag",
-          "page": "Jiang",
-          "data": "main/Ag/nk/Jiang.yml",
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
-            300.0,
-            2000.0
+            247.97,
+            12398.0
           ]
         },
         "perm_metalliclayer": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Au",
-          "page": "McPeak",
-          "data": "main/Au/nk/McPeak.yml",
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
           "override": [
-            300.0,
-            1700.0
+            247.97,
+            6199.2
           ]
         },
         "perm_sub": {

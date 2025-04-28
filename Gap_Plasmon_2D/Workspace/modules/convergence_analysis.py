@@ -14,6 +14,8 @@ la courbe. Un label affiche également le n_mode optimal, défini comme le premi
 la variation absolue de Rup devient inférieure à la tolérance (ce qui signifie la stabilisation des résultats).
 """
 
+import math
+
 import os
 import json
 import numpy as np
@@ -21,8 +23,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import time
 
+import zipfile
+
 import ipywidgets as widgets
-from IPython.display import display
+from IPython.display import FileLink, display
 from simulate_reflectance import simulate_reflectance_single
 
 
@@ -192,19 +196,30 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     
     # Widget de sortie pour afficher le tracé de convergence.
     conv_output = widgets.Output(
-        layout=widgets.Layout(border="1px solid lightgray", width='630px', height='400px')
+        layout=widgets.Layout(
+            border="1px solid lightgray",
+            width='630px',
+            height='450px' 
+        )
+    )
+    
+    # Widget pour afficher les résultats dans un tableau
+    results_table_output = widgets.Output(
+        layout=widgets.Layout(border="1px solid lightgray", width='630px', max_height='200px', overflow='auto')
+    )
+    
+    # Lien HTML qui deviendra le bouton de téléchargement
+    download_link = widgets.HTML(
+        value="",  # on mettra le bon <a> après le calcul
+        placeholder="",
+        description=""
     )
 
-    # Widget pour afficher le n_mode optimal.
-    optimal_label = widgets.HTML(
-        value="",
-        layout=widgets.Layout(width='450px')
-    )
+
 
 
     def Conv_computation(b):
         conv_output.clear_output()
-        optimal_label.value = ""
         
         lambda_fixed = lambda_fixed_widget.value
         n_mode_max   = n_mode_max_widget.value
@@ -220,12 +235,19 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
         fig, ax = plt.subplots(figsize=(7.5, 4))
-        optimal_texts = []
         
         iterations_per_config = len(np.arange(1, n_mode_max + 1, n_mode_step))
         overall_progress_bar.max = len(selected_configs) * iterations_per_config
         overall_progress_bar.value = 0
 
+
+        # listes pour stocker
+        cfg_names   = []
+        n_modes_all = []
+        Rup_all     = []
+        optimal_list= []
+        
+        
         for idx, cfg in enumerate(selected_configs):
             geometry_cfg = cfg["geometry"]["geometry"]
             material_config_list = cfg["material"]["MATERIALS_CONFIG"]
@@ -238,29 +260,110 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
                 stable_required=stable_required, progress_bar=overall_progress_bar
             )
             
+            cfg_name = cfg["config_name"]
+            cfg_names.append(cfg_name)
+            n_modes_all.append(n_modes)
+            Rup_all.append(Rup_vals)
+            optimal_list.append(optimal_n_mode)
+            
+            
             color = colors[idx % len(colors)]
             ax.plot(n_modes, Rup_vals, label=cfg["config_name"], color=color)
-            optimal_texts.append(f'<span style="color:{color};">{cfg["config_name"]}: optimal n_mode = {optimal_n_mode}</span>')
         
         ax.set_xlabel("n_mode")
         ax.set_ylabel("Rup")
         ax.set_title(f"Convergence pour λ = {lambda_fixed} nm", fontsize=10)
         ax.grid(True)
-        ax.legend(fontsize=8)
-        plt.tight_layout()
-        optimal_label.value = " | ".join(optimal_texts)
+
+        # -- légende dynamique à multiples colonnes sous le graphique --
+        n_cfg    = len(selected_configs)
+        max_rows = 10                             # nombre max de lignes par colonne
+        ncol     = math.ceil(n_cfg / max_rows)    # nombre de colonnes
+        # place la légende sous le plot, centrée
+        ax.legend(
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=ncol,
+            fontsize=8,
+            frameon=False
+        )
+        # ajuste le bas du figure pour faire de la place à la légende
+        fig.subplots_adjust(bottom=0.25)
         
         with conv_output:
             display(fig)
             plt.close(fig)
 
 
+        # 1) Construction du DataFrame des résultats
+        df_results = pd.DataFrame({
+            "config_name":      cfg_names,
+            "optimal_n_mode":   optimal_list
+        })
+
+        # 2) Affichage du tableau
+        with results_table_output:
+            results_table_output.clear_output()
+            display(
+                df_results.style
+                    .set_table_styles([
+                        {"selector": "th", "props": [("background-color", "#4B8BBE"),
+                                                     ("color", "white"),
+                                                     ("font-size","14px")]},
+                        {"selector": "td", "props": [("font-size","12px")]}
+                    ])
+                    .set_caption("▶ Optimal n_mode per configuration")
+                    .hide(axis="index")
+            )
+
+        # 3) Sauvegarde des CSV et création d’un ZIP
+        #    on écrit dans /mnt/data pour qu’IPython puisse y accéder
+        workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        convergence_dir = os.path.join(workspace_dir, "Convergence")
+        
+        os.makedirs(convergence_dir, exist_ok=True)
+
+        # Tableau principal
+        results_csv = os.path.join(convergence_dir, "optimal_n_modes.csv")
+        df_results.to_csv(results_csv, index=False)
+
+        # Chaque spectre
+        spectrum_files = []
+        for name, modes, vals in zip(cfg_names, n_modes_all, Rup_all):
+            df_spec = pd.DataFrame({"n_mode": modes, "Rup": vals})
+            fname   = os.path.join(convergence_dir, f"{name}_spectrum.csv")
+            df_spec.to_csv(fname, index=False)
+            spectrum_files.append(fname)
+
+        # Création du ZIP
+        zip_path = os.path.join(convergence_dir, "convergence_results.zip")
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.write(results_csv, arcname="optimal_n_modes.csv")
+            for f in spectrum_files:
+                zf.write(f, arcname=os.path.basename(f))
+
+        # 4) Configuration du bouton de téléchargement
+        relativ_path = os.path.relpath(zip_path, start=os.getcwd())
+        download_link.value = (
+            f'<a href="{relativ_path}" download '
+            f'style="text-decoration:none; padding:6px 12px; '
+            f'background-color:#28a745; color:white; border-radius:4px; '
+            f'font-weight:bold;">'
+            f'Download results & spectra</a>'
+        )
+
 
     
     plot_button.on_click(Conv_computation)
     
     conv_controls = widgets.VBox([numeric_controls, button_container])
-    widget = widgets.VBox([conv_config_selector_box, optimal_label, conv_controls, conv_output], 
-                          layout=widgets.Layout(width='53%', justify_content='flex-end'))
+    widget = widgets.VBox([
+        conv_config_selector_box,
+        conv_controls,
+        conv_output,
+        results_table_output,
+        download_link
+    ], layout=widgets.Layout(width='53%', justify_content='flex-end'))
+
     
     return widget
