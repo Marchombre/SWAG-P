@@ -276,7 +276,7 @@ def create_plot_tab():
                 colLabels=config_labels,
                 rowLabels=[
                     "Geometry", "Material", "FWHM", r"$\lambda_0$",
-                    "S_lam L & R", "Q-factor", "Score interne"
+                    "S_lam abs: min & sym", "Q-factor", "Scoring dips per spectrum"
                 ],
                 loc="center", cellLoc="left"
             )
