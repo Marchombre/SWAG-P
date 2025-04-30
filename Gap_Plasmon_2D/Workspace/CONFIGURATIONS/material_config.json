@@ -415,14 +415,22 @@
           "key": "perm_gap",
           "material": {
             "type": "Custom",
-            "expression": "1.45**2"
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
           "key": "perm_diel",
           "material": {
             "type": "Custom",
-            "expression": "1.45**2"
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
@@ -440,15 +448,29 @@
         {
           "key": "perm_reso",
           "material": {
-            "type": "Standard",
-            "material": "Silver"
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              999.97
+            ]
           }
         },
         {
           "key": "perm_metalliclayer",
           "material": {
-            "type": "Standard",
-            "material": "Gold"
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              999.97
+            ]
           }
         },
         {
@@ -466,21 +488,37 @@
         {
           "key": "perm_sub",
           "material": {
-            "type": "RefractiveIndex",
-            "shelf": "main",
-            "book": "SiO2",
-            "page": "Rodriguez-de_Marcos",
-            "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+            "type": "Standard",
+            "material": "ITO",
+            "override": [
+              193.05,
+              1681.72
+            ]
           }
         }
       ],
       "RI_OVERRIDES": {
-        "perm_sub": {
+        "perm_reso": {
           "type": "RefractiveIndex",
           "shelf": "main",
-          "book": "SiO2",
-          "page": "Rodriguez-de_Marcos",
-          "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+          "book": "Ag",
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            999.97
+          ]
+        },
+        "perm_metalliclayer": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Au",
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            999.97
+          ]
         }
       }
     },
@@ -566,7 +604,11 @@
             "shelf": "main",
             "book": "Si",
             "page": "Franta-300K",
-            "data": "main/Si/nk/Franta-300K.yml"
+            "data": "main/Si/nk/Franta-300K.yml",
+            "override": [
+              30.9963,
+              309963.0
+            ]
           }
         },
         {
@@ -576,7 +618,11 @@
             "shelf": "main",
             "book": "Si",
             "page": "Franta-300K",
-            "data": "main/Si/nk/Franta-300K.yml"
+            "data": "main/Si/nk/Franta-300K.yml",
+            "override": [
+              30.9963,
+              309963.0
+            ]
           }
         },
         {
@@ -597,8 +643,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Ag",
-            "page": "Werner-DFT",
-            "data": "main/Ag/nk/Werner-DFT.yml"
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              12398.0
+            ]
           }
         },
         {
@@ -607,8 +657,12 @@
             "type": "RefractiveIndex",
             "shelf": "main",
             "book": "Au",
-            "page": "Werner-DFT",
-            "data": "main/Au/nk/Werner-DFT.yml"
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              6199.2
+            ]
           }
         },
         {
@@ -627,10 +681,14 @@
           "key": "perm_sub",
           "material": {
             "type": "RefractiveIndex",
-            "shelf": "main",
-            "book": "SiO2",
-            "page": "Rodriguez-de_Marcos",
-            "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+            "shelf": "other",
+            "book": "In2O3-SnO2",
+            "page": "Konig",
+            "data": "other/mixed crystals/In2O3-SnO2/nk/Konig.yml",
+            "override": [
+              251.57000000000002,
+              1000.0
+            ]
           }
         }
       ],
@@ -640,35 +698,194 @@
           "shelf": "main",
           "book": "Si",
           "page": "Franta-300K",
-          "data": "main/Si/nk/Franta-300K.yml"
+          "data": "main/Si/nk/Franta-300K.yml",
+          "override": [
+            30.9963,
+            309963.0
+          ]
         },
         "perm_diel": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Si",
           "page": "Franta-300K",
-          "data": "main/Si/nk/Franta-300K.yml"
+          "data": "main/Si/nk/Franta-300K.yml",
+          "override": [
+            30.9963,
+            309963.0
+          ]
         },
         "perm_reso": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Ag",
-          "page": "Werner-DFT",
-          "data": "main/Ag/nk/Werner-DFT.yml"
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            12398.0
+          ]
         },
         "perm_metalliclayer": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Au",
-          "page": "Werner-DFT",
-          "data": "main/Au/nk/Werner-DFT.yml"
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            6199.2
+          ]
         },
         "perm_sub": {
           "type": "RefractiveIndex",
+          "shelf": "other",
+          "book": "In2O3-SnO2",
+          "page": "Konig",
+          "data": "other/mixed crystals/In2O3-SnO2/nk/Konig.yml",
+          "override": [
+            251.57000000000002,
+            1000.0
+          ]
+        }
+      }
+    },
+    {
+      "config_name": "Mat_Structure 2",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              1936.97
+            ]
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              1936.97
+            ]
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Al",
+            "page": "Rakic-BB",
+            "data": "main/Al/nk/Rakic-BB.yml",
+            "override": [
+              199.992,
+              128014.992
+            ]
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Custom",
+            "expression": "1.5**2",
+            "override": [
+              193.05,
+              1681.72
+            ]
+          }
+        }
+      ],
+      "RI_OVERRIDES": {
+        "perm_reso": {
+          "type": "RefractiveIndex",
           "shelf": "main",
-          "book": "SiO2",
-          "page": "Rodriguez-de_Marcos",
-          "data": "main/SiO2/nk/Rodriguez-de Marcos.yml"
+          "book": "Ag",
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            1936.97
+          ]
+        },
+        "perm_metalliclayer": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Au",
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            1936.97
+          ]
+        },
+        "perm_accroche": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Al",
+          "page": "Rakic-BB",
+          "data": "main/Al/nk/Rakic-BB.yml",
+          "override": [
+            199.992,
+            128014.992
+          ]
         }
       }
     }

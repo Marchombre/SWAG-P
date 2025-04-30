@@ -22,9 +22,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import time
-
+from datetime import datetime
 import zipfile
-
+from pathlib import Path
 import ipywidgets as widgets
 from IPython.display import FileLink, display
 from simulate_reflectance import simulate_reflectance_single
@@ -51,7 +51,7 @@ def compute_convergence(lambda_fixed, n_mode_max, geometry, wave, df_config, jso
     Returns:
         n_modes (np.array): Tableau des valeurs de n_mode testées.
         Rup_vals (list): Liste des valeurs de Rup calculées pour chaque n_mode.
-        optimal_n_mode (int): Valeur optimale de n_mode, c'est-à-dire le premier n_mode
+        optimal_n_modes (int): Valeur optimale de n_mode, c'est-à-dire le premier n_mode
                               pour lequel la variation se maintient < tolerance sur stable_required itérations.
     """
     n_modes = np.arange(1, n_mode_max + 1, n_step)
@@ -120,6 +120,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         button_style="info",
         tooltip="Rafraîchir les configurations de convergence"
     )
+    
     def refresh_conv_configs(b):
         combos_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CONFIGURATIONS", "geom_mat_combinations.json")
         new_configs = []
@@ -298,7 +299,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         # 1) Construction du DataFrame des résultats
         df_results = pd.DataFrame({
             "config_name":      cfg_names,
-            "optimal_n_mode":   optimal_list
+            "optimal_n_modes":   optimal_list
         })
 
         # 2) Affichage du tableau
@@ -316,40 +317,66 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
                     .hide(axis="index")
             )
 
-        # 3) Sauvegarde des CSV et création d’un ZIP
-        #    on écrit dans /mnt/data pour qu’IPython puisse y accéder
-        workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        convergence_dir = os.path.join(workspace_dir, "Convergence")
-        
-        os.makedirs(convergence_dir, exist_ok=True)
 
-        # Tableau principal
-        results_csv = os.path.join(convergence_dir, "optimal_n_modes.csv")
-        df_results.to_csv(results_csv, index=False)
+        # 3) Sauvegarde des json 
+        module_dir = Path(__file__).resolve().parent       # …/Gap_Plasmon_2D/Workspace/modules
+        project_root = module_dir.parent                    # …/Gap_Plasmon_2D/Workspace
+        convergence_dir = project_root / "Convergence"
+        convergence_dir.mkdir(exist_ok=True)
 
-        # Chaque spectre
-        spectrum_files = []
-        for name, modes, vals in zip(cfg_names, n_modes_all, Rup_all):
-            df_spec = pd.DataFrame({"n_mode": modes, "Rup": vals})
-            fname   = os.path.join(convergence_dir, f"{name}_spectrum.csv")
-            df_spec.to_csv(fname, index=False)
-            spectrum_files.append(fname)
+        # 3a) Master JSON metadata
+        master_path = convergence_dir / "convergence_results.json"
+        if master_path.exists():
+            master = json.loads(master_path.read_text(encoding="utf-8"))
+        else:
+            master = {"configs": {}}
 
-        # Création du ZIP
-        zip_path = os.path.join(convergence_dir, "convergence_results.zip")
-        with zipfile.ZipFile(zip_path, "w") as zf:
-            zf.write(results_csv, arcname="optimal_n_modes.csv")
-            for f in spectrum_files:
-                zf.write(f, arcname=os.path.basename(f))
+        # --- Pour chaque configuration du run courant, on ajoute sa méta-donnée ---
+        for cfg_name, optimal_n in zip(cfg_names, optimal_list):
+            entry = {
+                "timestamp":       datetime.now().isoformat(),
+                "lambda_fixed":    lambda_fixed,
+                "n_mode_max":      n_mode_max,
+                "n_mode_step":     n_mode_step,
+                "tolerance":       tol,
+                "stable_required": stable_required,
+                "optimal_n_mode":  optimal_n
+            }
+            # Si c'est la première fois qu'on voit cfg_name, on crée la liste
+            if cfg_name not in master["configs"]:
+                master["configs"][cfg_name] = []
+            # On ajoute la méta-donnée
+            master["configs"][cfg_name].append(entry)
 
-        # 4) Configuration du bouton de téléchargement
-        relativ_path = os.path.relpath(zip_path, start=os.getcwd())
+        # --- Écriture du master JSON ---
+        master_path.write_text(
+            json.dumps(master, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+
+        # --- JSON par config pour le spectre (inchangé) ---
+        for cfg_name, modes, vals in zip(cfg_names, n_modes_all, Rup_all):
+            safe = cfg_name.replace(" ", "_")
+            spec_path = convergence_dir / f"{safe}_spectrum.json"
+            spectrum = [
+                {"n_mode": int(n), "Rup": float(r)}
+                for n, r in zip(modes, vals)
+            ]
+            spec_path.write_text(
+                json.dumps(spectrum, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+
+        # --- Mise à jour du lien de téléchargement pour le master JSON ---
+        rel = os.path.relpath(str(master_path), start=os.getcwd())
+        # Préfixe Jupyter
+        href = "/files/" + rel.replace(os.sep, "/")
         download_link.value = (
-            f'<a href="{relativ_path}" download '
+            f'<a href="{href}" download '
             f'style="text-decoration:none; padding:6px 12px; '
-            f'background-color:#28a745; color:white; border-radius:4px; '
+            f'background-color:#007bff; color:white; border-radius:4px; '
             f'font-weight:bold;">'
-            f'Download results & spectra</a>'
+            f'Download convergence_results.json</a>'
         )
 
 

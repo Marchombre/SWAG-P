@@ -1,7 +1,7 @@
 ### Geometry_Material_Config.py
 
 import ipywidgets as widgets
-from IPython.display import display, clear_output
+from IPython.display import clear_output
 import os
 import json
 

@@ -4,7 +4,7 @@
 """
 Module: data_readers.py
 
-Ce module réunit toutes les fonctions de lecture et de pré‑traitement des données utilisées dans votre projet.
+Ce module réunit toutes les fonctions de lecture et de pré‑traitement des données utilisées.
 
 Fonctions disponibles :
   - read_all_combos(file_path) :
@@ -33,7 +33,61 @@ import re
 import ast
 import numpy as np
 
+
 # --- Fonctions de lecture ---
+
+
+def get_material_str_clean(simulation_details):
+    """
+    Extrait et retourne une chaîne construite à partir des configurations
+    matérielles contenues dans simulation_details.
+    
+    Pour chaque configuration matérielle, la fonction récupère la valeur 
+    associée à la clé (par exemple "perm_gap") et ajoute le nom de la couche 
+    (la partie après "perm_") suivi d'un underscore devant la valeur nettoyée.
+    
+    Par exemple, pour :
+        "key": "perm_gap",
+        "material": {
+            "type": "Custom",
+            "expression": "1.45**2"
+        }
+    le fragment généré sera "gap_1.45**2".
+    """
+    roles_order = [
+        "perm_env", "perm_reso", "perm_gap", "perm_mol",
+        "perm_func", "perm_diel", "perm_metalliclayer",
+        "perm_accroche", "perm_sub"
+    ]
+    suffix_parts = []
+    if simulation_details:
+        # On prend la première configuration pour constituer le nom de fichier
+        first_combo = next(iter(simulation_details.values()))
+        for role in roles_order:
+            val = ""
+            for entry in first_combo["material_config"]:
+                if entry.get("key", "").strip() == role:
+                    mat_info = entry.get("material", {})
+                    mtype = mat_info.get("type", "").strip().lower()
+                    if mtype == "standard":
+                        val = mat_info.get("material", "").strip()
+                    elif mtype == "refractiveindex":
+                        book = mat_info.get("book", "")
+                        page = mat_info.get("page", "")
+                        val = f"Book: {book}, Page: {page}"                        
+                    elif mtype == "custom":
+                        val = mat_info.get("expression", "").strip()
+                    break
+            if val.lower() != "none" and val != "":
+                # Nettoyage de la valeur pour conserver uniquement les caractères alphanumériques, points, astérisques et plus
+                val_clean = re.sub(r'[^A-Za-z0-9\.\*\+]', '', val)
+                # Extraction de l'indice de la couche (la partie après "perm_")
+                layer_index = role.split("_", 1)[-1]
+                suffix_parts.append(f"{layer_index}_{val_clean}")
+    filtered_parts = [part for part in suffix_parts if part]
+    return "_".join(filtered_parts)
+
+
 
 def read_all_combos(file_path):
     """
@@ -215,61 +269,58 @@ def parse_simulation_summary(file_path):
 
 
 
-
-
 def parse_experimental_data_summary(file_path):
     """
-    Lit et parse un fichier de données expérimentales afin d'extraire,
-    pour certaines clés attendues, un résumé de la configuration sous forme
-    d'un dictionnaire avec les clés "geometry" et "material".
+    Parse le header d'un fichier expérimental en découpant chaque ligne
+    contenant ':' ou '/' pour en extraire deux résumés :
+      - geometry : épaisseurs (nm ou '∞' pour l'environnement)
+      - material : nom ou notation 'n = …' pour chaque couche.
+    Accepte un nombre quelconque de couches (plus ou moins de 6).
     """
-    expected_keys = [
-        "Environnement",
-        "Cube",
-        "Gap diélectrique / n =",
-        "Fonctionnalisation diélectrique / n =",
-        "Couche métallique",
-        "Substrat"
-    ]
-    geom_lines = []  # Liste de lignes pour le résumé géométrie
-    mat_lines  = []  # Liste de lignes pour le résumé matériaux
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()  # Nettoyage espaces
-                if not line:
-                    continue          # Ignorer les lignes vides
-                for key in expected_keys:
-                    if line.startswith(key):
-                        # On découpe au premier ":" pour séparer clé et valeur
-                        parts = line.split(":", 1)
-                        if len(parts) < 2:
-                            continue
-                        value = parts[1].strip()
-                        if "/" in value:
-                            tokens = [tok.strip() for tok in value.split("/")]
-                            if key == "Cube":
-                                mat_val  = tokens[0]
-                                geom_val = tokens[-1] if "nm" in tokens[-1] else ""
-                            else:
-                                mat_val  = tokens[0]
-                                geom_val = tokens[-1] if "nm" in tokens[-1] else ""
-                        else:
-                            mat_val  = ""
-                            geom_val = value
-                        # Ajout des lignes dans nos deux listes
-                        geom_lines.append(f"{key}: {geom_val}".strip())
-                        mat_lines.append(f"{key}: {mat_val}".strip())
-                        break  # On passe à la ligne suivante dès qu’on trouve une clé
-    except Exception as e:
-        print(f"Erreur lors de la lecture du fichier expérimental {file_path}: {e}")
-    # Retour d’un dict contenant deux chaînes multi-lignes
+    geom_lines = []
+    mat_lines  = []
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                # ignorer vide
+                continue
+
+            # déterminer label et reste, même si c'est "Gap ... / ..." sans ":"
+            if ':' in line:
+                label, rest = line.split(':', 1)
+            elif '/' in line:
+                label, rest = line.split('/', 1)
+            else:
+                # ni ":" ni "/", ce n'est pas une ligne de couche
+                continue
+
+            label = label.strip()
+            rest  = rest.strip().lstrip('/').strip()
+
+            # on découpe ensuite par '/'
+            tokens = [tok.strip() for tok in rest.split('/') if tok.strip()]
+
+            # --- Géométrie ---
+            if label.lower().startswith("environnement"):
+                thickness = "∞"
+            else:
+                # dernier token avec "nm"
+                thickness = next((tok for tok in reversed(tokens) if "nm" in tok), "")
+
+            # --- Matériau ---
+            # toujours premier token (Air, Argent, n = 1.45, etc.)
+            material = tokens[0] if tokens else ""
+
+            geom_lines.append(f"{label}: {thickness}")
+            mat_lines.append(f"{label}: {material}")
+
     return {
         "geometry": "\n".join(geom_lines),
         "material": "\n".join(mat_lines)
     }
 
-# --- Fonctions extraites de interactive_simulation.py ---
+
 
 def list_sim_summary_files(summary_dir):
     """
@@ -319,6 +370,8 @@ def get_simulation_label(base_label, file_path, label_to_tag):
         label_to_tag[base_label][version] += 1
         count = label_to_tag[base_label][version]
         return f"{base_label} ({version} {count})"
+    
+    
 
 def get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params):
     """
@@ -388,6 +441,10 @@ def get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params):
                                 val = mat_info.get("material", "").strip()
                             elif mtype == "custom":
                                 val = mat_info.get("expression", "").strip()
+                            elif mtype == "refractiveindex":
+                                book = mat_info.get("book", "")
+                                page = mat_info.get("page", "")
+                                val = f"Book: {book}, Page: {page}"                                
                             else:
                                 val = ""
                             if val:

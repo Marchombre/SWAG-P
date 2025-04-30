@@ -36,7 +36,7 @@ def find_best_dip_fwhm(wavelength, reflectance,
         dips = np.array([np.argmin(R_s)])
         props = {"prominences": np.array([0.0])}
 
-    # Pré-calculs partagés
+    # Pré-calculs
     grad      = np.abs(np.gradient(R_s, lam))
     dR        = np.gradient(R_s, lam)
     zc        = np.where((dR[:-1] > 0) & (dR[1:] < 0))[0]
@@ -320,7 +320,8 @@ def find_best_dip_fwhm(wavelength, reflectance,
         scores_list.append(raw_score)
 
         # 3f) mise à jour si meilleur score
-        if raw_score > best_score:
+        if (not best) or (raw_score > best_score):
+        #if raw_score > best_score:
             best_score = raw_score
             best = {
                 "lam_left":  lam_left,

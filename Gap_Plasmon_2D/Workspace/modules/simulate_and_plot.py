@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from datetime import datetime
 # Importations internes relatives aux simulations et à la sauvegarde de résultats :
-from simulate_reflectance import simulate_reflectance_all_combos, simulate_reflectance_single
+from simulate_reflectance import simulate_reflectance_single
 # ──────────────────────────────────────────────────────────────────────────────
 # simulate_reflectance_all_combos   : simule tous les couples géométrie/matériau
 # simulate_reflectance_single       : simule une seule configuration
@@ -87,6 +87,10 @@ def format_material_summary(material_config_list):
             val = mat.get("material", "").strip()     # nom du matériau standard
         elif mtype == "custom":
             val = mat.get("expression", "").strip()   # expression personnalisée
+        elif mtype == "refractiveindex":
+            book = mat.get("book", "")
+            page = mat.get("page", "")
+            val = f"Book: {book}, Page: {page}"            
         else:
             val = ""                                  # cas non défini
         if val:
@@ -287,102 +291,3 @@ def run_simulation_one_combo(lam_range, wave, n_mod, combo, json_combined_path):
     # on retourne Rup, Absorption et le dict complet pour usage ultérieur
     return Rup, Absorption, simulation_details
 
-def run_simulation_all_combos(lambda_range, wave, n_mod,
-                             json_combined_path,
-                             geom_mat_combinations_path=None,
-                             selected_configs=None):
-    """
-    Lance la simulation pour toutes les combinaisons ou pour un sous-ensemble.
-
-    - Si selected_configs n’est pas fourni : on utilise simulate_reflectance_all_combos
-      pour tout le jeu, et on recharge éventuellement le fichier JSON de combos.
-    - Sinon, on filtre all_configs pour ne retenir que ceux demandés,
-      puis on appelle run_simulation_one_combo pour chacun.
-    À la fin, on construit la figure récapitulative et on sauve résumé + figure.
-
-    Returns :
-      results            : dict mapping config_name → (Rup, Rdown)
-      simulation_details : dict mapping config_name → details complets
-      all_configs        : liste des configs effectivement simulées
-      fig                : figure matplotlib finale
-    """
-    if selected_configs is None:
-        # ──────────────────────────────────────────────────────────────────────
-        # Mode “toutes les combinaisons” : appel global optimisé
-        # ──────────────────────────────────────────────────────────────────────
-        results, simulation_details, all_configs = simulate_reflectance_all_combos(
-            lambda_range, wave, n_mod, json_combined_path
-        )
-        # si on a fourni un chemin de fichiers combos, on le relaod pour la liste complète
-        if geom_mat_combinations_path:
-            with open(geom_mat_combinations_path, "r", encoding="utf-8") as f:
-                all_configs = json.load(f).get("ALL_COMBINED_CONFIGS", [])
-    else:
-        # ──────────────────────────────────────────────────────────────────────
-        # Mode “subset” : on recharge la liste complète puis on filtre
-        # ──────────────────────────────────────────────────────────────────────
-        if geom_mat_combinations_path:
-            with open(geom_mat_combinations_path, "r", encoding="utf-8") as f:
-                all_configs = json.load(f).get("ALL_COMBINED_CONFIGS", [])
-        else:
-            with open(json_combined_path, "r", encoding="utf-8") as f:
-                data       = json.load(f)
-                all_configs = data.get("ALL_COMBINED_CONFIGS", [])
-        # on ne garde que les configs dont le nom est dans selected_configs
-        all_configs = [
-            cfg for cfg in all_configs
-            if cfg["config_name"] in selected_configs
-        ]
-        simulation_details = {}
-        results            = {}
-        # boucle sur chaque config sélectionnée
-        for config in all_configs:
-            config_name = config["config_name"]
-            try:
-                Rup, details = run_simulation_one_combo(
-                    lambda_range, wave, n_mod, config, json_combined_path
-                )
-            except Exception as e:
-                # en cas d’erreur, on l’affiche et on continue la boucle
-                print(f"Erreur lors de la simulation de {config_name}: {e}")
-                continue
-            # on stocke les détails et les résultats Rup/Rdown
-            simulation_details[config_name] = details
-            results[config_name]            = (details["Rup"], details["Rdown"])
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # Une fois toutes les simulations faites, on construit la figure finale
-    # ──────────────────────────────────────────────────────────────────────────
-    title = "Simulation Reflectance Spectra"
-    fig   = build_simulation_figure(
-        simulation_details, lambda_range, title, all_configs
-    )
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # Préparation des répertoires de sauvegarde
-    # ──────────────────────────────────────────────────────────────────────────
-    current_dir       = os.getcwd()
-    notebooks_path    = os.path.join(current_dir, '..', 'notebooks')
-    figures_dir       = os.path.join(current_dir, '..', 'Figures')
-    summary_dir       = os.path.join(notebooks_path, "Summary_Simulation")
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # Sauvegarde du résumé de simulation (JSON, CSV…)
-    # ──────────────────────────────────────────────────────────────────────────
-    save_simulation_summary(
-        simulation_details, lambda_range, wave, n_mod, summary_dir
-    )
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # Fabrication d’une chaîne descriptive “propre” pour la matière
-    # (généralement on prend la première config pour construire le nom final)
-    # ──────────────────────────────────────────────────────────────────────────
-    material_str_clean = get_material_str_clean(simulation_details)
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # Sauvegarde de la figure avec un nom incluant material_str_clean
-    # ──────────────────────────────────────────────────────────────────────────
-    save_figure(fig, title, figures_dir, material_str_clean)
-
-    # on retourne tout ce qui peut intéresser l’appelant
-    return results, simulation_details, all_configs, fig

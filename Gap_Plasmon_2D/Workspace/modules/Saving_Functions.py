@@ -11,52 +11,7 @@ import re
 from datetime import datetime
 import numpy as np
 
-
-def get_material_str_clean(simulation_details):
-    """
-    Extrait et retourne une chaîne construite à partir des configurations
-    matérielles contenues dans simulation_details.
-    
-    Pour chaque configuration matérielle, la fonction récupère la valeur 
-    associée à la clé (par exemple "perm_gap") et ajoute le nom de la couche 
-    (la partie après "perm_") suivi d'un underscore devant la valeur nettoyée.
-    
-    Par exemple, pour :
-        "key": "perm_gap",
-        "material": {
-            "type": "Custom",
-            "expression": "1.45**2"
-        }
-    le fragment généré sera "gap_1.45**2".
-    """
-    roles_order = [
-        "perm_env", "perm_reso", "perm_gap", "perm_mol",
-        "perm_func", "perm_diel", "perm_metalliclayer",
-        "perm_accroche", "perm_sub"
-    ]
-    suffix_parts = []
-    if simulation_details:
-        # On prend la première configuration pour constituer le nom de fichier
-        first_combo = next(iter(simulation_details.values()))
-        for role in roles_order:
-            val = ""
-            for entry in first_combo["material_config"]:
-                if entry.get("key", "").strip() == role:
-                    mat_info = entry.get("material", {})
-                    mtype = mat_info.get("type", "").strip().lower()
-                    if mtype == "standard":
-                        val = mat_info.get("material", "").strip()
-                    elif mtype == "custom":
-                        val = mat_info.get("expression", "").strip()
-                    break
-            if val.lower() != "none" and val != "":
-                # Nettoyage de la valeur pour conserver uniquement les caractères alphanumériques, points, astérisques et plus
-                val_clean = re.sub(r'[^A-Za-z0-9\.\*\+]', '', val)
-                # Extraction de l'indice de la couche (la partie après "perm_")
-                layer_index = role.split("_", 1)[-1]
-                suffix_parts.append(f"{layer_index}_{val_clean}")
-    filtered_parts = [part for part in suffix_parts if part]
-    return "_".join(filtered_parts)
+from data_readers import get_material_str_clean
 
 
 
