@@ -18,7 +18,7 @@ geometry_config = {
     "thick_func": 1,           # Épaisseur réelle de la Fonctionnalisation
     "thick_diel": 1,           # Épaisseur réelle du Polymère
     "thick_metalliclayer": 10, # Épaisseur réelle du Métallique
-    "thick_XIAOYI": 2,         # Épaisseur réelle du XIAOYI
+    "thick_XIAOYI": 0,         # Épaisseur réelle du XIAOYI
     "thick_accroche": 1,       # Épaisseur réelle de l'Accroche
     "thick_sub": 200,          # Épaisseur réelle du Substrate
     "period": 100.2153         # Cellule RCWA (carrée)
