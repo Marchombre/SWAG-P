@@ -328,16 +328,21 @@ def create_plot_tab():
 
             if show_hlines_chk.value:
                 # demi-hauteur sur Rup
-                ax_plot.hlines(ylev,
-                            lam_left, lam_right,
-                            linewidth=2, colors=color, zorder=2)
+                ax_plot.hlines(
+                    y_level_list[best_idx],
+                    lam_left_list[best_idx],
+                    lam_right_list[best_idx],
+                    linewidth=2, colors=color, zorder=2
+                )
                 # demi-hauteur sur Rup_dn uniquement si disponible
                 if Rup_dn_tuple is not None:
                     ax_plot.hlines(
                         y_level_list_dn[best_idx],
                         lam_left_list_dn[best_idx],
+                        lam_right_list_dn[best_idx],
                         linewidth=2, colors=color, zorder=2
-                    )  
+                    )
+
                     
             if show_dips_chk.value:
                 ax_plot.scatter(lam[dip_list_idx], Rup[dip_list_idx], marker='x', s=40, color=color, zorder=3)
