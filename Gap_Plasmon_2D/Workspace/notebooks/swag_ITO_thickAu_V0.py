@@ -384,7 +384,11 @@ Rd_ito = np.empty((list_metal.size, list_wavelength.size))
 
 for idx_metal, thick_metal in enumerate(list_metal):
     print(idx_metal)
-    geometry = {"thick_super": thick_super, "width_reso": width_reso, "thick_reso": thick_reso, "thick_gap": thick_gap, "thick_func": thick_func, "thick_mol": thick_mol, "thick_metalliclayer": thick_metal, "thick_sub": thick_sub, "thick_accroche": thick_accroche, "period": period}
+    geometry = {"thick_super": thick_super, "width_reso": width_reso,
+                "thick_reso": thick_reso, "thick_gap": thick_gap,
+                "thick_func": thick_func, "thick_mol": thick_mol,
+                "thick_metalliclayer": thick_metal, "thick_sub": thick_sub,
+                "thick_accroche": thick_accroche, "period": period}
 
     for idx_wav, wavelength in enumerate(list_wavelength):    
         perm_Ag = epsAgbb(wavelength) 
@@ -392,9 +396,13 @@ for idx_metal, thick_metal in enumerate(list_metal):
         _, _, ri = nk_ITO(wavelength)
         perm_ito = ri**2
 
-        materials = {"perm_env": perm_env, "perm_dielec": perm_dielec, "perm_sub": perm_ito, "perm_reso": perm_Ag, "perm_metalliclayer": perm_Au, "perm_accroche": perm_Au}
+        materials = {"perm_env": perm_env, "perm_dielec": perm_dielec,
+                     "perm_sub": perm_ito, "perm_reso": perm_Ag,
+                     "perm_metalliclayer": perm_Au, "perm_accroche": perm_Au}
 
-        wave = {"wavelength": wavelength, "angle": angle, "polarization": polarization}
+        wave = {"wavelength": wavelength, "angle": angle,
+                "polarization": polarization}
+        
         Ru_ito[idx_metal, idx_wav], Rd_ito[idx_metal, idx_wav] = reflectance(geometry, wave, materials, n_mod)
 
 plt.figure(1)

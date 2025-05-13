@@ -159,6 +159,38 @@ def compute_epsilon(n_func, k_func, lam_range):
     """Calcule ε(λ) à partir de n(λ) et k(λ)."""
     return (n_func(lam_range) + 1j * k_func(lam_range))**2
 
+
+
+def resolve_lambda_bounds(get_bounds_fn, config, JSON_COMBINED_PATH, DATA_DIR,
+                          default_bounds=(200.0, 1000.0)):
+    """
+    Appelle get_bounds_fn(config, JSON_COMBINED_PATH, DATA_DIR)
+    qui renvoie soit (min, max) soit None,
+    gère l’override dans config['override'] et fournit toujours
+    un tuple (min, max) valide.
+    """
+    try:
+        raw = get_bounds_fn(config, JSON_COMBINED_PATH, DATA_DIR)
+    except Exception:
+        raw = None
+
+    ov_min, ov_max = config.get("override", (None, None))
+
+    # pas de bornes intrinsèques ?
+    if raw is None or raw[0] is None or raw[1] is None:
+        if ov_min is not None and ov_max is not None:
+            return ov_min, ov_max
+        return default_bounds
+
+    # bornes intrinsèques -> on applique override et clamp
+    low  = ov_min if ov_min is not None else raw[0]
+    high = ov_max if ov_max is not None else raw[1]
+    return max(raw[0], low), min(raw[1], high)
+
+
+
+
+
 # ============================================================================
 # Widget d'exploration du catalogue RefractiveIndex
 # ============================================================================
@@ -588,61 +620,15 @@ class MaterialRoleWidget:
                 print("Aucun matériau défini pour le tracé.")
                 return
 
-            # --- calcul des bornes du matériau principal ---
             # --- calcul des bornes du matériau principal sans aucun fallback ---
+            # --- calcul des bornes du matériau principal, via resolve_lambda_bounds ---
             if mode == "RefractiveIndex":
-                try:
-                    bounds = get_lambda_bounds_refractiveindex(config, DATA_DIR)
-                except Exception as e:
-                    print(f"Erreur détermination plage λ (RefractiveIndex) : {e}")
-                    return
-
-                ov_min, ov_max = config.get("override", (None, None))
-
-                if bounds is None:
-                    # Brendel‑Bormann sans limites intrinsèques
-                    if ov_min is None or ov_max is None:
-                        print("Modèle Brendel‑Bormann sans limites : veuillez saisir manuellement λ min et λ max override.")
-                        return
-                    main_bounds = (ov_min, ov_max)
-                else:
-                    main_min = ov_min if ov_min is not None else bounds[0]
-                    main_max = ov_max if ov_max is not None else bounds[1]
-                    if main_min >= main_max:
-                        print(f"Plage non valide pour {self.role_name}")
-                        return
-                    main_bounds = (max(bounds[0], main_min), min(bounds[1], main_max))
-
-            elif mode in ["Standard", "Custom"]:
-                try:
-                    bounds = get_lambda_bounds(config.get("material", "").strip(),
-                                            JSON_COMBINED_PATH, DATA_DIR)
-                except Exception as e:
-                    print(f"Erreur détermination plage λ (Standard/Custom) : {e}")
-                    return
-
-                ov_min, ov_max = config.get("override", (None, None))
-
-                if bounds is None:
-                    # pas de plage intrinsèque
-                    if ov_min is None or ov_max is None:
-                        print("Pas de limites intrinsèques : veuillez saisir manuellement λ min et λ max override.")
-                        return
-                    main_bounds = (ov_min, ov_max)
-                else:
-                    main_min = ov_min if ov_min is not None else bounds[0]
-                    main_max = ov_max if ov_max is not None else bounds[1]
-                    if main_min >= main_max:
-                        print(f"Plage non valide pour {self.role_name}")
-                        return
-                    main_bounds = (max(bounds[0], main_min), min(bounds[1], main_max))
-
+                bounds_fn = lambda cfg, json_path, data_dir: get_lambda_bounds_refractiveindex(cfg, data_dir)
             else:
-                # aucun fallback possible
-                print("Mode de configuration inconnu ou non pris en charge pour le tracé.")
-                return
+                bounds_fn = lambda cfg, json_path, data_dir: get_lambda_bounds(
+                    cfg.get("material",""), json_path, data_dir)
 
-            # à partir d'ici, main_bounds est défini sans jamais utiliser (200,1000)
+            main_bounds = resolve_lambda_bounds(bounds_fn, config, JSON_COMBINED_PATH, DATA_DIR)
             local_range = np.linspace(main_bounds[0], main_bounds[1], num_points)
 
 
@@ -730,24 +716,17 @@ class MaterialRoleWidget:
                     continue
 
                 # bornes
+                # bornes et plage comparée via resolve_lambda_bounds
                 if comp_conf["type"] == "RefractiveIndex":
-                    try:
-                        comp_bounds = get_lambda_bounds_refractiveindex(comp_conf, DATA_DIR)
-                    except Exception:
-                        comp_bounds = comp_conf.get("override", (200, 1000))
+                    bounds_fn_c = lambda cfg, json_path, data_dir: get_lambda_bounds_refractiveindex(cfg, data_dir)
                 else:
-                    try:
-                        comp_bounds = get_lambda_bounds(comp_conf.get("material", "").strip(),
-                                                        JSON_COMBINED_PATH, DATA_DIR)
-                    except Exception:
-                        comp_bounds = (200, 1000)
-                ov = comp_conf.get("override", (None, None))
-                cmin = ov[0] if ov[0] is not None else comp_bounds[0]
-                cmax = ov[1] if ov[1] is not None else comp_bounds[1]
-                comp_bounds = (max(comp_bounds[0], cmin), min(comp_bounds[1], cmax))
-                if comp_bounds[0] >= comp_bounds[1]:
-                    continue
-                comp_range = np.linspace(comp_bounds[0], comp_bounds[1], num_points)
+                    bounds_fn_c = lambda cfg, json_path, data_dir: get_lambda_bounds(
+                        cfg.get("material",""), json_path, data_dir)
+
+                comp_bounds = resolve_lambda_bounds(bounds_fn_c, comp_conf,
+                                                    JSON_COMBINED_PATH, DATA_DIR)
+                comp_range  = np.linspace(comp_bounds[0], comp_bounds[1], num_points)
+
 
                 # calcul des valeurs
                 if comp_conf["type"] == "Custom":

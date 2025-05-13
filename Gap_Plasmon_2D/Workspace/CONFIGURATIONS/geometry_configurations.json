@@ -225,7 +225,7 @@
         "thick_gap": 2.0,
         "thick_mol": 0.0,
         "thick_func": 0.0,
-        "thick_diel": 6.0,
+        "thick_diel": 2.0,
         "thick_metalliclayer": 10.0,
         "thick_XIAOYI": 0.0,
         "thick_accroche": 0.0,

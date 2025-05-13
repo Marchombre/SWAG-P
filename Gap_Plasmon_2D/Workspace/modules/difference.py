@@ -2,9 +2,14 @@
 """
 Module: difference.py
 
-Cette partie gère l'onglet "Ratio" de l'application interactive.
+Gère l'onglet « Ratio ». Version mise à jour pour la nouvelle API
+de data_readers.get_all_spectra_and_summaries, qui renvoie maintenant :
+    (Rup_dict, Rup_dn_dict, summaries, metrics_dict)
 """
 
+# ------------------------------------------------------------------ #
+#                                imports                             #
+# ------------------------------------------------------------------ #
 import os
 import io, base64
 from datetime import datetime
@@ -12,123 +17,114 @@ from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import ipywidgets as widgets
-from IPython.display import HTML, display, Javascript
+from IPython.display import HTML, display
 
-from data_readers import get_all_spectra_and_summaries
+from data_readers     import get_all_spectra_and_summaries
 from simulate_and_plot import ordered_params
 
-# Construction des chemins
+# ------------------------------------------------------------------ #
+#                           chemins communs                          #
+# ------------------------------------------------------------------ #
 module_dir    = os.path.dirname(os.path.abspath(__file__))
 workspace_dir = os.path.dirname(module_dir)
 notebooks_dir = os.path.join(workspace_dir, "notebooks")
 summary_dir   = os.path.join(notebooks_dir, "Summary_Simulation")
 exp_data_dir  = os.path.join(notebooks_dir, "Experimental_Data")
 
-# --- Téléchargement de la figure ---
-def create_download_link(fig, filename="figure.png"):
+# ------------------------------------------------------------------ #
+#                     helper: lien de téléchargement                 #
+# ------------------------------------------------------------------ #
+def _download_link(fig, fname):
     buf = io.BytesIO()
-    fig.savefig(buf, format="png")
+    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.05)
     buf.seek(0)
-    b64 = base64.b64encode(buf.read()).decode("utf-8")
-    href = (
-        f'<a download="{filename}" href="data:image/png;base64,{b64}" '
-        f'target="_blank">Télécharger l\'image</a>'
+    b64 = base64.b64encode(buf.read()).decode()
+    return HTML(
+        f'<a download="{fname}" href="data:image/png;base64,{b64}" '
+        'target="_blank">Télécharger l’image</a>'
     )
-    return HTML(href)
 
-# --- Onglet Difference ---
+# ------------------------------------------------------------------ #
+#                           Onglet « Ratio »                         #
+# ------------------------------------------------------------------ #
 def create_difference_tab():
-    # Widgets
-    diff_ref_dropdown = widgets.Dropdown(
-        options=[],
-        description="Base:",
-        style={'description_width': 'initial'},
-        layout=widgets.Layout(width='500px')
-    )
-    diff_target_dropdown = widgets.Dropdown(
-        options=[],
-        description="Comparing to:",
-        style={'description_width': 'initial'},
-        layout=widgets.Layout(width='500px')
-    )
-    diff_button = widgets.Button(
-        description="Draw ratio", button_style="warning",
-        tooltip="Drawing the ratio between two spectra"
-    )
-    diff_output = widgets.Output(
-        layout=widgets.Layout(border="2px solid #ccc", padding="10px", min_height="400px")
-    )
+    # --------------- widgets principaux ---------------------------- #
+    ref_dd = widgets.Dropdown(description="Base:",
+                              layout=widgets.Layout(width="500px"),
+                              style={'description_width': 'initial'})
+    tgt_dd = widgets.Dropdown(description="Comparing to:",
+                              layout=widgets.Layout(width="500px"),
+                              style={'description_width': 'initial'})
+    draw_b = widgets.Button(description="Draw ratio",
+                            button_style="warning",
+                            tooltip="Draw the ratio between two spectra")
+    out    = widgets.Output(layout=widgets.Layout(
+                border="2px solid #ccc", padding="10px", min_height="400px"))
 
-    # Mise à jour des options des dropdowns
-    def update_diff_options():
-        spectra_all, _, _ = get_all_spectra_and_summaries(
-            summary_dir, exp_data_dir, ordered_params
-        )
-        options = list(spectra_all.keys())
-        diff_ref_dropdown.options    = options
-        diff_target_dropdown.options = options
+    # --------------- chargement / rafraîchissement ---------------- #
+    def _refresh_options():
+        # ↓↓↓ 4 valeurs depuis la nouvelle API
+        Rup_dict, *_ = get_all_spectra_and_summaries(
+            summary_dir, exp_data_dir, ordered_params)
 
-    update_diff_options()
+        opts = list(Rup_dict.keys())
+        ref_dd.options = opts
+        tgt_dd.options = opts
+    _refresh_options()
 
-    # Callback du bouton
-    def on_diff_button_clicked(b):
-        ref_label    = diff_ref_dropdown.value
-        target_label = diff_target_dropdown.value
-        if not ref_label or not target_label:
-            with diff_output:
-                diff_output.clear_output()
+    # --------------- callback « Draw » ----------------------------- #
+    def _draw(_btn):
+        ref_lbl, tgt_lbl = ref_dd.value, tgt_dd.value
+        if not ref_lbl or not tgt_lbl:
+            with out:
+                out.clear_output()
                 print("Veuillez sélectionner les deux spectres.")
             return
-        spectra_all, _ = get_all_spectra_and_summaries(
-            summary_dir, exp_data_dir, ordered_params
-        )
-        ref_data    = spectra_all.get(ref_label)
-        target_data = spectra_all.get(target_label)
-        if ref_data is None or target_data is None:
-            with diff_output:
-                diff_output.clear_output()
+
+        # récupération des données
+        Rup_dict, *_ = get_all_spectra_and_summaries(
+            summary_dir, exp_data_dir, ordered_params)
+        ref = Rup_dict.get(ref_lbl); tgt = Rup_dict.get(tgt_lbl)
+        if ref is None or tgt is None:
+            with out:
+                out.clear_output()
                 print("Données introuvables pour l'un des spectres.")
             return
-        wl1, R1 = ref_data
-        wl2, R2 = target_data
-        if np.array_equal(wl1, wl2):
-            common_wl = wl1
-            diff_R     = np.array(R2) - np.array(R1)
-        else:
-            common_wl = wl1
-            diff_R     = np.array(np.interp(wl1, wl2, R2)) - np.array(R1)
 
+        wl1, Rup_dn = ref
+        wl2, R2 = tgt
+        if np.array_equal(wl1, wl2):
+            wl_common = wl1
+            diff_R   = np.asarray(R2) - np.asarray(Rup_dn)
+        else:
+            wl_common = wl1
+            diff_R = np.asarray(np.interp(wl1, wl2, R2)) - np.asarray(Rup_dn)
+
+        # tracé
         fig = plt.figure(figsize=(10, 6))
         ax  = fig.add_axes([0.1, 0.15, 0.8, 0.75])
-        ax.plot(common_wl, diff_R,
-                label=f"Diff: {target_label} - {ref_label}",
-                color="blue")
-        ax.axhline(0, color="black", linestyle="--", linewidth=1)
+        ax.plot(wl_common, diff_R,
+                label=f"{tgt_lbl} – {ref_lbl}", color="blue")
+        ax.axhline(0, color="black", ls="--", lw=1)
         ax.set_xlabel("Wavelength (nm)")
-        ax.set_ylabel("Différence de reflectance")
-        ax.set_title(f"Différence: {target_label} - {ref_label}")
-        ax.legend()
-        ax.grid(True)
+        ax.set_ylabel("Δ Reflectance")
+        ax.set_title(f"Difference: {tgt_lbl} – {ref_lbl}")
+        ax.legend(); ax.grid(True)
 
-        with diff_output:
-            diff_output.clear_output()
+        with out:
+            out.clear_output()
             display(fig)
-            link = create_download_link(
-                fig,
-                filename=f"ratio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-            )
-            display(link)
+            display(_download_link(fig,
+                    f"ratio_{datetime.now():%Y%m%d_%H%M%S}.png"))
             plt.close(fig)
 
-    diff_button.on_click(on_diff_button_clicked)
+    draw_b.on_click(_draw)
 
-    diff_controls = widgets.VBox([
+    # --------------- assemblage ------------------------------------ #
+    ctrls = widgets.VBox([
         widgets.HTML("<h3>Ratio</h3>"),
-        diff_ref_dropdown,
-        diff_target_dropdown,
-        diff_button
+        ref_dd, tgt_dd, draw_b
     ])
-
-    diff_tab = widgets.VBox([diff_controls, diff_output])
-    diff_tab.update_diff_options = update_diff_options
-    return diff_tab
+    tab = widgets.VBox([ctrls, out])
+    tab.update_diff_options = _refresh_options
+    return tab

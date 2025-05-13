@@ -7,13 +7,9 @@ géométrie/matériaux. Il utilise une compréhension de liste pour maximiser le
 et retourne à la fois les résultats et les détails complets de la simulation.
 """
 
-import os
-import json
-import numpy as np
-import pandas as pd
+
 from Material_Configuration import build_material_configuration_dynamic
 from Function_reflectance_SWAG import reflectance
-from Saving_Functions import save_simulation_summary
 
 def simulate_reflectance_single(lambda_range, geometry, wave, df_config, json_combined_path, n_mod, ri_overrides=None):
     """

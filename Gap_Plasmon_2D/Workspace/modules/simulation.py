@@ -1,23 +1,37 @@
 #!/usr/bin/env python3
+# -*- coding: utf‑8 -*-
 """
-Module: simulation.py
-
-Cette partie gère l'onglet Simulation de l'application interactive.
+Module : simulation.py
+Onglet « Simulation » – version stable, après corrections successives :
+  • aucun constructeur de widget appelé en positionnel
+  • tableau à hauteur dynamique
+  • sauvegarde complète des métriques calculées
 """
+# --------------------------------------------------------------------- #
+#                                imports                                #
+# --------------------------------------------------------------------- #
+import os, io, base64, json, textwrap
+from copy import deepcopy
+from datetime import datetime
+from pathlib import Path
 
-import os
-import io, base64
-import json
 import numpy as np
 import matplotlib.pyplot as plt
 import ipywidgets as widgets
-from IPython.display import HTML, display, Javascript
-from datetime import datetime
-import textwrap
-import pandas as pd
-from pathlib import Path
+from ipywidgets import Layout, HBox, VBox, ToggleButton, HTML
+from IPython.display import HTML as DHTML, display, Javascript
+from scipy.interpolate import interp1d
 
-# Construction des chemins
+# dépendances internes
+from simulate_and_plot     import ordered_params, run_simulation_one_combo
+from data_readers          import list_sim_summary_files
+from convergence_analysis  import create_multi_convergence_widget
+from Saving_Functions      import save_simulation_summary
+from Characterization      import _find_dip_core, find_best_dip, simulate_delta_spectrum, compute_half_point
+
+# --------------------------------------------------------------------- #
+#                               chemins                                 #
+# --------------------------------------------------------------------- #
 module_dir         = os.path.dirname(os.path.abspath(__file__))
 workspace_dir      = os.path.dirname(module_dir)
 notebooks_dir      = os.path.join(workspace_dir, "notebooks")
@@ -27,745 +41,891 @@ configurations_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
 data_dir           = os.path.join(workspace_dir, "data")
 json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
-# chemin du CSV
-auto_modes_path = os.path.join(workspace_dir, "Convergence", "optimal_n_modes.csv")
-try:
-    auto_modes_df = pd.read_csv(auto_modes_path, index_col="config_name")
-except Exception:
-    auto_modes_df = None
 
-# Importations internes
-from simulate_and_plot import ordered_params, run_simulation_one_combo
-from data_readers import list_sim_summary_files, get_material_str_clean
-from convergence_analysis import create_multi_convergence_widget
-from Saving_Functions import save_simulation_summary, save_figure
-from Characterization import find_best_dip_fwhm, minmax
 
-# --- Téléchargement de la figure ---
-def create_download_link(fig, filename="figure.png"):
+
+# --------------------------------------------------------------------- #
+def _download_link(fig, fname="figure.png"):
     buf = io.BytesIO()
-    fig.savefig(buf, format="png")
+    fig.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.05)
     buf.seek(0)
-    b64 = base64.b64encode(buf.read()).decode("utf-8")
-    href = f'<a download="{filename}" href="data:image/png;base64,{b64}" target="_blank">Télécharger l\'image</a>'
-    return HTML(href)
+    b64 = base64.b64encode(buf.read()).decode()
+    return DHTML(f'<a download="{fname}" href="data:image/png;base64,{b64}" '
+                 f'target="_blank">Télécharger l’image</a>')
 
-# --- Onglet Simulation ---
-def create_simulation_tab(json_combined_path, summary_dir, exp_data_dir):
-    """
-    Crée l'interface interactive avec trois onglets :
-      - Onglet "Simulation" : La partie haute est divisée en deux colonnes (à gauche : contrôles de simulation ; à droite : contrôles de convergence).
-        La partie basse affiche la figure de simulation et, sous celle‑ci, un tableau récapitulatif.
-      - Onglet "Plot" : Affiche les spectres disponibles et leur tableau récapitulatif.
-      - Onglet "Difference" : Permet de comparer deux spectres.
-    """
-    # Lecture des configurations
-    combos_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
-    if os.path.exists(combos_file):
-        with open(combos_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        all_configs = data.get("ALL_COMBINED_CONFIGS", [])
+# --------------------------------------------------------------------- #
+def create_simulation_tab(json_combined_path: str,
+                          summary_dir: str,
+                          exp_data_dir: str) -> widgets.VBox:
+    """Construit l’onglet *Simulation* complet."""
+
+    # ------------------ chargement des configurations -----------------
+    cfg_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
+    if os.path.exists(cfg_file):
+        with open(cfg_file, encoding="utf-8") as f:
+            all_configs = json.load(f)["ALL_COMBINED_CONFIGS"]
     else:
         all_configs = []
-    
-    # --- Partie Simulation - Haut (deux colonnes) ---
-    # Gauche : Contrôles de simulation
-    sim_lambda_min = widgets.FloatText(value=600.0, description="lam_ min (nm):",
-                                        layout=widgets.Layout(width='150px'),
-                                        style={'description_width': 'initial'})
-    sim_lambda_max = widgets.FloatText(value=1000.0, description="lam_ max (nm):",
-                                        layout=widgets.Layout(width='150px'),
-                                        style={'description_width': 'initial'})
-    sim_n_points = widgets.IntText(value=200, description="Points:",
-                                    layout=widgets.Layout(width='200px'),
-                                    style={'description_width': 'initial'})
-    sim_n_mod = widgets.IntText(value=10, description="Modes:",
-                                 layout=widgets.Layout(width='200px'),
-                                 style={'description_width': 'initial'})
-    sim_run_button = widgets.Button(description="Run simulation", button_style="success",
-                                    tooltip="Lancer la simulation")
-    
-    # mode de calcul des modes
+
+    # =================== widgets paramètres généraux ==================
+    sim_lambda_min = widgets.FloatText(
+        value=300.0, description="λ min (nm):",
+        layout=Layout(width='150px'), style={'description_width': 'initial'})
+    sim_lambda_max = widgets.FloatText(
+        value=1100.0, description="λ max (nm):",
+        layout=Layout(width='150px'), style={'description_width': 'initial'})
+    sim_n_points = widgets.IntText(
+        value=400, description="Points:",
+        layout=Layout(width='200px'), style={'description_width': 'initial'})
+    sim_n_mod = widgets.IntText(
+        value=5, description="Modes:",
+        layout=Layout(width='200px'), style={'description_width': 'initial'})
+    # mode de calcul : dip ou half-level
+    mode_calc_radio = widgets.RadioButtons(
+        options=[('Dip (min)', 'dip'), ('FWHM (half)', 'half')],
+        value='dip',
+        description='Mode calc:',
+        style={'description_width':'initial'},
+        layout=Layout(width='200px')
+    )
+    sim_run_button = widgets.Button(
+        description="Run simulation", button_style="success",
+        tooltip="Lancer la simulation")
+
     mode_selection = widgets.RadioButtons(
         options=[('Fixe', 'fixed'),
                  ('Personnalisé', 'custom'),
                  ('Automatique', 'auto')],
-        value='fixed',
-        description='Modes:',
-        style={'description_width': 'initial'}
-    )
-    # boîte qui contiendra, en mode custom, un IntText par config sélectionnée
-    custom_modes_box = widgets.VBox()
-    
-    
-    
-    # Empêche les valeurs négatives pour les épaisseurs
-    def validate_positive(change):
-        if change['new'] < 0:
-            change['owner'].value = 0  
-            
-    # On applique la validation pour chacun des widgets.
-    sim_lambda_min.observe(validate_positive, names='value')
-    sim_lambda_max.observe(validate_positive, names='value')
-    sim_n_points.observe(validate_positive, names='value')
-    sim_n_mod.observe(validate_positive, names='value')                      
-            
-    
+        value='fixed', description='Modes:',
+        style={'description_width': 'initial'})
+    custom_modes_box = VBox()
+
+    # --------- empêcher valeurs négatives ----------------------------
+    def _positive(ch):
+        if ch['new'] < 0:
+            ch['owner'].value = 0
+    for w in (sim_lambda_min, sim_lambda_max, sim_n_points, sim_n_mod):
+        w.observe(_positive, names='value')
+
+    # =================== gestion des fichiers .npz ====================
     sim_files_dropdown = widgets.Dropdown(
         options=list_sim_summary_files(summary_dir),
         description="Simulation files:",
-        style={'description_width': 'initial'},
-        layout=widgets.Layout(width='500px')
-    )
-    
-    sim_refresh_button = widgets.Button(description="Refresh files", button_style="info",
-                                        tooltip="Refresh simulations files")
-    sim_refresh_button.on_click(lambda b: sim_files_dropdown.set_trait("options", list_sim_summary_files(summary_dir)))
-        
-    
-    sim_download_button = widgets.Button(description="Download", button_style="danger",
-                                         tooltip="Download the selected simulation file")
-    sim_download_output = widgets.Output()
-    def create_file_download_link(file_path, link_text=None):
-        with open(file_path, "rb") as f:
-            data = f.read()
-        b64 = base64.b64encode(data).decode("utf-8")
-        if link_text is None:
-            link_text = os.path.basename(file_path)
-        return HTML(f'<a download="{os.path.basename(file_path)}" href="data:application/octet-stream;base64,{b64}" target="_blank">{link_text}</a>')
-    
+        layout=Layout(width='500px'),
+        style={'description_width': 'initial'})
+    sim_refresh_button = widgets.Button(
+        description="Refresh files", button_style="info",
+        tooltip="Rafraîchir la liste")
+    sim_download_button = widgets.Button(
+        description="Download", button_style="danger",
+        tooltip="Télécharger le fichier")
 
-    def on_download_clicked(b):
-        selected_file = sim_files_dropdown.value
-        if selected_file:
-            with open(selected_file, "rb") as f:
-                data = f.read()
-            b64 = base64.b64encode(data).decode("utf-8")
-            file_name = os.path.basename(selected_file)
-            js_code = f"""
-            var a = document.createElement('a');
-            a.href = "data:application/octet-stream;base64,{b64}";
-            a.download = "{file_name}";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            """
-            display(Javascript(js_code))
-        else:
-            print("Aucun fichier sélectionné.")
+    sim_refresh_button.on_click(
+        lambda *_: sim_files_dropdown.set_trait(
+            "options", list_sim_summary_files(summary_dir)))
 
-    sim_download_button.on_click(on_download_clicked)
+    def _download(_):
+        path = sim_files_dropdown.value
+        if not path:
+            print("Aucun fichier sélectionné."); return
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        fname = os.path.basename(path)
+        js = (f"var a=document.createElement('a');"
+              f"a.href='data:application/octet-stream;base64,{b64}';"
+              f"a.download='{fname}';a.style.display='none';"
+              "document.body.appendChild(a);a.click();a.remove();")
+        display(Javascript(js))
+    sim_download_button.on_click(_download)
 
-    
-    sim_files_box = widgets.HBox(
-        [
-            sim_files_dropdown,    # Liste déroulante pour sélectionner les fichiers
-            sim_download_output    # Zone d'affichage des liens de téléchargement (peut être cachée ou affichée)
-        ],
-        layout=widgets.Layout(
-            width='100%',                     # Occupe toute la largeur disponible
-            justify_content='flex-start',     # Alignement horizontal (flex-start, center, flex-end, space-between, ...)
-            margin='10px 0px 10px 0px'          # Marges (haut, droite, bas, gauche). Ici, 10px en haut et en bas.
-        )
-    )
-    
-    Download_Refresh_box = widgets.HBox(    
-        [
-            sim_refresh_button,    # Bouton pour rafraîchir la liste des fichiers
-            sim_download_button,   # Bouton pour télécharger le fichier sélectionné
-        ], 
-        layout=widgets.Layout(
-            width='50%',                     # Occupe 1/2 de l'espace disponible
-            justify_content='flex-start',     # Alignement horizontal (flex-start, center, flex-end, space-between, ...)
-            margin='10px 0px 10px 0px'          # Marges (haut, droite, bas, gauche). Ici, 10px en haut et en bas.
-        )
-    )       
-    
-    # Nouveau widget pour saisir le nom de la simulation
+    sim_files_box = HBox([sim_files_dropdown],
+                         layout=Layout(width='100%', margin='10px 0'))
+    download_refresh_box = HBox([sim_refresh_button, sim_download_button],
+                                layout=Layout(width='50%', margin='10px 0'))
+
     sim_name_widget = widgets.Text(
-        value="",
-        placeholder="Nom de simulation (auto si vide)",
-        description="Sim Name:",
-        layout=widgets.Layout(width='500px'),
-        style={'description_width': 'initial'}
-    )                      
+        value="", placeholder="Nom de simulation (auto si vide)",
+        description="Sim Name:", layout=Layout(width='500px'),
+        style={'description_width': 'initial'})
 
-    # Création d'un widget de sélection multiple pour choisir une ou plusieurs configurations de simulation.
-    # La largeur est fixée à 350px.
-    sim_config_selector = widgets.SelectMultiple(
-        options=[(cfg["config_name"], cfg) for cfg in all_configs],
-        description="Config simulation:",
-        layout=widgets.Layout(width='500px', height='150px'),
-        style={'description_width': 'initial'}  # Permet de conserver la largeur par défaut pour la description
+    # ======================= sélecteur Config / Δn ====================
+    config_rows, config_checkboxes, dn_checkboxes = [], {}, {}
+    for cfg in all_configs:
+        name = cfg["config_name"]
+        chk = widgets.Checkbox(value=False, description=name, indent=False)
+        dn  = widgets.Checkbox(value=False, description='Δn', indent=False,
+                               layout=Layout(width='46px'))
+        config_checkboxes[name] = chk
+        dn_checkboxes[name] = dn
+        config_rows.append(HBox([chk, dn], layout=Layout(grid_gap='5px')))
+
+    visible = min(len(config_rows), 10)
+    
+        # 1) Crée les deux boutons
+    select_all_cfg_btn = widgets.Button(
+        description="Tout sélectionner Configs",
+        button_style="info",
+        layout=Layout(width='auto', margin='0 5px 5px 0')
     )
-    
-    custom_n_mod_inputs = {}
-    def refresh_custom_modes(*args):
-        if mode_selection.value == 'custom':
-            inputs = []
-            for cfg in sim_config_selector.value:
-                name = cfg['config_name']
-                inp = widgets.IntText(
-                    value=sim_n_mod.value,
-                    description=name,
-                    layout=widgets.Layout(width='300px'),
-                    style={'description_width': 'initial'}
-                )
-                custom_n_mod_inputs[name] = inp
-                inputs.append(inp)
-            custom_modes_box.children = inputs
-        else:
-            custom_modes_box.children = []
-
-    mode_selection.observe(refresh_custom_modes, names='value')
-    sim_config_selector.observe(refresh_custom_modes, names='value')
-    
-    
-    
-    # Checkbox pour activer/désactiver le verbose
-    verbose_toggle = widgets.Checkbox(
-        value=True,
-        description="Verbose",
-        indent=False,
-        layout=widgets.Layout(width='150px'),
-        style={'description_width': 'initial'}
+    select_all_dn_btn = widgets.Button(
+        description="Tout sélectionner Δn",
+        button_style="info",
+        layout=Layout(width='auto', margin='0 0 5px 0')
     )
 
+    # 2) Handler qui bascule l’état de toutes les checkboxes Configs
+    def _toggle_all_cfg(_):
+        all_sel = all(cb.value for cb in config_checkboxes.values())
+        for cb in config_checkboxes.values():
+            cb.value = not all_sel
+    select_all_cfg_btn.on_click(_toggle_all_cfg)
 
-    sim_debug = widgets.Output(
-        layout=widgets.Layout(
-            width='100%',
-            height='200px',
+    # 3) Handler qui bascule l’état de toutes les checkboxes Δn
+    def _toggle_all_dn(_):
+        all_sel = all(cb.value for cb in dn_checkboxes.values())
+        for cb in dn_checkboxes.values():
+            cb.value = not all_sel
+    select_all_dn_btn.on_click(_toggle_all_dn)
+
+    # 3) Reconstruit config_list en y glissant les boutons avant les lignes
+    config_list = VBox(
+        children=[
+            HTML("<b>Configurations et Δn</b>"),
+            HBox([select_all_cfg_btn, select_all_dn_btn],
+                layout=Layout(grid_gap='10px')),
+            *config_rows
+        ],
+        layout=Layout(
+            width='500px',
+            height=f'{30+visible*30}px',
             overflow_y='auto',
-            border='1px solid darkred',
-            display='block' if verbose_toggle.value else 'none'
+            border='1px solid lightgray',
+            padding='5px',
+            display='none'
         )
     )
-    
-    # Masque/affiche et vide le contenu quand on décoche/coché verbose
-    def toggle_sim_debug(change):
-        sim_debug.layout.display = 'block' if change['new'] else 'none'
-        if not change['new']:
-            sim_debug.clear_output()
-    verbose_toggle.observe(toggle_sim_debug, names='value')
+    toggle_btn = ToggleButton(
+        value=False, description="Sélection Configs / Δn",
+        icon='caret-down', layout=Layout(width='520px'))
 
+    def _toggle(ch):
+        config_list.layout.display = 'block' if ch['new'] else 'none'
+        toggle_btn.icon = 'caret-up' if ch['new'] else 'caret-down'
+    toggle_btn.observe(_toggle, names='value')
+    config_selector = VBox([toggle_btn, config_list],
+                           layout=Layout(padding='5px'))
+
+    # ======================== couche(s) Δn ============================
+    layer_keys = [m['key'] for m in all_configs[0]['material']['MATERIALS_CONFIG']]
+    layer_selector = widgets.SelectMultiple(
+        options=layer_keys, description="Couche(s) Δn:",
+        layout=Layout(width='300px', height='100px'),
+        style={'description_width': 'initial'})
     
-    def load_configs():
-        combos_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
-        if os.path.exists(combos_file):
-            with open(combos_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return data.get("ALL_COMBINED_CONFIGS", [])
+    delta_n_widget = widgets.FloatText(
+        value=1e-2, description="Δn:",
+        layout=Layout(width='150px'),
+        style={'description_width': 'initial'})
+    
+    delta_n_widget.observe(_positive, names='value')
+
+    # =================== custom modes rafraîchissement ================
+    custom_n_mod_inputs = {}
+    def _refresh_custom_modes(*_):
+        sel = [c for c in all_configs
+               if config_checkboxes[c["config_name"]].value]
+        if mode_selection.value != 'custom' or not sel:
+            custom_modes_box.children = []; return
+        inputs = []
+        for cfg in sel:
+            name = cfg["config_name"]
+            it = widgets.IntText(
+                value=sim_n_mod.value, description=name,
+                layout=Layout(width='300px'),
+                style={'description_width': 'initial'})
+            custom_n_mod_inputs[name] = it
+            inputs.append(it)
+        custom_modes_box.children = inputs
+    mode_selection.observe(_refresh_custom_modes, names='value')
+    for cb in config_checkboxes.values():
+        cb.observe(_refresh_custom_modes, names='value')
+
+    # =========================== verbose ==============================
+    verbose_toggle = widgets.Checkbox(
+        value=True, description="Verbose", indent=False,
+        layout=Layout(width='100%'),
+        style={'description_width': 'initial'})
+    
+    debug_out = widgets.Textarea(
+    value='',
+    placeholder='Logs verbose…',
+    layout=Layout(
+        width='100%',
+        height='200px',      # fixe la hauteur
+        overflow_y='scroll', # barre de scroll verticale
+        border='1px solid darkred'
+    ),
+    disabled=False  
+    )
+    
+    def _toggle_dbg(ch):
+        debug_out.layout.display = 'block' if ch['new'] else 'none'
+        if not ch['new']:
+            debug_out.value = ''    # on vide simplement le texte
+    verbose_toggle.observe(_toggle_dbg, names='value')
+
+    # ===================== métriques / overlays =======================
+    def _cb(val, desc): return widgets.Checkbox(value=val, description=desc)
+    show_fwhm_chk         = _cb(False, "FWHM")
+    show_lambda0_chk      = _cb(True,  r"λ0")
+    show_delta_lam_over_midLam_chk        = _cb(False, r"Δλ / λmin or λsym")
+    show_S_lambda_chk     = _cb(True,  "Sλ = Δλ / Δn (nm/RIU)")
+    show_S_dn_chk         = _cb(True,  r"ΔR/Δn (1/RIU)")
+    show_deltaR_half_chk  = _cb(True,  r"ΔR_half")
+    show_Q_chk            = _cb(False, "Q‑factor")
+
+    show_Rup_dn_chk   = _cb(True,  "Rup_dn dashed")
+    show_hlines_chk       = _cb(False, "half‑level line")
+    show_dips_chk         = _cb(False, "dips (×)")
+    show_maxima_chk       = _cb(False, "maxima (×)")
+    show_symmetry_pts_chk = _cb(False, "symmetric pts (×)")
+    show_selected_dip_chk = _cb(True,  "selected dip (○)")
+    show_sensitivity_marker_chk = _cb(True,  "sensitivity marker (□)")
+    
+    # 1) enlève toute marge / padding / fixe la largeur à auto sur chaque checkbox
+    for cb in (show_fwhm_chk, show_lambda0_chk, show_delta_lam_over_midLam_chk, show_S_lambda_chk,
+            show_S_dn_chk, show_deltaR_half_chk, show_Q_chk):
+        cb.layout.margin  = '0'
+        cb.layout.padding = '0'
+        cb.layout.width   = 'auto'
+        cb.indent         = False  # si besoin d'enlever l'indentation interne
+
+    # 2) utilise gap=0px sur la HBox
+    metrics_hbox = HBox(
+        [show_fwhm_chk, show_lambda0_chk, show_delta_lam_over_midLam_chk, show_S_lambda_chk,
+        show_S_dn_chk, show_deltaR_half_chk, show_Q_chk],
+        layout=Layout(
+            display='flex',
+            flex_flow='row nowrap',
+            justify_content='space-around',
+            gap='0px',      # colle les items les uns aux autres
+            margin='0 10px 0 0',
+            padding='0'
+        )
+    )
+
+    # même chose pour tes overlays :
+    for cb in (show_Rup_dn_chk, show_hlines_chk, show_dips_chk,
+            show_maxima_chk, show_symmetry_pts_chk, show_selected_dip_chk, show_sensitivity_marker_chk):
+        cb.layout.margin  = '0'
+        cb.layout.padding = '0'
+        cb.layout.width   = 'auto'
+        cb.indent         = False
+
+    overlays_hbox = HBox(
+        [show_Rup_dn_chk, show_hlines_chk, show_dips_chk,
+        show_maxima_chk, show_symmetry_pts_chk, show_selected_dip_chk, show_sensitivity_marker_chk],
+        layout=Layout(
+            display='flex',
+            flex_flow='row nowrap',
+            justify_content='space-around',
+            gap='0px',
+            margin='0 10px 0 0',
+            padding='0'
+        )
+    )
+
+
+    metrics_selector = VBox(
+        children=[HTML("<b>Métriques à afficher :</b>"), metrics_hbox,
+                  HTML("<b>Overlays graphiques :</b>"), overlays_hbox],
+        layout=Layout(width='100%', border='1px solid lightgray',
+                      padding='5px', margin='10px 0'))
+
+    # ======================== refresh configs =========================
+    def _load_configs():
+        if os.path.exists(cfg_file):
+            with open(cfg_file, encoding='utf-8') as f:
+                return json.load(f)["ALL_COMBINED_CONFIGS"]
         return []
 
-    def refresh_configs(b):
-        global all_configs
-        # Recharge le fichier JSON avec les dernières modifications
-        all_configs = load_configs()
-        # Met à jour les options du sélecteur avec la nouvelle liste de configurations
-        sim_config_selector.options = [(cfg["config_name"], cfg) for cfg in all_configs]
+    def _refresh_cfgs(_):
+        nonlocal all_configs
+        for cb in config_checkboxes.values():
+            try: cb.unobserve(_refresh_custom_modes, names='value')
+            except Exception:
+                pass
+        all_configs = _load_configs()
+        config_rows.clear(); config_checkboxes.clear(); dn_checkboxes.clear()
+        for cfg in all_configs:
+            name = cfg["config_name"]
+            chk = widgets.Checkbox(value=False, description=name, indent=False)
+            dn  = widgets.Checkbox(value=False, description='Δn', indent=False,
+                                   layout=Layout(width='46px'))
+            chk.observe(_refresh_custom_modes, names='value')
+            config_checkboxes[name] = chk; dn_checkboxes[name] = dn
+            config_rows.append(HBox([chk, dn], layout=Layout(grid_gap='5px')))
+        config_list.children = [HTML("<b>Configurations et Δn</b>")] + config_rows
+        _refresh_custom_modes()
 
-    # Création du bouton de rafraîchissement
-    config_refresh_button = widgets.Button(
-        description="Refresh Configs", 
-        button_style="info",
-        tooltip="Refresh configurations files"
-    )
-    # Attache le callback au clic sur le bouton
-    config_refresh_button.on_click(refresh_configs)
+    cfg_refresh_button = widgets.Button(
+        description="Refresh Configs", button_style="info",
+        tooltip="Rafraîchir la liste des configs")
+    cfg_refresh_button.on_click(_refresh_cfgs)
 
-   
+    # ===================== conteneur gauche (controls) ================
+    sim_controls = VBox(
+        children=[
+            HTML("<h3>Simulation – Paramètres</h3>"),
+            sim_name_widget,
+            sim_files_box,
+            HBox([download_refresh_box]),
+            HBox([sim_lambda_min, sim_lambda_max]),
+            HBox([sim_n_points, sim_n_mod]),
+            VBox([cfg_refresh_button]),
+            config_selector,
+            HBox([mode_selection, layer_selector]),
+            custom_modes_box,
+            HBox([delta_n_widget, mode_calc_radio, sim_run_button]),
+            verbose_toggle],
+        layout=Layout(padding='10px', border='1px solid lightgray'))
 
-    # Regroupement vertical des contrôles de simulation dans un conteneur VBox.
-    # Chaque ligne est soit un HBox (pour afficher plusieurs éléments horizontalement),
-    # soit un widget unique.
-    sim_controls = widgets.VBox(
-        [
-            widgets.HTML("<h3>Simulation - Paramètres</h3>"),
-            sim_name_widget, sim_files_box,  # La première ligne : fichier(s) sélection et boutons associés.
-            widgets.HBox(
-                [Download_Refresh_box],
-                layout=widgets.Layout(justify_content='space-around', margin='5px 0px')
-            ),  # Ligne pour les boutons de téléchargement et de rafraîchissement                
-            widgets.HBox(
-                [sim_lambda_min, sim_lambda_max],
-                layout=widgets.Layout(justify_content='space-around', margin='5px 0px')
-            ),  # Ligne pour les valeurs lambda min et max
-            widgets.HBox(
-                [sim_n_points, sim_n_mod],
-                layout=widgets.Layout(justify_content='space-around', margin='5px 0px')
-            ),  # Ligne pour le nombre de points et le nombre de modes
-            # Pour le bouton Run Simulation, vous pouvez le centrer ou l'aligner à gauche/droite selon vos préférences.
-            
-            widgets.VBox(
-                [sim_run_button, config_refresh_button],
-                layout=widgets.Layout(justify_content='center', margin='5px 0px')
-            ),  # Ligne contenant le bouton de lancement de la simulation.
-            sim_config_selector,            # Affichage du sélecteur multiple pour les configurations de simulation.
-            mode_selection, custom_modes_box,
-            verbose_toggle
-        ],
-        layout=widgets.Layout(
-            padding='10px',         # Espace interne autour de ces éléments
-            border='solid 1px lightgray'
-        )
-    )
-
-    
-    # Droite : Contrôles et tracé de convergence
+    # widget convergence (droite)
     conv_widget = create_multi_convergence_widget(json_combined_path, all_configs)
-    
-    
-        
-        
-        
-    # --- Partie Simulation - Bas : Zone d'affichage de la simulation ---
-    
-    
-    
+
+    # sortie figure + tableau
     sim_output = widgets.Output(
-        layout=widgets.Layout(
-            border="2px solid #ccc",
-            padding="10px",
-            min_height="400px",
-            margin='40px 0 0 0'  # 20px de marge en haut, 0 en droite, 0 en bas, 0 en gauche
-        )
-    )
-    
-    
-    def on_sim_run_clicked(b):
+        layout=Layout(border='2px solid #ccc', padding='10px',
+                      min_height='400px', margin='40px 0 0 0'))
+
+    # ================================================================= #
+    #                          callback RUN                             #
+    # ================================================================= #
+    def _run(_):
+        # ---------- spinner -------------------------------------------
         with sim_output:
             sim_output.clear_output(wait=True)
-            # Affichage d'un spinner pendant la simulation
-            spinner = widgets.HTML(
-                "<div style='text-align: center;'><img src='https://i.gifer.com/ZZ5H.gif' width='50px'/><br><em>Simulation en cours...</em></div>"
+            display(HTML("<div style='text-align:center'>"
+                         "<img src='https://i.gifer.com/ZZ5H.gif' width='40'>"
+                         "<br><em>Simulation en cours…</em></div>"))
+
+        # ---------- paramètres de base --------------------------------
+        lam_range = np.linspace(sim_lambda_min.value,
+                                sim_lambda_max.value,
+                                sim_n_points.value)
+        wave = {"angle": 0, "polarization": 1}
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        sel_layers = list(layer_selector.value)
+        delta_n = max(delta_n_widget.value, 1e-9)
+
+        # ---------- modes automatiques --------------------------------
+        auto_modes = {}
+        conv_json = Path(workspace_dir) / "Convergence/convergence_results.json"
+        if conv_json.exists():
+            with open(conv_json, encoding='utf-8') as f:
+                master = json.load(f)
+            auto_modes = {n: r[-1]["optimal_n_mode"]
+                          for n, r in master.get("configs", {}).items() if r}
+
+        selected_cfgs = [c for c in all_configs
+                         if config_checkboxes[c["config_name"]].value]
+        dn_cfgs = {n for n, cb in dn_checkboxes.items() if cb.value}
+
+        mode_by_cfg = {}
+        if mode_selection.value == 'fixed':
+            for cfg in selected_cfgs:
+                mode_by_cfg[cfg["config_name"]] = sim_n_mod.value
+        elif mode_selection.value == 'custom':
+            for n, inp in custom_n_mod_inputs.items():
+                mode_by_cfg[n] = inp.value
+        else:
+            for cfg in selected_cfgs:
+                mode_by_cfg[cfg["config_name"]] = int(auto_modes[cfg["config_name"]])
+
+        # ---------- figure --------------------------------------------
+        fig = plt.figure(figsize=(13, 9))
+        ax_plot  = fig.add_axes([0.10, 0.50, 0.80, 0.35])
+        ax_table = fig.add_axes([0.10, 0.05, 0.80, 0.35]); ax_table.axis('off')
+
+        # ---------- accumulateurs  ----------------------------------
+        cfg_labels, geom_sum, mat_sum = [], [], []
+        fwhm_sum, lam_sum, delta_lam_over_midLam = [], [], []
+        S_lambda_sum, S_R_sum, dR_half_sum = [], [], []
+        S_R_vals = []
+        S_lam_min, S_lam_sym = [], []
+        Q_fac = []
+        debug_lines = []
+        simulation_details = {}
+
+        verbose = verbose_toggle.value
+        flags = dict(
+            show_fwhm=show_fwhm_chk.value, show_lambda0=show_lambda0_chk.value,
+            show_delta_lam_over_midLam=show_delta_lam_over_midLam_chk.value, show_S_lambda=show_S_lambda_chk.value,
+            show_S_dn=show_S_dn_chk.value, show_deltaR_half=show_deltaR_half_chk.value,
+            show_Q=show_Q_chk.value,
+            show_Rup_dn=show_Rup_dn_chk.value, show_hlines=show_hlines_chk.value,
+            show_dips=show_dips_chk.value, show_maxima=show_maxima_chk.value,
+            show_symmetry_pts=show_symmetry_pts_chk.value,
+            show_selected_dip=show_selected_dip_chk.value,
+            show_sensitivity_marker=show_sensitivity_marker_chk.value)
+        
+        use_half = (mode_calc_radio.value == 'half')
+
+
+        # ================== boucle configs ============================
+        for idx, cfg in enumerate(selected_cfgs):
+            name = cfg["config_name"]; n_modes = mode_by_cfg[name]
+            Rup, _, details = run_simulation_one_combo(
+                lam_range, wave, n_modes, cfg, json_combined_path)
+            lam = lam_range; Rup = np.asarray(Rup, dtype=float)
+            simulation_details[name] = details
+
+
+
+            Best_values_out, who, best_dip_index = find_best_dip(
+                cfg=cfg,
+                wavelength=lam,
+                reflectance=Rup,
+                wave=wave,
+                n_modes=n_modes,
+                sel_layers=sel_layers,
+                delta_n=delta_n,
+                json_combined_path=json_combined_path,
+                smooth_win=0,
+                polyorder=0,
+                dip_prom=1e-2,
+                dip_dist=1,
+                peak_dist=1,
+                verbose=True,
+                cfg_name=name,
+                mode="half" if use_half else "dip"
             )
-            display(spinner)
+
+            (dip_list, lam_dip_list, R_dip_list,
+            y_level_list,
+            lam_left_list, lam_right_list, fwhm_list,
+            lam_max_l_list, R_max_l_list,
+            lam_max_r_list, R_max_r_list,
+            lam_sym_list,   R_sym_list,
+            depth_list), _ = _find_dip_core(
+                wavelength=lam, reflectance=Rup,
+                smooth_win=0, polyorder=0,
+                dip_prom=1e-2, dip_dist=1, peak_dist=1,
+                verbose=False, cfg_name=name
+            )
+
+            # si tu as vraiment besoin de tableaux NumPy pour tracer :
+            lam_max_l_list = np.array(lam_max_l_list)
+            R_max_l_list   = np.array(R_max_l_list)
+            lam_max_r_list = np.array(lam_max_r_list)
+            R_max_r_list   = np.array(R_max_r_list)
+            lam_sym_list   = np.array(lam_sym_list)
+            R_sym_list     = np.array(R_sym_list)
+            width_list     = np.array(fwhm_list)    
+            depth_list     = np.array(depth_list)
+
+            if Best_values_out is None:             # ← aucun dip pour cette config
+                debug_lines.append(f" Aucun dip sélectionné pour la configuration “{who}” – ignorée.")
+                continue                # on saute au spectre suivant
+
+            # sinon on déroule
+            (lam_left, lam_right, fwhm, depth,
+            lam_dip, R_dip, ylev,
+            lam_m_l, Rm_l, lam_m_r, Rm_r,
+            lam_sym, R_sym,
+            best_S_R, S_lambda, dR_half,
+            dips_idx_list, dR_over_dn_list, dLam_over_dn_list
+            ) = Best_values_out
+
+
+            lam_min = lam_m_l if Rm_l < Rm_r else lam_m_r
+            lam_mid = lam_left if Rm_l < Rm_r else lam_right
             
-            # Récupération des paramètres
-            lam_min = sim_lambda_min.value
-            lam_max = sim_lambda_max.value
-            n_points = sim_n_points.value
-                        
-            wave = {"angle": 0, "polarization": 1}
-            lam_range = np.linspace(lam_min, lam_max, n_points)
-            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-            n_colors = len(colors)
+            S_lam_min_abs = abs((lam_dip - lam_min) / lam_mid)
+            S_lam_sym_abs = abs((lam_dip - lam_sym) / lam_mid)
+            
+            S_lam_min.append(S_lam_min_abs)
+            S_lam_sym.append(S_lam_sym_abs)
+            
+            compute_delta = flags['show_Rup_dn'] and name in dn_cfgs and sel_layers
 
-
-            # Détection de workspace_dir 
-            workspace_dir = Path(__file__).resolve().parent.parent
-
-            # chemin du JSON
-            json_path = workspace_dir / "Convergence" / "convergence_results.json"
-
-            # On charge le JSON une seule fois
-            if not json_path.exists():
-                auto_modes = {}
+            if compute_delta:
+                # on ne fait la simu Δn QUE si la case “Spectres Δn” est cochée
+                Rup_dn, lam_calc, R0, lam_calc_dn, R1, S_lambda, S_R, dR_half = simulate_delta_spectrum(
+                    cfg=cfg,
+                    lam=lam_range,
+                    wave=wave,
+                    n_modes=n_modes,
+                    sel_layers=sel_layers,
+                    delta_n=delta_n,
+                    lam_dip=lam_dip,
+                    R_dip=R_dip,
+                    lam_left=lam_left,
+                    lam_right=lam_right,
+                    base_spectrum=Rup,
+                    json_combined_path=json_combined_path,
+                    dip_index=best_dip_index,
+                    mode="half" if use_half else "dip"
+                )
             else:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    master = json.load(f)
-                # master["configs"] est un dict : { config_name: [run1, run2, …], … }
-                auto_modes = {}
-                for cfg_name, runs in master.get("configs", {}).items():
-                    if runs:
-                        # on prend le dernier run
-                        auto_modes[cfg_name] = runs[-1]["optimal_n_mode"]
+                Rup_dn    = None
+                lam_calc_dn  = S_lambda = S_R = dR_half = None
+                
+                
+                
+            # ----- accumulateurs tableau ------------------------------
+            cfg_labels.append(name)
+            geom = cfg["geometry"]["geometry"]
+            geom_sum.append("\n".join(
+                f"{d}: {geom[k]}" for k, d in ordered_params if k in geom))
+            mat_lines = []
+            for e in cfg["material"]["MATERIALS_CONFIG"]:
+                key = e['key']
+                disp = next((d for k, d in ordered_params if k == key), key)
+                mat = e['material']; typ = mat['type'].lower()
+                if typ == "standard": val = mat['material']
+                elif typ == "custom": val = mat['expression']
+                else: val = f"Book: {mat.get('book','')}, Page: {mat.get('page','')}"
+                mat_lines.append(f"{disp}: {val}")
+            mat_sum.append("\n".join(mat_lines))
 
-            # Ensuite, choix de n_mod :
-            mode = mode_selection.value
-            mode_by_cfg = {}
+            fwhm_sum.append(f"{fwhm:.1f} nm")
+            lam_sum.append(f"{lam_dip:.1f} nm")
+            delta_lam_over_midLam.append(f"{S_lam_min_abs:.3f} & {S_lam_sym_abs:.3f}")
+            Q_fac.append(f"{lam_dip/fwhm:.1f}")
 
-            if mode == 'fixed':
-                # même n_mod pour tous
-                for cfg in sim_config_selector.value:
-                    mode_by_cfg[cfg['config_name']] = sim_n_mod.value
-
-            elif mode == 'custom':
-                # récupère la saisie personnalisée
-                for name, inp in custom_n_mod_inputs.items():
-                    mode_by_cfg[name] = inp.value
-
-            else:  # 'auto'
-                if not auto_modes:
-                    raise FileNotFoundError(f"Aucun mode automatique trouvé dans {json_path}")
-                for cfg in sim_config_selector.value:
-                    name = cfg['config_name']
-                    try:
-                        mode_by_cfg[name] = int(auto_modes[name])
-                    except KeyError:
-                        raise KeyError(f"Pas de données auto pour la configuration « {name} » dans {json_path}")
-                        
+            def _a(lst, cond, val=""): lst.append(val if cond else "")
+            _a(S_lambda_sum,
+               flags['show_S_lambda'] and name in dn_cfgs and S_lambda is not None, 
+               f"{S_lambda:.3f}" if S_lambda is not None else "")
             
-            # Configuration de l'axe du tracé
-            # 1) Définition des marges pour 80 % de la largeur
-            left_marges, width_marges = 0.10, 0.80
-            fig      = plt.figure(figsize=(13, 9))
-            ax_plot = fig.add_axes([left_marges, 0.50, width_marges, 0.35])
-            ax_table = fig.add_axes([left_marges, 0.05, width_marges, 0.35])
-            ax_table.axis('off')
-                        
-            # Initialisation des listes pour le tracé et le tableau ainsi que du dictionnaire des détails de simulation
-            config_labels = []
-            geom_summaries = []
-            mat_summaries = []
-            simulation_details = {}
-            fwhm_summaries = []
-            lam_summaries = []
+            _a(S_R_sum,
+               flags['show_S_dn'] and name in dn_cfgs and S_R is not None,
+               f"{S_R:.3f}" if S_R is not None else "")
+            S_R_vals.append(S_R if S_R is not None else np.nan)
             
-            S_lam_summaries  = []   
-            # listes numériques pour S_lam
-            S_lam_min_vals = []
-            S_lam_sym_vals = []
-            
-            Q_factor = []
-            raw_score_summaries = []   # depth*slope/width
-            debug_lines = []
-            
-            # Pour chaque configuration sélectionnée, lancer la simulation et collecter les courbes et résumés
-            verbose = verbose_toggle.value
-            
-            
-            for idx, cfg in enumerate(sim_config_selector.value):
-                name    = cfg['config_name']
-                n_modes = mode_by_cfg[name]
-                Rup, _, details = run_simulation_one_combo(
-                    lam_range, wave, n_modes, cfg, json_combined_path
-                )
-
-                lam = np.array(lam_range)
-                Rup = np.array(Rup)
-
-                # Enregistrer les détails
-                simulation_details[cfg["config_name"]] = details
-
-                lam_left, lam_right, width, lam_dip, Rdip, ylev, lam_m_l, Rm_l, \
-                lam_m_r, Rm_r, lam_sym, R_sym, slope, depth, raw_score, dips, scores_list, depths, slopes, widths, \
-                lam_max_ls, R_max_ls, lam_max_rs, R_max_rs, lam_syms, R_syms = \
-                    find_best_dip_fwhm(lam, Rup,
-                                    smooth_win=0, # odd integer ≥ 3: window length for Savitzky–Golay smoothing
-                                    polyorder=0,   # polynomial order for the filter (must be < smooth_win)
-                                    dip_prom=0.01, # min “prominence” (depth) to qualify as a dip
-                                    dip_dist=5,   # min separation (in points) between dips
-                                    peak_dist=5,
-                                    verbose = True)  # min separation (in points) between maxima
+            _a(dR_half_sum,
+               flags['show_deltaR_half'] and name in dn_cfgs and dR_half is not None,
+               f"{dR_half:.3f}" if dR_half is not None else "")
 
 
-                # On choisit le max de plus petite amplitude 
-                if Rm_l < Rm_r:
-                    lam_min  = lam_m_l
-                    lam_middle = lam_left
+
+            # ------------------------------------------------------------
+            #  AJOUT des métriques supplémentaires dans *details*
+            # ------------------------------------------------------------
+            details["extra_metrics"] = {
+                "Sλ (nm/RIU)" : f"{S_lambda:.3f}" if S_lambda is not None else "",
+                "ΔR/Δn (1/RIU)": f"{S_R:.3f}"    if S_R is not None else "",
+                "ΔR_half"       : f"{dR_half:.3f}" if dR_half is not None else "",
+                "S_lam_min"     : f"{S_lam_min_abs:.3f}",
+                "S_lam_sym"     : f"{S_lam_sym_abs:.3f}",
+                "Δn"            : f"{delta_n:.3e}"
+            }
+   
+
+            # ----- tracé ------------------------------------------------
+            color = colors[idx % len(colors)]
+            ax_plot.plot(lam, Rup, color=color, zorder=1,)
+
+            # ----- overlays indépendants du verbose -----------------------
+            if flags['show_Rup_dn'] and Rup_dn is not None:
+                ax_plot.plot(lam, Rup_dn, '--', color=color, linewidth=2, alpha=0.7, zorder=100, label=f"{name} (R + Δn)")
+
+            if flags['show_hlines']:
+                ax_plot.hlines(ylev, lam_left, lam_right, color=color)
+
+            if flags['show_dips']:
+                ax_plot.scatter(lam[dips_idx_list], Rup[dips_idx_list], marker='x', color=color)
+
+            if flags['show_maxima']:
+                ax_plot.scatter(lam_max_l_list, R_max_l_list, marker='x', color=color)
+                ax_plot.scatter(lam_max_r_list, R_max_r_list, marker='x', color=color)
+
+            if flags['show_symmetry_pts']:
+                ax_plot.scatter(lam_sym_list, R_sym_list, marker='x', color=color)
+
+            if flags['show_selected_dip']:
+                ax_plot.scatter([lam_dip], [R_dip], marker='o',
+                                facecolor='none', edgecolor=color, s=70)
+                
+                
+            # → on redétecte les dips sur Rup_dn  
+            (dip_idx_dn, lam_dip_dn_list, R_dip_dn_list,
+            ylev_dn_list,
+            lam_left_dn, lam_right_dn, fwhm_dn,
+            lam_max_l_dn, R_max_l_dn,
+            lam_max_r_dn, R_max_r_dn,
+            lam_sym_dn, R_sym_dn,
+            depth_dn), _ = _find_dip_core(
+                wavelength=lam,
+                reflectance=Rup_dn,
+                smooth_win=0, polyorder=0,
+                dip_prom=1e-2, dip_dist=1, peak_dist=1,
+                verbose=False, cfg_name=name + " (Δn)"
+            )
+
+            # 1) half-level lines
+            if flags['show_hlines']:
+                ax_plot.hlines(ylev_dn_list[best_dip_index], lam_left_dn[best_dip_index], lam_right_dn[best_dip_index],
+                                linestyles='--', linewidth=2,
+                                color=color, alpha=0.7, zorder=99)
+
+            # 2) dips
+            if flags['show_dips']:
+                ax_plot.scatter(lam_dip_dn_list, R_dip_dn_list, #lam[dip_idx_dn]
+                                marker='x', s=40,
+                                color=color, alpha=0.7, zorder=101)
+
+            # 3) maxima
+            if flags['show_maxima']:
+                ax_plot.scatter(lam_max_l_dn, R_max_l_dn,
+                                marker='x', s=30,
+                                color=color, alpha=0.7, zorder=101)
+                ax_plot.scatter(lam_max_r_dn, R_max_r_dn,
+                                marker='x', s=30,
+                                color=color, alpha=0.7, zorder=101)
+
+            # 4) symmetry points
+            if flags['show_symmetry_pts']:
+                ax_plot.scatter(lam_sym_dn, R_sym_dn,
+                                marker='x', s=30,
+                                color=color, alpha=0.7, zorder=101)
+
+            # 5) selected dip
+            if flags['show_selected_dip']:
+                ax_plot.scatter(lam_dip_dn_list[best_dip_index], 
+                                R_dip_dn_list[best_dip_index],  
+                                marker='o', s=70,
+                                facecolor='none',
+                                edgecolor=color, alpha=0.7, zorder=102)
+                
+                
+            if flags['show_sensitivity_marker']:
+                if use_half:
+                    # 3 marqueurs en half-mode :
+                    # (1) base : demi-hauteur de Rup
+                    lam_half = compute_half_point(lam, Rup, lam_left_list[best_dip_index], lam_right_list[best_dip_index])
+                    #lam_half = lam_left_list[best_dip_index] if Rm_l < Rm_r else lam_right_list[best_dip_index]
+                    ax_plot.scatter(
+                        [lam_half], [R0],
+                        marker='s', s=80,
+                        facecolor='none', edgecolor=color,
+                        alpha=0.7, zorder=102,
+                        label=f"{name} sens. half-base"
+                    )
+                    # (2) sur Rup_dn au même λ
+                    ax_plot.scatter(
+                        [lam_half], [R1],
+                        marker='s', s=80,
+                        facecolor='none', edgecolor=color,
+                        alpha=0.7, zorder=102
+                    )
+                    # (3) nouveau demi-point sur Rup_dn (même flank)
+                    lam_half_dn = compute_half_point(lam, Rup_dn, lam_left_dn[best_dip_index], lam_right_dn[best_dip_index])
+                    #lam_half_dn = lam_left_dn[best_dip_index] if R_max_l_dn < R_max_r_dn else lam_right_dn[best_dip_index]
+                    ax_plot.scatter(
+                        [lam_half_dn], [ylev_dn_list[best_dip_index]],
+                        marker='s', s=80,
+                        facecolor='none', edgecolor=color,
+                        alpha=0.7, zorder=102,
+                        label=f"{name} sens. half-Δn"
+                    )
                 else:
-                    lam_min  = lam_m_r
-                    lam_middle = lam_right
-                
-                #  on ajoute S_lam
-                S_lam_min_abs = abs((lam_dip   - lam_min  ) / lam_middle)
-                S_lam_sym_abs = abs((lam_dip   - lam_sym  ) / lam_middle)
-                # Ajout pour mémoriser les valeurs absolues
-                S_lam_min_vals.append(S_lam_min_abs)
-                S_lam_sym_vals.append(S_lam_sym_abs)                
-                
-                
-                color = colors[idx % n_colors]
-                ax_plot.plot(lam_range, Rup, color=color)
-
-                if verbose:
-                    # barre horizontale au niveau ylev
-                    ax_plot.hlines(ylev, xmin=lam_left, xmax=lam_right,
-                                linewidth=2, color=color,
-                                label='_nolegend_')
-
-                    # croix de dips détectés
+                    # 3 marqueurs en dip-mode :
+                    # (1) base : creux de Rup
                     ax_plot.scatter(
-                        lam[dips], Rup[dips],
-                        marker='x', s=40,
-                        color=color,
-                        label='_nolegend_'
+                        [lam_dip], [R_dip],
+                        marker='s', s=80,
+                        facecolor='none', edgecolor=color,
+                        alpha=0.7, zorder=102,
+                        label=f"{name} sens. dip-base"
                     )
-                    # croix des maxima initiaux
+                    # (2) sur Rup_dn au même λ_dip
                     ax_plot.scatter(
-                        lam_max_ls, R_max_ls,
-                        marker='x', s=30,
-                        color=color, label='_nolegend_'
+                        [lam_dip], [R1],
+                        marker='s', s=80,
+                        facecolor='none', edgecolor=color,
+                        alpha=0.7, zorder=102
                     )
+                    # (3) vrai creux sur Rup_dn
                     ax_plot.scatter(
-                        lam_max_rs, R_max_rs,
-                        marker='x', s=30,
-                        color=color, label='_nolegend_'
+                        [lam_dip_dn_list[best_dip_index]], [R_dip_dn_list[best_dip_index]],
+                        marker='s', s=80,
+                        facecolor='none', edgecolor=color,
+                        alpha=0.7, zorder=102,
+                        label=f"{name} sens. dip-Δn"
                     )
-                    # croix des points symétriques
-                    ax_plot.scatter(
-                        lam_syms, R_syms,
-                        marker='x', s=30,
-                        color=color, label='_nolegend_'
-                    )
-                    # annotation du dip retenu
-                    ax_plot.scatter([lam_dip], [Rdip],
-                                    marker='o', s=70,
-                                    facecolor='none',
-                                    edgecolor=color,
-                                    linewidths=2,
-                                    label='_nolegend_')
+                                            
+                
 
-
-    
-                config_labels.append(cfg["config_name"])
-                
-                # Construction du résumé de géométrie
-                geom = cfg.get("geometry", {}).get("geometry", {})
-                geom_lines = []
-                for key, disp_name in ordered_params:
-                    if key in geom:
-                        geom_lines.append(f"{disp_name}: {geom[key]}")
-                        
-                geom_summaries.append("\n".join(geom_lines))
-                
-                # Construction du résumé matière
-                mat_list = cfg.get("material", {}).get("MATERIALS_CONFIG", [])
-                mat_lines = []
-                if isinstance(mat_list, list):
-                    for entry in mat_list:
-                        key = entry.get("key", "")
-                        disp_name = key
-                        for k, dname in ordered_params:
-                            if k == key:
-                                disp_name = dname
-                                break
-                        mat_info = entry.get("material", {})
-                        mtype = mat_info.get("type", "").strip().lower()
-                        if mtype == "standard":
-                            val = mat_info.get("material", "").strip()
-                        elif mtype == "custom":
-                            val = mat_info.get("expression", "").strip()
-                        elif mtype == "refractiveindex":
-                            book = mat_info.get("book", "")
-                            page = mat_info.get("page", "")
-                            val = f"Book: {book}, Page: {page}"
-                        else:
-                            val = ""
-                        if val:
-                            mat_lines.append(f"{disp_name}: {val}")
-                            
-                mat_summaries.append("\n".join(mat_lines))
-                
-                
-                
-                #  on ajoute la FWHM 
-                fwhm_summaries.append(f"{width:.1f} nm")
-                #  on ajoute lambda
-                lam_summaries.append(f"{lam_dip:.1f} nm")    
-                # on ajoute S_lam
-                S_lam_summaries.append(f"{S_lam_min_abs:.3f} & {S_lam_sym_abs:.3f}")                # on ajoute le Q-factor
-                Q_factor.append(f"{(lam_dip / width):.1f}")            
-                # on ajoute le score interne
-                raw_score_summaries.append(f"{raw_score:.2e}")
-                
-                            
-                if verbose:
-                    dips_nm  = ", ".join(f"{l:.1f}" for l in lam[dips])
-                    scores_str = ", ".join(f"{s:.3e}" for s in scores_list)
-                    depths_str = ", ".join(f"{d:.3f}"  for d in depths)
-                    slopes_str = ", ".join(f"{s:.3e}" for s in slopes)
-                    widths_str = ", ".join(f"{w:.3f}" for w in widths)
-                
-                    # Ligne unique résumé pour ce spectre
-                    debug_lines.append(
-                        f"{cfg['config_name']}: dips[{dips_nm}]  "
-                        f"dip{lam_dip:.1f}nm  "
-                        f"depths=[{depths_str}]  "
-                        f"depth={depth:.3f}  "
-                        f"slopes=[{slopes_str}]  "
-                        f"slope={slope:.3e}  "
-                        f"FWHMs=[{widths_str}]  "
-                        f"FWHM={width:.1f}  "
-                        f"scores=[{scores_str}]  "
-                        f"score={raw_score:.3e}  "
-                    )   
-                
-                    # sauvegarde **configuration par configuration**
-                    # on utilise [-1] pour ne prendre que la dernière entrée de chaque liste (celle de la config en cours).
-                    save_simulation_summary(
-                        { name: simulation_details[name] },  # un dict à une seule entrée
-                        lam_range,
-                        wave,
-                        n_modes,                             # le n_modes spécifique
-                        summary_dir,
-                        custom_name=name,                   # nom du fichier = nom de la config
-                        fwhm_summaries=[fwhm_summaries[-1]],
-                        lam_summaries=[lam_summaries    [-1]],
-                        S_lam_summaries=[S_lam_summaries[-1]],
-                        Q_factor=[Q_factor               [-1]],
-                        raw_score_summaries=[raw_score_summaries[-1]],
-                        #comp_summaries=[comp_summaries   [-1]]
-                    )
-                    
-            # calculer la configuration optimale 
-            if S_lam_min_vals:
-                # calcul de la distance euclidienne (norme 2) pour chaque couple
-                norms = [np.hypot(a, b) for a, b in zip(S_lam_min_vals, S_lam_sym_vals)]
-                best_idx = int(np.argmin(norms))
-                # on récupère le nom de la config correspondante
-                best_cfg = [cfg['config_name'] for cfg in sim_config_selector.value][best_idx]
-                # on peut aussi afficher les valeurs exactes
-                best_min = S_lam_min_vals[best_idx]
-                best_sym = S_lam_sym_vals[best_idx]
-                debug_lines.append(
-                    f"→ BEST_CONFIG: {best_cfg}  "
-                    f"(S_lam_min={best_min:.3f}, S_lam_sym={best_sym:.3f})"
-                )
-
-
-            # On fusionne toutes les lignes en un texte multi-lignes
-            debug_txt = "\n".join(debug_lines)           
-
-
-            # === début nouveau bloc de wrapping ===
-            wrapper = textwrap.TextWrapper(
-                width=150,             # nombre max de caractères par ligne
-                break_long_words=True,
-                replace_whitespace=False
-            )
-            wrapped = []
-            for line in debug_txt.splitlines():
-                # wrapper.wrap renvoie [] si line == ""
-                wrapped.extend(wrapper.wrap(line) or [""])
-            # on écrase debug_txt par sa version "coupée"
-            debug_txt = "\n".join(wrapped)
-            # === fin bloc de wrapping ===
-
-            # Affiche le debug dans le widget sim_debug
-            sim_debug.clear_output()
+            # ----- debug : uniquement si verbose --------------------------
             if verbose:
-                with sim_debug:
-                    # debug_txt contient déjà le texte “wrapped”
-                    display(widgets.Textarea(
-                        value=debug_txt,
-                        layout=widgets.Layout(
-                            width='100%',
-                            height='200px',
-                            overflow_y='auto'
-                        )
-                    ))
+                dips_nm     = ", ".join(f"{lam[d]:.1f}"   for d in dips_idx_list)
+                dR_over_dn_str      = ", ".join(f"{s:.3f}"    for s in dR_over_dn_list)
+                dLam_over_dn_str    = ", ".join(f"{s1:.3f}"    for s1 in dLam_over_dn_list)
+                depths_str  = ", ".join(f"{di:.3f}"        for di in depth_list)
+                fwhm_str  = ", ".join(f"{w:.3f}"        for w in width_list)
 
 
-            Rn = minmax(raw_score_summaries)
-            Qn = minmax([float(q) for q in Q_factor])
-
-            comp = (Rn + Qn ) / 3.0
-            comp_summaries = [f"{c:.3f}" for c in comp]
-            
-            
-            
-            # FINALISATION DU TRACÉ
-            ax_plot.set_xlabel("Wavelength (nm)")
-            ax_plot.set_ylabel("Reflectance")
-            ax_plot.set_title("Simulation")
-            ax_plot.grid(True)
-            
-            # Désactivation de l'affichage des axes dans l'axe qui contiendra le tableau
-            ax_table.axis("off")
-            
-            # Ajustement des noms pour le tableau (ajout d'un saut de ligne si nécessaire)
-            config_labels = [label.replace("Mat_", "\nMat_") for label in config_labels]
-            
-            if config_labels:
-                # 1) nombre de colonnes
-                n_configs = len(config_labels)
-                # 2) taille de police dynamique
-                fontsize = 8 if n_configs <= 5 else max(8 - (n_configs - 5), 3)
-                table = ax_table.table(
-                    cellText=[
-                        geom_summaries,
-                        mat_summaries,
-                        fwhm_summaries,
-                        lam_summaries,
-                        S_lam_summaries,
-                        Q_factor,
-                        raw_score_summaries,
-                        #comp_summaries
-                    ],
-                    colLabels=config_labels,
-                    rowLabels=[
-                        "Geometry", "Material",
-                        "FWHM", r"$\lambda_0$",
-                        "S_lam abs: min & sym", "Q-factor",
-                        "Scoring dips per spectrum"#, "Score total"
-                    ],
-                    loc="center", cellLoc="left"
+                if lam_calc_dn is not None:
+                    lam_dip_dn_str   = f"{lam_calc_dn:.2f}"
+                    delta_lam_str  = f"{(lam_calc_dn - lam_dip):.3f}"
+                    S_lambda_str   = f"{S_lambda:.2f}"
+                else:
+                    lam_dip_dn_str   = "–"
+                    delta_lam_str  = "–"
+                    S_lambda_str   = "–"
+                                                                             # A VERIFIER
+                if S_R is not None:
+                    S_R_str        = f"{S_R:.3f}"
+                else:
+                    S_R_str        = "–"
+        
+    
+                # ligne unique de résumé pour ce spectre
+                debug_lines.append(
+                    f"{name} : dips[{dips_nm}], λ0={lam_dip:.2f} nm, "
+                    f"λΔn={lam_dip_dn_str} nm, "
+                    f"Δλ={delta_lam_str},  "
+                    f"Δλ/Δn[{dLam_over_dn_str}],  best Δλ/Δn={S_lambda:.3f},  "
+                    f"depths[{depths_str}], depth={depth:.3f}  "
+                    #f"slopes[{slopes_str}] slope={slope:.3f}  "
+                    f"FWHMs[{fwhm_str}], FWHM={fwhm:.1f}  "
+                    f"ΔR/Δn[{dR_over_dn_str}], best ΔR/Δn=={best_S_R:.3f}"
                 )
-                table.auto_set_font_size(False)
-                table.set_fontsize(fontsize)
-                table.auto_set_column_width(col=list(range(len(config_labels))))
-                # Personnalisation des cellules d'en-tête
-                for (row, col), cell in table.get_celld().items():
-                    if row == -1:
-                        cell.set_facecolor("#40466e")
-                        cell.set_text_props(weight="bold", color="white", fontsize=fontsize, ha="center")
-                    elif col == -1:
-                        cell.set_facecolor("#40466e")
-                        cell.set_text_props(weight="bold", color="white", fontsize=fontsize)
-                    else:
-                        cell.set_facecolor("whitesmoke")
-                        cell.set_edgecolor("lightgray")
-                        cell.set_linewidth(0.5)
-                # Appliquer les couleurs aux textes des cellules du corps
-                for (row, col), cell in table.get_celld().items():
-                    if row >= 0 and col >= 0:
-                        cell.get_text().set_color(colors[col % len(colors)])
-                # Ajustement dynamique de la hauteur des cellules
-                row_heights = {}
-                for (row, col), cell in table.get_celld().items():
-                    if row >= 0:
-                        txt = cell.get_text().get_text()
-                        nb_lines = txt.count("\n") + 1
-                        row_heights[row] = max(row_heights.get(row, 0), nb_lines)
-                for (row, col), cell in table.get_celld().items():
-                    if row in row_heights:
-                        cell.set_height(0.04 * row_heights[row])
-            
-            ax_table.figure.canvas.draw_idle()  # Mise à jour du tableau
-            
-
-            # transforme mode_by_cfg en liste alignée sur simulation_details:
-            n_mod_list = [ mode_by_cfg[name] for name in simulation_details.keys() ]
-
+                debug_lines.append("")
+                
+            # ----- sauvegarde de R + delta n ------------------------------    
+            if Rup_dn is not None: 
+                details["Rup_dn"] = Rup_dn.tolist()
+                details["delta_n"] = delta_n
+                
+            # ----- sauvegarde par config ------------------------------
             save_simulation_summary(
-                simulation_details,
-                lam_range,
-                wave,
-                n_mod_list,              # liste de n_modes
-                summary_dir,
-                custom_name=sim_name_widget.value,
-                fwhm_summaries=fwhm_summaries,
-                lam_summaries=lam_summaries,
-                S_lam_summaries=S_lam_summaries,
-                Q_factor=Q_factor,
-                raw_score_summaries=raw_score_summaries,
-                #comp_summaries=comp_summaries
-            )
+                {name: details}, lam_range, wave, n_modes, summary_dir,
+                custom_name=name,
+                fwhm_summaries=[fwhm_sum[-1]],
+                lam_summaries=[lam_sum[-1]],
+                delta_lam_over_midLam_summaries=[delta_lam_over_midLam[-1]],
+                Q_factor=[Q_fac[-1]],
+                best_S_R=[S_R_sum[-1]]
+                )
 
+        # ----- meilleure dip with respect to S_R max ---------------------------------------
+        if S_R_vals:
+            best = int(np.nanargmax(S_R_vals))
+            best_S_R_val = S_R_vals[best]
+            debug_lines.append(f"→ BEST_CONFIG (max ΔR/Δn): {cfg_labels[best]} (S_R = {best_S_R_val:.3f})")
+
+
+        # ----- debug ---------------------------------------------------
+        if verbose:
+            debug_out.value = "\n".join(debug_lines)
             
-            figures_dir = os.path.join(workspace_dir, "Figures")
-            material_str_clean = get_material_str_clean(simulation_details)
-            save_figure(fig, "Simulation Reflectance Spectra", figures_dir, material_str_clean)
-            
-            # Affichage final de la figure et du lien de téléchargement
+        # ----- tableau final (uniquement si on a au moins une config) ----
+        if not cfg_labels:
             sim_output.clear_output(wait=True)
-            display(fig)
-            download_link = create_download_link(fig, filename=f"simulation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
-            display(download_link)
-            plt.close(fig)
+            with sim_output:
+                print("Aucun dip valide trouvé : pas de tableau à afficher.")
+                plt.close(fig)
+                return
 
+        # ----- tableau final ------------------------------------------
+        ax_plot.set_xlabel("Wavelength (nm)")
+        ax_plot.set_ylabel("Reflectance"); ax_plot.set_title("Simulation")
+        ax_plot.grid(True); ax_table.axis('off')
+        
+        # === Filtrer “Geometry” ===
+        base_geom = set(geom_sum[0].splitlines())
+        new_geom = []
+        for i, txt in enumerate(geom_sum):
+            lines = txt.splitlines()
+            if i == 0:
+                new_geom.append(txt)
+            else:
+                diff = [l for l in lines if l not in base_geom]
+                new_geom.append("\n".join(diff))
+        geom_sum = new_geom
+
+        # === Filtrer “Material” ===
+        base_mat = set(mat_sum[0].splitlines())
+        new_mat = []
+        for i, txt in enumerate(mat_sum):
+            lines = txt.splitlines()
+            if i == 0:
+                new_mat.append(txt)
+            else:
+                diff = [l for l in lines if l not in base_mat]
+                new_mat.append("\n".join(diff))
+        mat_sum = new_mat
+        
+
+        col_labels = [lbl.replace("Mat_", "\nMat_") for lbl in cfg_labels]
+        if col_labels:
+            cellText, rowLabels = [], []
             
+            cellText.append(geom_sum); rowLabels.append("Geometry (nm)")
+            cellText.append(mat_sum);  rowLabels.append("Material")
             
-    sim_run_button.on_click(on_sim_run_clicked)
-    
-    # Assemblage de l'onglet Simulation : partie haute (deux colonnes) + partie basse (figure simulation et tableau)
-    sim_tab = widgets.VBox([
-        widgets.HBox([sim_controls, conv_widget]),
-        sim_debug,     
-        sim_output
-    ])    
-    return sim_tab
-    
+            if flags['show_fwhm']:     cellText.append(fwhm_sum); rowLabels.append("FWHM (nm)")
+            if flags['show_lambda0']:  cellText.append(lam_sum);  rowLabels.append(r"$\lambda_0$")
+            if flags['show_delta_lam_over_midLam']: cellText.append(delta_lam_over_midLam); rowLabels.append(r"$\Delta_{\lambda}$ / $\lambda_{min}$ or $\lambda_{sym}$")
+            if flags['show_S_lambda']: cellText.append(S_lambda_sum); rowLabels.append(r"$S_{\lambda}$ = Δλ / Δn (nm/RIU)")
+            if flags['show_S_dn']:     cellText.append(S_R_sum); rowLabels.append(r"ΔR/Δn (1/RIU)")
+            if flags['show_deltaR_half']: cellText.append(dR_half_sum); rowLabels.append(r"$\Delta R_{half}$")
+            if flags['show_Q']:        cellText.append(Q_fac); rowLabels.append("Q‑factor")
+
+            filtered = []
+            for lbl, row in zip(rowLabels, cellText):
+                if lbl in ("Geometry (nm)", "Material"):
+                    ref = row[0]
+                    new = [row[0]] + [("" if row[j]==ref else row[j]) for j in range(1,len(row))]
+                    filtered.append(new)
+                else:
+                    filtered.append(row)
+            cellText = filtered
+
+                       
+            n_cfg = len(col_labels)
+            fs = 8 if n_cfg <= 5 else max(8 - (n_cfg - 5), 3)
+            table = ax_table.table(
+                cellText=cellText, colLabels=col_labels, rowLabels=rowLabels,
+                loc="center", cellLoc="left")
+            table.auto_set_font_size(False); table.set_fontsize(fs)
+            table.auto_set_column_width(col=list(range(n_cfg)))
+
+            for (r, c), cell in table.get_celld().items():
+                if r == -1 or c == -1:
+                    cell.set_facecolor("#40466e")
+                    cell.get_text().set_color("white")
+                    cell.get_text().set_weight("bold")
+                else:
+                    cell.set_facecolor("whitesmoke")
+                    cell.set_edgecolor("lightgray")
+                    cell.set_linewidth(0.5)
+                    cell.get_text().set_color(colors[c % len(colors)])
+
+            # --------- hauteur dynamique --------------------------------
+            row_heights = {}
+            for (r, c), cell in table.get_celld().items():
+                if r >= 0:
+                    nb = cell.get_text().get_text().count("\n") + 1
+                    row_heights[r] = max(row_heights.get(r, 0), nb)
+            for (r, c), cell in table.get_celld().items():
+                if r in row_heights:
+                    cell.set_height(0.04 * row_heights[r])
+
+        # ----- affichage final ----------------------------------------
+        sim_output.clear_output(wait=True)
+        with sim_output:
+            display(fig)
+            display(_download_link(fig,
+                   f"simulation_{datetime.now():%Y%m%d_%H%M%S}.png"))
+        plt.close(fig)
+
+    sim_run_button.on_click(_run)
+
+    # ======================= assemblage final =========================
+    columns = HBox([sim_controls, conv_widget],
+                layout=Layout(align_items='flex-start'))
+    return VBox([columns, metrics_selector, debug_out, sim_output])

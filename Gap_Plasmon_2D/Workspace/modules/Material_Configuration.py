@@ -26,6 +26,7 @@ def build_material_configuration_dynamic(df_config, lambda_val_nm, json_combined
     with open(json_combined_path, "r", encoding="utf-8") as f:
         materials_data = json.load(f)
     available_materials = {k.lower(): k for k in materials_data.keys()}
+    
     materials_perm = {}
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_dir_local = os.path.join(base_path, "data")

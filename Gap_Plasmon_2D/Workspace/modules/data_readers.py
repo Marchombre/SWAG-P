@@ -27,15 +27,34 @@ Fonctions disponibles :
 """
 # Le docstring ci‑dessus décrit le rôle du module et la liste de ses fonctions disponibles.
 
-import os
-import glob
-import re
-import ast
+import os, glob, re, ast
+from collections import defaultdict
 import numpy as np
+import pandas as pd
+
+# ------------------------------------------------------------------ #
+#                       extraction utilitaires                       #
+# ------------------------------------------------------------------ #
+def _extract_points(line):
+    """
+    Détecte et renvoie (λ, Rup, Rup_dn) à partir d’une ligne du type :
+        λ=650.0 nm -> Rup=0.123, Rup_dn=0.118
+    ou (ancienne version) :
+        λ=650.0 nm -> Rup=0.123
+    """
+    m = re.search(
+        r"λ\s*=\s*([\d\.]+)\s*nm\s*->\s*Rup\s*=\s*([\d\.eE\+\-]+)"
+        r"(?:\s*,\s*Rup_dn\s*=\s*([\d\.eE\+\-]+))?", line)
+    if not m:
+        return None
+    lam  = float(m.group(1))
+    Rup  = float(m.group(2))
+    Rup_dn   = float(m.group(3)) if m.group(3) is not None else None
+    return lam, Rup, Rup_dn
+
 
 
 # --- Fonctions de lecture ---
-
 
 def get_material_str_clean(simulation_details):
     """
@@ -88,80 +107,72 @@ def get_material_str_clean(simulation_details):
     return "_".join(filtered_parts)
 
 
+# ------------------------------------------------------------------ #
+#                  lecture d’un fichier  summary RCWA                #
+# ------------------------------------------------------------------ #
+# deux regex compactes (plus lisibles que la précédente)
+_re_rup    = re.compile(r"λ\s*=\s*([\d\.]+).*?Rup\s*=\s*([\d\.Ee\+\-]+)")
+_re_rup_dn = re.compile(r"λ\s*=\s*([\d\.]+).*?Rup_dn\s*=\s*([\d\.Ee\+\-]+)")
 
-def read_all_combos(file_path):
+def read_all_combos(path):
     """
-    Lit le fichier simulation_summary_XXX.txt et extrait pour chaque combo (délimité par "Combo name:")
-    les points de réflectance Rup. La plage de longueurs d'onde est déduite des lignes de points
-    de réflectance du premier combo rencontré.
-    
-    Retourne un dictionnaire dont les clés sont les noms de combo et les valeurs sont un tuple
-    (wavelengths, Rup_values) sous forme de tableaux numpy.
+    Renvoie deux dictionnaires synchronisés :
+      • combos_Rup    {combo → (λ_array, Rup_array)}
+      • combos_Rup_dn {combo → (λ_array, Rup_dn_array)}  (clé absente si le
+        bloc « Rup_dn » n’existe pas pour la combo)
     """
-    combos = {}                       # Dictionnaire final : clé = nom de combo, valeur = (λ, Rup)
-    lambda_range = None              # Sera défini lorsque le premier combo fournit sa liste de λ
-    current_combo = None             # Nom du combo en cours de lecture
-    current_wavelengths = []         # Liste temporaire des λ pour ce combo
-    current_Rup = []                 # Liste temporaire des Rup pour ce combo
-    reading_points = False           # Indicateur : sommes‑nous dans la section “Reflectance points” ?
+    combos_Rup, combos_Rup_dn = {}, {}
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()        # Lecture de toutes les lignes du fichier
+    # ---------- lecture brute du fichier ---------------------------
+    with open(path, encoding="utf‑8") as f:
+        lines = [ln.rstrip() for ln in f]
 
-    for line in lines:
-        line = line.strip()          # Suppression des espaces en début/fin de ligne
-        if line.startswith("Combo name:"):
-            # Si on rencontre une nouvelle section de combo :
-            if current_combo is not None and current_Rup:
-                # Si un combo précédent était en cours et a des données Rup
-                if lambda_range is None:
-                    # Pour le premier combo, fixer la plage de λ
-                    lambda_range = np.array(current_wavelengths)
-                # Enregistrer le combo précédent dans le dict
-                combos[current_combo] = (lambda_range, np.array(current_Rup))
-            # Extraire et mémoriser le nouveau nom de combo
-            current_combo = line.split("Combo name:")[1].strip()
-            # Réinitialiser les listes de points
-            current_wavelengths = []
-            current_Rup = []
-            reading_points = False  # Nous ne lirons les points qu’après la ligne « Reflectance points »
-            continue                  # Passer à la ligne suivante
+    # ---------- parse ligne par ligne ------------------------------
+    cur_name, section = None, None                   # section = None | 'rup' | 'rupdn'
+    λ_buf, rup_buf, rupdn_buf = [], [], []
 
-        if "Reflectance points" in line:
-            # Dès qu’on voit cette mention, on passe en mode lecture des points
-            reading_points = True
+    def flush():
+        """Enregistre les buffers courants dans les deux dictionnaires"""
+        if cur_name and rup_buf:                     # on a au moins Rup
+            λ = np.asarray(λ_buf, float)
+            combos_Rup[cur_name] = (λ, np.asarray(rup_buf, float))
+            if rupdn_buf:                            # bloc « Rup_dn » présent
+                combos_Rup_dn[cur_name] = (λ, np.asarray(rupdn_buf, float))
+                
+    for raw in lines:
+        ln = raw.strip()                      #  enlève les blancs à gauche/droite
+
+        # ---------- nouvelle combo ----------
+        if ln.startswith("Combo name:"):
+            flush()
+            cur_name = ln.split("Combo name:")[1].strip()
+            λ_buf, rup_buf, rupdn_buf = [], [], []
+            section = None
             continue
 
-        if reading_points and line.startswith("λ="):
-            # Extraction des valeurs λ et Rup dans la ligne
-            m = re.search(
-                r"λ=([\d\.]+)\s*nm\s*->\s*Rup=([\d\.eE\+\-]+)",
-                line
-            )
+        # ---------- détection de bloc ----------
+        if ln.startswith("Reflectance points"):
+            section = "rupdn" if "Rup_dn" in ln else "rup"
+            continue
+
+        # ---------- points Rup ----------
+        if section == "rup":
+            m = _re_rup.match(ln)             # ln est déjà ‘strippé’ -> OK
             if m:
-                try:
-                    wl_val  = float(m.group(1))  # Conversion du premier groupe en float
-                    rup_val = float(m.group(2))  # Conversion du second groupe en float
-                    current_wavelengths.append(wl_val)
-                    current_Rup.append(rup_val)
-                except Exception:
-                    # En cas d’erreur de conversion, on ignore cette ligne
-                    continue
+                λ_buf .append(float(m.group(1)))
+                rup_buf.append(float(m.group(2)))
+            continue
 
-        if reading_points and re.match(r"^-{10,}", line):
-            # Une ligne de tirets longs marque la fin des points de réflectance
-            reading_points = False
+        # ---------- points Rup_dn ----------
+        if section == "rupdn":
+            m = _re_rup_dn.match(ln)
+            if m:
+                rupdn_buf.append(float(m.group(2)))
+            continue
 
-    # Après la boucle, vérifier s’il reste un combo en cours à enregistrer
-    if current_combo is not None and current_Rup:
-        if lambda_range is None:
-            lambda_range = np.array(current_wavelengths)
-        combos[current_combo] = (lambda_range, np.array(current_Rup))
-    
-    if not combos:
-        # Si aucun combo n’a été extrait, c’est une erreur
-        raise ValueError("Aucun combo n'a pu être extrait du fichier.")
-    return combos  # Retourne le dict complet
+    flush()                                           # dernière combo
+    return combos_Rup, combos_Rup_dn
+
 
 def read_experimental_data(file_path):
     """
@@ -322,6 +333,62 @@ def parse_experimental_data_summary(file_path):
 
 
 
+
+
+from Material_Configuration import build_material_configuration_dynamic
+def get_baseline_n(cfg, layer_key, lam_ref, json_combined_path):
+    """
+    Extrait l'indice de réfraction de base n0 pour la couche `layer_key`,
+    en utilisant build_material_configuration_dynamic pour tous les types.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration complète d'une combo, avec cfg['material']['MATERIALS_CONFIG'].
+    layer_key : str
+        Clé de la couche ciblée (ex. "perm_gap", "perm_reso", …).
+    lam_ref : float
+        Longueur d'onde de référence (en nm) à laquelle on évalue epsilon
+        (typiquement lam_dip ou la moyenne de lam).
+    json_combined_path : str
+        Chemin vers le JSON combiné (passé à build_material_configuration_dynamic).
+
+    Returns
+    -------
+    float
+        Indice n0 pour la couche layer_key.
+    """
+
+    # 1) On construit un DataFrame pandas à partir de la liste MATERIALS_CONFIG
+    df_config = pd.DataFrame(cfg['material']['MATERIALS_CONFIG'])
+
+    # 2) On appelle build_material_configuration_dynamic pour obtenir ε(role) → permittivité
+    #    On ne fournit pas d'override ici, puisque c'est la valeur de base.
+    eps_dict = build_material_configuration_dynamic(
+        df_config,
+        lam_ref,
+        json_combined_path,
+        ri_overrides=None
+    )
+
+    # 3) On récupère la permittivité complexe (ou réelle) de la couche layer_key
+    if layer_key not in eps_dict:
+        raise KeyError(f"Couche '{layer_key}' introuvable dans eps_dict renvoyé")
+    eps = eps_dict[layer_key]
+
+    # 4) On extrait l'indice n0 : sqrt de la partie réelle de ε
+    #    (si ε est complexe, on prend la partie réelle pour n)
+    n0 = np.sqrt(np.real(eps))
+
+    return float(n0)
+
+
+
+
+
+
+
+
 def list_sim_summary_files(summary_dir):
     """
     Retourne la liste triée des fichiers de simulation summary présents dans summary_dir.
@@ -373,106 +440,74 @@ def get_simulation_label(base_label, file_path, label_to_tag):
     
     
 
+# ------------------------------------------------------------------ #
+#            agrégation complète pour l’interface graphique           #
+# ------------------------------------------------------------------ #
 def get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params):
     """
-    Parcourt les fichiers de simulation et expérimentaux, récupère les spectres et
-    prépare pour chacun un résumé (geometry et material) à l'aide de ordered_params.
-    
-    Parameters:
-      - summary_dir: répertoire contenant les fichiers simulation_summary*.txt.
-      - exp_data_dir: répertoire contenant les fichiers Data_structure*.txt.
-      - ordered_params: liste de tuples (clé, nom_affiché) utilisée pour formater les résumés.
-      
-    Retourne:
-      - spectra: dictionnaire {label: (wavelengths, reflectance_values)}.
-      - summaries: dictionnaire {label: (geometry_summary, material_summary)}.
+    Retourne quatre dictionnaires synchronisés :
+        Rup_dict, Rup_dn_dict, summaries, metrics
     """
-    spectra     = {}  # Dictionnaire final des spectres simulés et exp.
-    summaries   = {}  # Dictionnaire final des résumés (geometry, material)
-    label_to_tag= {}  # Pour gérer les doublons de labels
-    metrics_dict = {}
-    
-    sim_files   = list_sim_summary_files(summary_dir)  # Liste des fichiers simulation
-    
-    for fpath in sim_files:
-        combos     = read_all_combos(fpath)             # Lire les points Rpup par combo
-        sim_configs= parse_simulation_summary(fpath)    # Lire les metadata par combo
-        for combo_label, (wl, R) in combos.items():
-            base_label = combo_label.replace(" - ", "\n")
-            if base_label in spectra:
-                # Si ce base_label existe déjà, on génère un nouveau label unique
-                new_label = get_simulation_label(base_label, fpath, label_to_tag)
-            else:
-                # Sinon, on initialise le mapping et on crée le premier label
-                fname = os.path.basename(fpath)
-                tag   = os.path.splitext(fname)[0]
-                prefix= "simulation_summary_RCWA_"
-                if tag.startswith(prefix):
-                    remainder = tag[len(prefix):]
-                    parts     = remainder.split("_", 1)
-                    tag       = parts[0] if parts else ""
-                label_to_tag[base_label] = {tag: 1}
-                new_label = f"{base_label} ({tag})" if tag else base_label
-            spectra[new_label] = (wl, R)  # Stockage du spectre simulé
-            # Recherche du summary correspondant dans sim_configs
-            found = False
-            for cfg in sim_configs:
-                cfg_label = cfg.get("label", "Unknown").replace(" - ", "\n")
-                if cfg_label == base_label:
-                    geom = cfg.get("geometry", {})
-                    geom_lines = []
-                    for key, disp_name in ordered_params:
-                        if key in geom:
-                            geom_lines.append(f"{disp_name}: {geom[key]}")
-                    geom_summary = "\n".join(geom_lines)
-                    mat = cfg.get("material", [])
-                    mat_lines = []
-                    if isinstance(mat, list):
-                        for entry in mat:
-                            key       = entry.get("key", "")
-                            disp_name = key
-                            for k, dname in ordered_params:
-                                if k == key:
-                                    disp_name = dname
-                                    break
-                            mat_info = entry.get("material", {})
-                            mtype    = mat_info.get("type", "").strip().lower()
-                            if mtype == "standard":
-                                val = mat_info.get("material", "").strip()
-                            elif mtype == "custom":
-                                val = mat_info.get("expression", "").strip()
-                            elif mtype == "refractiveindex":
-                                book = mat_info.get("book", "")
-                                page = mat_info.get("page", "")
-                                val = f"Book: {book}, Page: {page}"                                
-                            else:
-                                val = ""
-                            if val:
-                                mat_lines.append(f"{disp_name}: {val}")
-                    mat_summary = "\n".join(mat_lines)
-                    summaries[new_label] = (geom_summary, mat_summary)
-                    
-                    # metrics
-                    metrics = cfg.get("metrics", {})
-                    metrics_dict[new_label] = metrics
-                    
-                    found = True
-                    break
-            if not found:
-                # Si aucun summary n’a été trouvé, on met des champs vides
-                summaries[new_label] = ("", "")
-                metrics_dict[new_label] = {}
-                
-    # Lecture des fichiers expérimentaux
-    exp_files = list_exp_data_files(exp_data_dir)
-    for fpath in exp_files:
-        data     = read_experimental_data(fpath)          # (λ, R) expérimentaux
-        if data:
-            base_lbl = os.path.basename(fpath)
-            spectra[base_lbl]   = data                    # Ajout au dict spectra
-            exp_data    = parse_experimental_data_summary(fpath)
-            geom_summary= exp_data.get("geometry", "")
-            mat_summary = exp_data.get("material", "")
-            summaries[base_lbl] = (geom_summary, mat_summary)
 
-    return spectra, summaries, metrics_dict  # Retourne les deux dictionnaires finaux
+    Rup_dict, Rup_dn_dict = {}, {}
+    summaries, metrics_dict, delta_n_dict = {}, {}, {}
+    label_to_tag = {}
+
+    # ---------- fichiers de simulation ------------------------------
+    for fpath in list_sim_summary_files(summary_dir):
+        combos_Rup, combos_Rup_dn = read_all_combos(fpath)
+        sim_cfgs = parse_simulation_summary(fpath)
+
+        for combo_name, (λ, Rup) in combos_Rup.items():
+            base = combo_name.replace(" - ", "\n")
+            label = get_simulation_label(base, fpath, label_to_tag)
+
+            Rup_dict[label] = (λ, Rup)
+            if combo_name in combos_Rup_dn:
+                Rup_dn_dict[label] = combos_Rup_dn[combo_name]
+
+            # --------- résumé geometry / material -------------------
+            match_cfg = next((c for c in sim_cfgs
+                              if c["label"].replace(" - ", "\n") == base), None)
+            if match_cfg:
+                # geometry
+                geom_lines = [f"{d}: {match_cfg['geometry'].get(k)}"
+                              for k, d in ordered_params
+                              if k in match_cfg['geometry']]
+                # material
+                mat_lines  = []
+                for entry in match_cfg['material']:
+                    key = entry['key']
+                    disp = next((d for k, d in ordered_params if k == key), key)
+                    mat = entry['material']; typ = mat['type'].lower()
+                    if typ == "standard":  val = mat['material']
+                    elif typ == "custom":  val = mat['expression']
+                    else:                  val = f"Book: {mat.get('book','')}, Page: {mat.get('page','')}"
+                    mat_lines.append(f"{disp}: {val}")
+                summaries[label] = ("\n".join(geom_lines), "\n".join(mat_lines))
+                metrics_dict[label] = match_cfg.get("metrics", {})
+                # ←–– extraire Δn depuis les metrics (clé "Δn")
+                dn_str = metrics_dict[label].get("Δn")
+                try:
+                    delta_n_dict[label] = float(dn_str)
+                except Exception:
+                    delta_n_dict[label] = None
+            else:
+                summaries[label] = ("", "")
+                metrics_dict[label] = {}
+                delta_n_dict[label] = None
+
+    # ---------- fichiers expérimentaux ------------------------------
+    for fpath in list_exp_data_files(exp_data_dir):
+        try:
+            λ, Rexp = read_experimental_data(fpath)
+        except Exception:
+            continue
+        lbl = os.path.basename(fpath)
+        Rup_dict[lbl] = (λ, Rexp)
+        summaries[lbl] = tuple(parse_experimental_data_summary(fpath).values())
+        metrics_dict[lbl] = {}
+        delta_n_dict[lbl] = None
+        # (pas de spectre Rup_dn pour les données expérimentales)
+
+    return Rup_dict, Rup_dn_dict, summaries, metrics_dict, delta_n_dict

@@ -2,6 +2,7 @@
 import os
 import json
 import numpy as np
+import glob
 from scipy.special import erf, wofz
 
 
@@ -125,9 +126,6 @@ def get_permittivity_from_txt(material_name, lambda_val_nm, data_dir):
     l'interpolation se fasse avec lambda_val_nm (qui est en nm).
     Retourne ε = (n + i*k)^2 interpolé à lambda_val_nm.
     """
-    import glob
-    import numpy as np
-    import os
 
     # Cherche le fichier [material_name].txt ou contenant material_name dans data_dir
     pattern = os.path.join(data_dir, f"{material_name}.txt")

@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-# ──────────────────────────────────────────────────────────────────────────────
-# La ligne « shebang » indique au système que ce script doit être lancé
-# avec l’interpréteur Python 3 disponible dans le PATH.
-# ──────────────────────────────────────────────────────────────────────────────
 
 """
 Module: simulate_and_plot.py
@@ -13,27 +9,13 @@ ou uniquement pour un sous-ensemble choisi et construit un graphique récapitula
 sont sauvegardés via les fonctions utilitaires de Saving_Functions.py.
 """
 
-import os
-# Module de gestion des chemins et opérations système (lecture/écriture de fichiers)
-import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from datetime import datetime
-# Importations internes relatives aux simulations et à la sauvegarde de résultats :
-from simulate_reflectance import simulate_reflectance_single
-# ──────────────────────────────────────────────────────────────────────────────
-# simulate_reflectance_all_combos   : simule tous les couples géométrie/matériau
-# simulate_reflectance_single       : simule une seule configuration
-# ──────────────────────────────────────────────────────────────────────────────
 
-from Saving_Functions import get_material_str_clean, save_simulation_summary, save_figure
-# ──────────────────────────────────────────────────────────────────────────────
-# get_material_str_clean : fabrique une chaîne descriptive “propre” pour les matériaux
-# save_simulation_summary: écrit un fichier résumé de simulation (JSON, CSV…)
-# save_figure            : exporte la figure matplotlib dans un dossier donné
-# ──────────────────────────────────────────────────────────────────────────────
+from simulate_reflectance import simulate_reflectance_single
+
 
 # Liste ordonnée des paramètres géométriques avec leur libellé convivial
 ordered_params = [
