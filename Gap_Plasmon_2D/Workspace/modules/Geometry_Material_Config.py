@@ -141,25 +141,42 @@ def create_geometry_material_widget():
                     "material": mat_cfg
                 }
                 combined_configs.append(combined)
+                
+            # … juste avant, vous avez construit `combined_configs` …
             if combined_configs:
-                print("Combined Geometry-Material Configurations:")
-                for idx, cfg in enumerate(combined_configs, start=1):
-                    print(f"Row {idx} - {cfg['config_name']}:")
-                    print("  geometry:", cfg["geometry"]["config_name"])
-                    print("  material:", cfg["material"]["config_name"])
-                    print("-" * 40)
-                    
+                # définition du chemin du fichier
                 module_dir = os.path.dirname(os.path.abspath(__file__))
                 workspace_dir = os.path.dirname(module_dir)
                 CONFIGURATIONS_dir = os.path.join(workspace_dir, "CONFIGURATIONS")
                 if not os.path.exists(CONFIGURATIONS_dir):
                     os.makedirs(CONFIGURATIONS_dir)
                 combos_file = os.path.join(CONFIGURATIONS_dir, "geom_mat_combinations.json")
+
+                # chargement des combinaisons existantes (s’il y en a)
+                try:
+                    with open(combos_file, "r", encoding="utf-8") as f:
+                        existing = json.load(f).get("ALL_COMBINED_CONFIGS", [])
+                except (FileNotFoundError, json.JSONDecodeError):
+                    existing = []
+
+                # on indexe par config_name pour fusionner sans doublon
+                merged = { cfg["config_name"]: cfg for cfg in existing }
+                for cfg in combined_configs:
+                    # écrase si déjà présent, ou ajoute sinon
+                    merged[cfg["config_name"]] = cfg
+
+                # écriture fusionnée
                 with open(combos_file, "w", encoding="utf-8") as f:
-                    json.dump({"ALL_COMBINED_CONFIGS": combined_configs}, f, indent=2)
-                print(f"\nCombinations saved in {combos_file}")
+                    json.dump(
+                        {"ALL_COMBINED_CONFIGS": list(merged.values())},
+                        f,
+                        indent=2,
+                        ensure_ascii=False
+                    )
+                print(f"Combinations saved in {combos_file} ({len(merged)} total).")
             else:
                 print("No valid combination selected.")
+
     combine_button.on_click(on_combine_clicked)
     
     # Ajout du bouton refresh dans le container des boutons de contrôle

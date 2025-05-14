@@ -199,7 +199,7 @@
       "compartment": "c70"
     },
     {
-      "config_name": "Structure 1",
+      "config_name": "Structure 1 func=1",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 30.0,
@@ -213,7 +213,8 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-      }
+      },
+      "compartment": "D\u00e9faut"
     },
     {
       "config_name": "c30_g2_m10",

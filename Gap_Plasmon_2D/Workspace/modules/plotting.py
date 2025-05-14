@@ -71,6 +71,16 @@ def create_plot_tab():
 
     draw_b   = widgets.Button(description="Draw", button_style="info")
     
+    # nouvelle checkbox pour afficher les labels sur le plot
+    show_labels_chk = widgets.Checkbox(
+        value=False,
+        description="Show labels",
+        indent=False,
+        layout=Layout(width='auto'),
+        style={'description_width':'initial'}
+    )
+    
+    
     debug_out = widgets.Textarea(
     value='',
     placeholder='Logs verbose…',
@@ -166,7 +176,7 @@ def create_plot_tab():
         metrics_hbox,
         HTML("<b>Overlays graphiques :</b>"),
         overlays_hbox,
-        HBox([draw_b], layout=Layout(grid_gap='10px'))
+        HBox([show_labels_chk, draw_b], layout=Layout(grid_gap='10px'))
     ], layout=Layout(width='100%'))
 
 
@@ -201,9 +211,19 @@ def create_plot_tab():
         if not labels:
             return
 
-        fig = plt.figure(figsize=(13, 9))
-        ax_plot  = fig.add_axes([0.10, 0.50, 0.80, 0.35])
-        ax_table = fig.add_axes([0.10, 0.05, 0.80, 0.35]); ax_table.axis('off')
+        # ──────────────────────────────────────────────────────────
+        # 1) Figure dédiée au plot
+        # ──────────────────────────────────────────────────────────
+        fig_plot = plt.figure(figsize=(9, 6))
+        ax_plot  = fig_plot.add_axes([0.10, 0.10, 0.80, 0.85])  # occupe presque tout [ left, bottom, width, height ]
+        # … ici, on laisse TOUS les appels ax_plot.plot(), scatter(), grid(), légende, etc. …
+
+        # ──────────────────────────────────────────────────────────
+        # 2) Figure dédiée au tableau
+        # ──────────────────────────────────────────────────────────
+        fig_table = plt.figure(figsize=(9, 4))
+        ax_table  = fig_table.add_axes([0.10, 0.05, 0.80, 0.90])  # occupe tout sauf un petit haut [ left, bottom, width, height ]
+        ax_table.axis('off')
 
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
@@ -584,7 +604,8 @@ def create_plot_tab():
                 filtered_rows.append(row)
         rowLabels, cellText = filtered_labels, filtered_rows
                         
-                                           
+        # === création du tableau ===          
+                   
         n_cfg=len(cfg_labels)
         fs=8 if n_cfg<=5 else max(8-(n_cfg-5),3)
         
@@ -614,18 +635,29 @@ def create_plot_tab():
             if r in h_row:
                 cell.set_height(0.04*h_row[r])
 
-        # ---------------------- axes cosmetics ----------------------- #
+        # ---------------------- axes ----------------------- #
         ax_plot.set_xlabel("Wavelength (nm)")
         ax_plot.set_ylabel("Reflectance")
         ax_plot.grid(True)
+        # si demandé, on affiche la légende avec les noms de config
+        if show_labels_chk.value:
+            ax_plot.legend(loc='best', fontsize=8)
 
         # --------------- rendu dans la zone de sortie ---------------- #
         plot_out.clear_output(wait=True)
         with plot_out:
-            display(fig)
-            display(_download_link(fig,
-                     f"plot_{datetime.now():%Y%m%d_%H%M%S}.png"))
-        plt.close(fig)
+            # affichage + lien pour la figure du spectre
+            display(fig_plot)
+            display(_download_link(fig_plot,
+                    f"spectra_{datetime.now():%Y%m%d_%H%M%S}.png"))
+
+            # affichage + lien pour la figure du tableau
+            display(fig_table)
+            display(_download_link(fig_table,
+                    f"tableau_{datetime.now():%Y%m%d_%H%M%S}.png"))
+        plt.close(fig_plot)
+        plt.close(fig_table)
+
 
     # liaison bouton
     draw_b.on_click(_draw)
