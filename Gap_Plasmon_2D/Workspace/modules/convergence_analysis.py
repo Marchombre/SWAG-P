@@ -390,7 +390,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         conv_output,
         results_table_output,
         download_link
-    ], layout=widgets.Layout(width='53%', justify_content='flex-end'))
+    ], layout=widgets.Layout(width='53%'))
 
     
     return widget
