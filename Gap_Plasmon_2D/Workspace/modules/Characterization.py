@@ -38,7 +38,7 @@ def _find_dip_core(
             empty, empty,         # lam_max_l_list, R_max_l_list
             empty, empty,         # lam_max_r_list, R_max_r_list
             empty, empty,         # lam_sym_list, R_sym_list
-            empty, empty          # depth_list, slope_list
+            empty          # depth_list
         ), cfg_name
 
     # listes à remplir

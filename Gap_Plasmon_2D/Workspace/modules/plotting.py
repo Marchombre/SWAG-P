@@ -167,6 +167,22 @@ def create_plot_tab():
         )
     )
 
+
+    # ─── Widgets pour zoom en λ ─────────────
+    lambda_min_text = widgets.FloatText(
+        value=0.0, description="λ min (nm):",
+        layout=Layout(width='150px'),
+        style={'description_width':'initial'}
+    )
+    lambda_max_text = widgets.FloatText(
+        value=0.0, description="λ max (nm):",
+        layout=Layout(width='150px'),
+        style={'description_width':'initial'}
+    )
+    range_box = HBox([lambda_min_text, lambda_max_text],
+                        layout=Layout(grid_gap='10px'))
+
+
     # 3) On assemble le tout
     controls_box = VBox([
         HTML("<h3>Plot</h3>"),
@@ -175,14 +191,27 @@ def create_plot_tab():
         HTML("<b>Métriques à afficher :</b>"),
         metrics_hbox,
         HTML("<b>Overlays graphiques :</b>"),
-        overlays_hbox,
+        overlays_hbox, 
+        range_box,
         HBox([show_labels_chk, draw_b], layout=Layout(grid_gap='10px'))
     ], layout=Layout(width='100%'))
 
 
     # -------------------- zone figure / tableau -------------------- #
     plot_out = widgets.Output(
-        layout=Layout(border='2px solid #ccc', padding='10px', min_height='400px'))
+        layout=Layout(
+            border='2px solid #ccc',
+            padding='10px',
+            align_items='stretch',       # étire au maxi
+            display='flex',             # active le mode flex
+            flex_flow='column nowrap',  # empile verticalement
+            #align_items='center',       # centre horizontalement
+            width='100%',              # largeur pleine
+            height='auto',              # laisse la hauteur s'ajuster
+            justify_content='center'    # centre verticalement (si tu as un peu de marge)
+        )
+    )
+
 
     # ---------------------------------------------------------------- #
     #                    variables partagées              #
@@ -214,7 +243,7 @@ def create_plot_tab():
         # ──────────────────────────────────────────────────────────
         # 1) Figure dédiée au plot
         # ──────────────────────────────────────────────────────────
-        fig_plot = plt.figure(figsize=(9, 6))
+        fig_plot = plt.figure(figsize=(12, 6))
         ax_plot  = fig_plot.add_axes([0.10, 0.10, 0.80, 0.85])  # occupe presque tout [ left, bottom, width, height ]
         # … ici, on laisse TOUS les appels ax_plot.plot(), scatter(), grid(), légende, etc. …
 
@@ -244,6 +273,27 @@ def create_plot_tab():
         for idx, lab in enumerate(labels):
             lam, Rup = Rup_dict[lab]
             Rup_dn_tuple = Rup_dn_dict.get(lab)
+
+            # 1) calcul des bornes d’affichage
+            min_w, max_w = lambda_min_text.value, lambda_max_text.value
+            # si 0 => on prend toute la plage
+            low  = lam.min() if min_w <= 0 else max(min_w, lam.min())
+            high = lam.max() if max_w <= 0 else min(max_w, lam.max())
+
+            # 2) on crée lam_plot/Rup_plot pour TOUTES les courbes
+            mask       = (lam >= low) & (lam <= high)
+            lam_plot   = lam[mask]
+            Rup_plot   = Rup[mask]
+
+            # 3) idem pour Rup_dn (si existant), pour l’affichage uniquement
+            if Rup_dn_tuple is not None:
+                lam_dn_full, Rup_dn_full = Rup_dn_tuple
+                mask_dn     = (lam_dn_full >= low) & (lam_dn_full <= high)
+                lam_dn_plot = lam_dn_full[mask_dn]
+                Rup_dn_plot = Rup_dn_full[mask_dn]
+            else:
+                lam_dn_full = Rup_dn_full = lam_dn_plot = Rup_dn_plot = None
+
 
             dR_over_dn_list = []
             dLam_over_dn_list = []
@@ -344,18 +394,30 @@ def create_plot_tab():
 
             # Tracé graphique
             color = colors[idx % len(colors)]
-            ax_plot.plot(lam, Rup, color=color, label=lab, zorder=1)
+            # Tracé principal restreint :
+            ax_plot.plot(lam_plot, Rup_plot, color=color, label=lab, zorder=1)
+
+            # Dips :
+            if show_dips_chk.value:
+                # on ne montre que les dips DANS le range
+                dip_lams  = lam[dip_list_idx]
+                dip_rups  = Rup[dip_list_idx]
+                dip_mask  = (dip_lams >= low) & (dip_lams <= high)
+                ax_plot.scatter(dip_lams[dip_mask], dip_rups[dip_mask],
+                                marker='x', s=40, color=color, zorder=3)
+
 
             if show_hlines_chk.value:
                 # demi-hauteur sur Rup
-                ax_plot.hlines(
-                    y_level_list[best_idx],
-                    lam_left_list[best_idx],
-                    lam_right_list[best_idx],
-                    linewidth=2, colors=color, zorder=2
-                )
-                # demi-hauteur sur Rup_dn uniquement si disponible
-                if Rup_dn_tuple is not None:
+                if lam_left_list[best_idx] >= low and lam_right_list[best_idx] <= high:
+                    ax_plot.hlines(
+                        y_level_list[best_idx],
+                        lam_left_list[best_idx],
+                        lam_right_list[best_idx],
+                        linewidth=2, colors=color, zorder=2
+                    )
+                # idem sur Rup_dn dans le range
+                if Rup_dn_tuple is not None and lam_left_list_dn[best_idx]>=low and lam_right_list_dn[best_idx]<=high:
                     ax_plot.hlines(
                         y_level_list_dn[best_idx],
                         lam_left_list_dn[best_idx],
@@ -363,10 +425,8 @@ def create_plot_tab():
                         linewidth=2, colors=color, zorder=2
                     )
 
-                    
-            if show_dips_chk.value:
-                ax_plot.scatter(lam[dip_list_idx], Rup[dip_list_idx], marker='x', s=40, color=color, zorder=3)
 
+                    
             if show_maxima_chk.value:
                 ax_plot.scatter(lam_max_l_list, R_max_l_list, marker='x', s=30, color=color, zorder=3)
                 ax_plot.scatter(lam_max_r_list, R_max_r_list, marker='x', s=30, color=color, zorder=3)
@@ -389,15 +449,15 @@ def create_plot_tab():
                                     linewidths=2, zorder=4)
 
 
-            if show_Rup_dn_overlay_chk.value and Rup_dn_tuple is not None:
-                good = ~np.isnan(Rup_dn_vals)
-                ax_plot.plot(lam_dn[good], Rup_dn_vals[good], "--", linewidth=2, color=color, alpha=0.7, label=f"{lab} (R + Δn)", zorder=0)
-                
+            if show_Rup_dn_overlay_chk.value and lam_dn_plot is not None:
+                good = ~np.isnan(Rup_dn_plot)
+                ax_plot.plot(lam_dn_plot[good], Rup_dn_plot[good], "--",
+                            linewidth=2, color=color, alpha=0.7,
+                            label=f"{lab} (R + Δn)", zorder=0)
+
                 
             if show_sensitivity_marker_chk.value and Rup_dn_tuple is not None:
-                # unpack pour être clair
-                # lam0, R0 = point de référence (dip ou half) sur Rup
-                # lam1, R1 = point équivalent pour Rup_dn
+                # on récupère d’abord les coordonnées de base (sur tout le spectre)
                 if use_half:
                     # demi‐hauteur sur Rup
                     lam0 = compute_half_point(
@@ -407,52 +467,48 @@ def create_plot_tab():
                     R0 = float(interp0(lam0))
                     # même λ sur Rup_dn
                     R1 = float(interp1(lam0))
-                    # demi‐hauteur sur Rup_dn, même flank
+                    # demi‐hauteur sur Rup_dn
                     lam1 = compute_half_point(
-                        lam_dn, Rup_dn_vals,
+                        lam_dn_full, Rup_dn_full,
                         lam_left_list_dn[best_idx], lam_right_list_dn[best_idx]
                     )
-                    y1 = y_level_list_dn[best_idx]  # ylev sur Rp_dn
-
-                    # 3 carrés half‐mode
-                    ax_plot.scatter([lam0], [R0],
-                                    marker='s', s=70,
-                                    facecolor='none', edgecolor=color, alpha=0.7,
-                                    label=f"{lab} sens. half-base")
-                    ax_plot.scatter([lam0], [R1],
-                                    marker='s', s=70,
-                                    facecolor='none', edgecolor=color, alpha=0.7)
-                    ax_plot.scatter([lam1], [y1],
-                                    marker='s', s=70,
-                                    facecolor='none', edgecolor=color, alpha=0.7,
-                                    label=f"{lab} sens. half-Δn")
+                    y1 = y_level_list_dn[best_idx]
+                    # on ne trace que si lam0 et lam1 sont dans [low,high]
+                    if low <= lam0 <= high:
+                        ax_plot.scatter([lam0], [R0],
+                                        marker='s', s=70,
+                                        facecolor='none', edgecolor=color, alpha=0.7,
+                                        label=f"{lab} sens. half-base")
+                        ax_plot.scatter([lam0], [R1],
+                                        marker='s', s=70,
+                                        facecolor='none', edgecolor=color, alpha=0.7)
+                    if low <= lam1 <= high:
+                        ax_plot.scatter([lam1], [y1],
+                                        marker='s', s=70,
+                                        facecolor='none', edgecolor=color, alpha=0.7,
+                                        label=f"{lab} sens. half-Δn")
                 else:
-                    # creux sur Rup
+                    # dip-mode
                     lam0 = lam_dip_list[best_idx]
                     R0   = R_dip_list[best_idx]
-                    
-                    # même λ sur Rup_dn
                     R1_at_lam0 = float(interp1(lam0))
-                    
-                    # vrai creux sur Rup_dn
                     lam1 = lam_dip_list_dn[best_idx]
                     R1   = R_dip_list_dn[best_idx]
+                    # mêmes conditions de masque
+                    if low <= lam0 <= high:
+                        ax_plot.scatter([lam0], [R0],
+                                        marker='s', s=70,
+                                        facecolor='none', edgecolor=color, alpha=0.7,
+                                        label=f"{lab} sens. dip-base")
+                        ax_plot.scatter([lam0], [R1_at_lam0],
+                                        marker='s', s=70,
+                                        facecolor='none', edgecolor=color, alpha=0.7)
+                    if low <= lam1 <= high:
+                        ax_plot.scatter([lam1], [R1],
+                                        marker='s', s=70,
+                                        facecolor='none', edgecolor=color, alpha=0.7,
+                                        label=f"{lab} sens. dip-Δn")
 
-                    
-
-                    # 3 carrés dip‐mode
-                    ax_plot.scatter([lam0], [R0],
-                                    marker='s', s=70,
-                                    facecolor='none', edgecolor=color, alpha=0.7,
-                                    label=f"{lab} sens. dip-base")
-                    ax_plot.scatter([lam0], [R1_at_lam0],
-                                    marker='s', s=70,
-                                    facecolor='none', edgecolor=color, alpha=0.7)
-                    ax_plot.scatter([lam1], [R1],
-                                    marker='s', s=70,
-                                    facecolor='none', edgecolor=color, alpha=0.7,
-                                    label=f"{lab} sens. dip-Δn")
-                            
                 
                 
 
@@ -495,7 +551,6 @@ def create_plot_tab():
             dRhalf_sum.append(mets.get("ΔR_half", ""))
 
         # ---------- BEST config  ----------- #
-
             # Enregistrement des meilleurs résultats
             try:
                 sr_value = float(best_SR)
@@ -643,6 +698,9 @@ def create_plot_tab():
         if show_labels_chk.value:
             ax_plot.legend(loc='best', fontsize=8)
 
+
+        ax_plot.set_xlim(low, high)
+
         # --------------- rendu dans la zone de sortie ---------------- #
         plot_out.clear_output(wait=True)
         with plot_out:
@@ -665,6 +723,16 @@ def create_plot_tab():
     # ---------------------------------------------------------------- #
     #                         assemblage final                          #
     # ---------------------------------------------------------------- #
-    tab = VBox([controls_box, debug_out, plot_out])
+    tab = VBox(
+        [controls_box, debug_out, plot_out],
+        layout=Layout(
+            display='flex',
+            flex_flow='column nowrap',
+            height='100vh',  # ou '100%' si dans un parent qui gère la hauteur
+            width='100%'
+        )
+    )
+    
+    
     tab.update_spectra = _update_spectra
     return tab
