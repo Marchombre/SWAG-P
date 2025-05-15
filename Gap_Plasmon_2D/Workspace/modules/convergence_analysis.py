@@ -176,7 +176,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     plot_button = widgets.Button(
         description="Run convergence", 
         button_style="primary", 
-        layout=widgets.Layout(width="150px")
+        layout=widgets.Layout(justify_content='flex-end')
     )
     
     # Barre de progression
@@ -188,10 +188,10 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         layout=widgets.Layout(width='400px')
     )
     
-    spacer = widgets.HBox([], layout=widgets.Layout(flex='1 1 auto'))
+    #spacer = widgets.HBox([], layout=widgets.Layout(flex='1 1 auto'))
     
     button_container = widgets.HBox(
-        [overall_progress_bar, spacer, plot_button],
+        [overall_progress_bar, plot_button],
         layout=widgets.Layout(width='100%')
     )
     
