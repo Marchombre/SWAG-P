@@ -15,9 +15,9 @@ Fonctionnalités
 # ------------------------------------------------------------------ #
 #                             Imports                                #
 # ------------------------------------------------------------------ #
-import os, io, base64, textwrap
+import os, io, base64
 from datetime import datetime
-
+import re
 import numpy     as np
 import matplotlib.pyplot as plt
 import ipywidgets as widgets
@@ -25,6 +25,7 @@ from ipywidgets import Layout, HBox, VBox, HTML
 from IPython.display import HTML as DHTML, display
 from pyparsing import line
 from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
 
 from data_readers       import get_all_spectra_and_summaries
 from simulate_and_plot  import ordered_params
@@ -54,15 +55,32 @@ def _download_link(fig, fname="plot.png"):
 
 
 # ------------------------------------------------------------------ #
+#                     utilitaire pour netoyer les labels             #
+# ------------------------------------------------------------------ #
+def clean_config_label(label):
+    """
+    Enlève la partie ' ( ... )' à la fin d'un label, typique des configs géométrie/matériau
+    Exemple : "Structure 1 - ITO / AU (10nm) (Structure 1 - ITO )" → "Structure 1 - ITO / AU (10nm)"
+    """
+    return re.sub(r'\s*\([^\)]*\)\s*$', '', label or '')
+
+
+# ------------------------------------------------------------------ #
 #                    Construction de l’onglet Plot                   #
 # ------------------------------------------------------------------ #
 def create_plot_tab():
+    global custom_labels_dict, custom_labels_dn_dict, labels_editors_box, update_labels_btn
 
+    custom_labels_dict = {}  # {original_label: custom_label}
+    custom_labels_dn_dict = {}   # {original_label: custom_label for Rup_dn}
+    custom_marker_labels = {}  # {label: {type: valeur}}
+    
     # --------------------- widgets principaux ---------------------- #
     spectra_select = widgets.SelectMultiple(
         options=[], description="Available spectra:",
         layout=Layout(width='80%', height='150px'),
         style={'description_width':'initial'})
+    spectra_select.observe(lambda change: update_label_editors(), names="value")
 
     verbose_chk = widgets.Checkbox(
         value=True, description="Verbose",
@@ -80,6 +98,109 @@ def create_plot_tab():
         style={'description_width':'initial'}
     )
     
+    # === Variables globales pour l’édition interactive des labels ===
+    
+    custom_labels_dict = {}
+    custom_labels_dn_dict = {}
+    labels_editors_box = widgets.VBox()
+    update_labels_btn = widgets.Button(
+        description="Mettre à jour les labels",
+        button_style="primary",
+        layout=Layout(width="170px")
+)
+   # contiendra les inputs
+   
+    def on_update_labels(_=None):
+        for row in labels_editors_box.children:
+            for txt in row.children:
+                if hasattr(txt, "_carre_type"):
+                    lab = txt._orig_lab
+                    typ = txt._carre_type
+                    if lab not in custom_marker_labels:
+                        custom_marker_labels[lab] = {}
+                    custom_marker_labels[lab][typ] = txt.value
+                elif getattr(txt, "_is_dn", False):
+                    custom_labels_dn_dict[txt._orig_lab] = txt.value
+                else:
+                    custom_labels_dict[txt._orig_lab] = txt.value
+        _draw(None)
+
+
+    update_labels_btn.on_click(on_update_labels)
+    
+    toggle_labels_editors_btn = widgets.ToggleButton(
+        value=False,
+        description="Afficher/masquer les éditeurs de labels",
+        icon="chevron-down",
+        layout=Layout(width="270px")
+    )
+    
+    labels_editors_panel = VBox([
+        HTML("<b>Modifier les labels des spectres :</b>"),
+        labels_editors_box,
+        update_labels_btn 
+    ], layout=Layout(display='none'))  # Masqué par défaut
+        
+    def on_toggle_labels_panel(change):
+        if change["new"]:
+            labels_editors_panel.layout.display = "block"
+            toggle_labels_editors_btn.icon = "chevron-up"
+        else:
+            labels_editors_panel.layout.display = "none"
+            toggle_labels_editors_btn.icon = "chevron-down"
+
+    toggle_labels_editors_btn.observe(on_toggle_labels_panel, names="value")
+    
+
+    def update_label_editors():
+        labels = list(spectra_select.value) if 'spectra_select' in locals() else []
+        if not labels and 'Rup_dict' in locals():
+            labels = list(Rup_dict.keys())
+
+        # Détermine les types de carré à afficher
+        marker_types = []
+        if show_half_level_metrics.value:
+            marker_types = ["half-base", "half-dn"]
+        else:
+            marker_types = ["dip-base", "dip-dn"]
+
+        children = []
+        for lab in labels:
+            row = []
+
+            # Label principal du spectre
+            default_lab = custom_labels_dict.get(lab, clean_config_label(lab))
+            txt = widgets.Text(value=default_lab, description="Label:", layout=Layout(width="180px"))
+            txt._orig_lab = lab
+            txt._is_dn = False
+            row.append(txt)
+
+            # Label spectre Δn (optionnel)
+            if 'Rup_dn_dict' in locals() and lab in Rup_dn_dict and Rup_dn_dict[lab] is not None:
+                default_dn = custom_labels_dn_dict.get(lab, clean_config_label(lab) + " (R + Δn)")
+                txt_dn = widgets.Text(value=default_dn, description="Label Δn:", layout=Layout(width="180px"))
+                txt_dn._orig_lab = lab
+                txt_dn._is_dn = True
+                row.append(txt_dn)
+
+            # Labels pour tous les types de carrés pertinents
+            for typ in marker_types:
+                val = custom_marker_labels.get(lab, {}).get(typ, f"{clean_config_label(lab)} S_R {typ.replace('-', ' ')}")
+                txt_carre = widgets.Text(
+                    value=val,
+                    description=f"Carré {typ}:", layout=Layout(width="160px")
+                )
+                txt_carre._orig_lab = lab
+                txt_carre._carre_type = typ
+                row.append(txt_carre)
+
+            children.append(HBox(row, layout=Layout(margin="2px 0")))
+        labels_editors_box.children = children
+
+
+
+    # Met à jour dynamiquement quand la sélection change
+    spectra_select.observe(lambda change: update_label_editors(), names="value")    
     
     debug_out = widgets.Textarea(
     value='',
@@ -126,6 +247,7 @@ def create_plot_tab():
     show_half_level_metrics.layout.margin  = '0'
     show_half_level_metrics.layout.padding = '0'
     show_half_level_metrics.indent         = False
+    show_half_level_metrics.observe(lambda ch: update_label_editors(), names="value")
 
 
 
@@ -193,8 +315,19 @@ def create_plot_tab():
         HTML("<b>Overlays graphiques :</b>"),
         overlays_hbox, 
         range_box,
-        HBox([show_labels_chk, draw_b], layout=Layout(grid_gap='10px'))
+        
+        HBox([
+            show_labels_chk,
+            draw_b,
+            VBox([
+                toggle_labels_editors_btn,  # Le bouton qui permet d'afficher/masquer
+                labels_editors_panel        # Le panneau masquable qui contient la zone d’édition
+            ], layout=Layout(align_items="flex-start", min_width="260px"))
+        ], layout=Layout(grid_gap='12px'))
+
+                
     ], layout=Layout(width='100%'))
+
 
 
     # -------------------- zone figure / tableau -------------------- #
@@ -355,9 +488,80 @@ def create_plot_tab():
                 best_idx = int(np.nanargmax(dR_over_dn_list))
                 best_SR, best_S_lambda = dR_over_dn_list[best_idx], dLam_over_dn_list[best_idx]
             else:
-                best_idx=int(np.nanargmax(depth_list)); best_SR=best_S_lambda=None
-                if verbose: debug_lines.append(f"[Plot] Δn ou Rup_dn absent pour « {lab} »")
-                
+                # ──────────────────────────────────────────────────────────
+                #   Pas de Δn : on sélectionne le meilleur dip avec raw_score
+                # ──────────────────────────────────────────────────────────
+
+
+                R_array = Rup  # tableau NumPy des réflectances
+                lam_array = lam  # tableau NumPy des longueurs d’onde
+
+                # 2) Créer un interpolateur spline sur R_array
+                interp_R = interp1d(
+                    lam_array, R_array,
+                    kind='cubic',
+                    bounds_error=False,
+                    fill_value='extrapolate'
+                )
+
+                # 3) Définir un petit pas "delta" = pas de la grille en λ
+                delta = lam_array[1] - lam_array[0]
+
+                # 4) Paramètres de pondération
+                alpha = 2.0
+                beta  = 0.5
+
+                best_raw_score = -np.inf
+                best_idx_raw   = None
+
+                # On vide d’abord dR_over_dn_list et dLam_over_dn_list pour éviter d’ajouter en double
+                dR_over_dn_list.clear()
+                dLam_over_dn_list.clear()
+
+                # 5) Pour chaque dip candidat j, calculer raw_score
+                for j in range(len(dip_list_idx)):
+                    depth_j = depth_list[j]
+                    fwhm_j  = fwhm_list[j]
+                    lam_left_j  = lam_left_list[j]
+                    lam_right_j = lam_right_list[j]
+
+                    # ─── Calcul de la pente fine à demi-hauteur (flanc le plus abrupt) ───
+
+                    # pente à gauche : (R(lam_left + delta) - R(lam_left - delta)) / (2*delta)
+                    y_plus_L  = interp_R(lam_left_j + delta)
+                    y_minus_L = interp_R(lam_left_j - delta)
+                    slope_left  = abs((y_plus_L - y_minus_L) / (2 * delta))
+
+                    # pente à droite : (R(lam_right + delta) - R(lam_right - delta)) / (2*delta)
+                    y_plus_R  = interp_R(lam_right_j + delta)
+                    y_minus_R = interp_R(lam_right_j - delta)
+                    slope_right = abs((y_plus_R - y_minus_R) / (2 * delta))
+
+                    # on retient le flanc le plus abrupt
+                    slope = max(slope_left, slope_right)
+
+                    # ─── Calcul du raw_score ───
+                    # on ajoute un petit epsilon pour éviter division par zéro si fwhm_j = 0
+                    raw_score = (depth_j ** alpha) * (slope ** (1.0 - depth_j)) / (fwhm_j ** beta + 1e-12)
+
+                    if raw_score > best_raw_score:
+                        best_raw_score = raw_score
+                        best_idx_raw   = j
+
+                    # comme on n’a pas de Δn ici, on stocke 0.0 pour la cohérence du tableau
+                    dR_over_dn_list.append(0.0)
+                    dLam_over_dn_list.append(0.0)
+
+                # 6) On retient l’indice j qui maximise raw_score
+                best_idx = best_idx_raw
+                best_SR = None
+                best_S_lambda = None
+
+                if verbose:
+                    debug_lines.append(
+                        f"[Plot] Pas de Δn → sélection via raw_score, indice retenu = {best_idx}"
+                    )
+
                 
         
 
@@ -395,7 +599,11 @@ def create_plot_tab():
             # Tracé graphique
             color = colors[idx % len(colors)]
             # Tracé principal restreint :
-            ax_plot.plot(lam_plot, Rup_plot, color=color, label=lab, zorder=1)
+            label_affiche = custom_labels_dict.get(lab, clean_config_label(lab))
+            
+            ax_plot.plot(lam_plot, Rup_plot, color=color, label=label_affiche, zorder=1)
+
+
 
             # Dips :
             if show_dips_chk.value:
@@ -451,9 +659,11 @@ def create_plot_tab():
 
             if show_Rup_dn_overlay_chk.value and lam_dn_plot is not None:
                 good = ~np.isnan(Rup_dn_plot)
+                label_dn = custom_labels_dn_dict.get(lab, clean_config_label(lab) + " (R + Δn)")
                 ax_plot.plot(lam_dn_plot[good], Rup_dn_plot[good], "--",
                             linewidth=2, color=color, alpha=0.7,
-                            label=f"{lab} (R + Δn)", zorder=0)
+                            label=label_dn, zorder=0)
+
 
                 
             if show_sensitivity_marker_chk.value and Rup_dn_tuple is not None:
@@ -478,7 +688,9 @@ def create_plot_tab():
                         ax_plot.scatter([lam0], [R0],
                                         marker='s', s=70,
                                         facecolor='none', edgecolor=color, alpha=0.7,
-                                        label=f"{lab} sens. half-base")
+                                        label=custom_marker_labels.get(lab, {}).get("half-base", 
+                                                                                    f"{clean_config_label(lab)} S_R half R(λ; n)"))
+                                      
                         ax_plot.scatter([lam0], [R1],
                                         marker='s', s=70,
                                         facecolor='none', edgecolor=color, alpha=0.7)
@@ -486,7 +698,9 @@ def create_plot_tab():
                         ax_plot.scatter([lam1], [y1],
                                         marker='s', s=70,
                                         facecolor='none', edgecolor=color, alpha=0.7,
-                                        label=f"{lab} sens. half-Δn")
+                                        label=custom_marker_labels.get(lab, {}).get("half-dn", 
+                                                                                    f"{clean_config_label(lab)} S_R half R(λ; n+Δn)"))
+                                        
                 else:
                     # dip-mode
                     lam0 = lam_dip_list[best_idx]
@@ -499,7 +713,9 @@ def create_plot_tab():
                         ax_plot.scatter([lam0], [R0],
                                         marker='s', s=70,
                                         facecolor='none', edgecolor=color, alpha=0.7,
-                                        label=f"{lab} sens. dip-base")
+                                        label=custom_marker_labels.get(lab, {}).get("dip-base", 
+                                                                                    f"{clean_config_label(lab)} S_R dip R(λ; n)"))
+                        
                         ax_plot.scatter([lam0], [R1_at_lam0],
                                         marker='s', s=70,
                                         facecolor='none', edgecolor=color, alpha=0.7)
@@ -507,7 +723,8 @@ def create_plot_tab():
                         ax_plot.scatter([lam1], [R1],
                                         marker='s', s=70,
                                         facecolor='none', edgecolor=color, alpha=0.7,
-                                        label=f"{lab} sens. dip-Δn")
+                                        label=custom_marker_labels.get(lab, {}).get("dip-dn", 
+                                                                                    f"{clean_config_label(lab)} S_R dip R(λ; n+Δn)"))
 
                 
                 
@@ -524,7 +741,7 @@ def create_plot_tab():
                 S_lambda = f"{best_S_lambda:.3f}" if best_S_lambda is not None else "–"
                 
                 debug_lines.append(
-                    f"{lab}: dips[{dips_nm}]nm,  dip {lam_dip:.1f}nm  "
+                    f"{clean_config_label(lab)}: dips[{dips_nm}]nm,  dip {lam_dip:.1f}nm  "
                     f"depths[{depths_str}], depth={depth:.3f}  "
                     #f"slopes[{slopes_str}] slope={slope:.3f}  "
                     f"FWHMs[{fwhm_str}], FWHM={fwhm:.1f}  "
@@ -535,7 +752,7 @@ def create_plot_tab():
 
                 
             # ---------- alimenter tableau ---------------------------- #
-            cfg_labels.append(lab)
+            cfg_labels.append(clean_config_label(lab))
             geom_sum.append(summaries[lab][0])
             mat_sum .append(summaries[lab][1])
 
@@ -665,7 +882,7 @@ def create_plot_tab():
         fs=8 if n_cfg<=5 else max(8-(n_cfg-5),3)
         
         table=ax_table.table(cellText=cellText,
-                             colLabels=[l.replace("Mat_","\nMat_") for l in cfg_labels],
+                             colLabels=[clean_config_label(l.replace("Mat_","\nMat_")) for l in cfg_labels],
                              rowLabels=rowLabels, loc="center", cellLoc="left")
         table.auto_set_font_size(False); table.set_fontsize(fs)
         table.auto_set_column_width(col=list(range(n_cfg)))
@@ -691,12 +908,12 @@ def create_plot_tab():
                 cell.set_height(0.04*h_row[r])
 
         # ---------------------- axes ----------------------- #
-        ax_plot.set_xlabel("Wavelength (nm)")
-        ax_plot.set_ylabel("Reflectance")
+        ax_plot.set_xlabel("Wavelength (nm)", fontsize=16)
+        ax_plot.set_ylabel("Reflectance", fontsize=16)
         ax_plot.grid(True)
         # si demandé, on affiche la légende avec les noms de config
         if show_labels_chk.value:
-            ax_plot.legend(loc='best', fontsize=8)
+            ax_plot.legend(loc='best', fontsize=14)
 
 
         ax_plot.set_xlim(low, high)
@@ -711,10 +928,17 @@ def create_plot_tab():
 
             # affichage + lien pour la figure du tableau
             display(fig_table)
+            update_label_editors()
             display(_download_link(fig_table,
                     f"tableau_{datetime.now():%Y%m%d_%H%M%S}.png"))
+            
+            
+        update_label_editors()
+    
+            
         plt.close(fig_plot)
         plt.close(fig_table)
+
 
 
     # liaison bouton
@@ -728,7 +952,6 @@ def create_plot_tab():
         layout=Layout(
             display='flex',
             flex_flow='column nowrap',
-            height='100vh',  # ou '100%' si dans un parent qui gère la hauteur
             width='100%'
         )
     )

@@ -397,10 +397,18 @@ def create_simulation_tab(json_combined_path: str,
     sim_output = widgets.Output(
         layout=Layout(border='2px solid #ccc', padding='10px',
                       min_height='400px', margin='40px 0 0 0'))
+    
+    
+    
+    
+    
+    
+    
 
     # ================================================================= #
     #                          callback RUN                             #
     # ================================================================= #
+    
     def _run(_):
         # ---------- spinner -------------------------------------------
         with sim_output:
@@ -440,7 +448,14 @@ def create_simulation_tab(json_combined_path: str,
                 mode_by_cfg[n] = inp.value
         else:
             for cfg in selected_cfgs:
-                mode_by_cfg[cfg["config_name"]] = int(auto_modes[cfg["config_name"]])
+                nom = cfg["config_name"]
+                if nom in auto_modes:
+                    mode_by_cfg[nom] = int(auto_modes[nom])
+                else:
+                    # Fallback : met un mode par défaut, ou affiche un warning
+                    mode_by_cfg[nom] = sim_n_mod.value  # Ou la valeur par défaut que tu veux
+                    print(f"[AVERTISSEMENT] Pas de mode auto trouvé pour '{nom}'. Mode par défaut utilisé.")
+
 
         # ---------- figure --------------------------------------------
         fig = plt.figure(figsize=(13, 9))
@@ -474,6 +489,7 @@ def create_simulation_tab(json_combined_path: str,
 
         # ================== boucle configs ============================
         for idx, cfg in enumerate(selected_cfgs):
+            color = colors[idx % len(colors)]
             name = cfg["config_name"]; n_modes = mode_by_cfg[name]
             Rup, _, details = run_simulation_one_combo(
                 lam_range, wave, n_modes, cfg, json_combined_path)
@@ -567,10 +583,133 @@ def create_simulation_tab(json_combined_path: str,
                     dip_index=best_dip_index,
                     mode="half" if use_half else "dip"
                 )
-            else:
-                Rup_dn    = None
-                lam_calc_dn  = S_lambda = S_R = dR_half = None
                 
+                # → on redétecte les dips sur Rup_dn  si delta n est séléctionné
+                if Rup_dn is not None:
+                    (dip_idx_dn, lam_dip_dn_list, R_dip_dn_list,
+                    ylev_dn_list,
+                    lam_left_dn, lam_right_dn, fwhm_dn,
+                    lam_max_l_dn, R_max_l_dn,
+                    lam_max_r_dn, R_max_r_dn,
+                    lam_sym_dn, R_sym_dn,
+                    depth_dn), _ = _find_dip_core(
+                        wavelength=lam,
+                        reflectance=Rup_dn,
+                        smooth_win=0, polyorder=0,
+                        dip_prom=1e-2, dip_dist=1, peak_dist=1,
+                        verbose=False, cfg_name=name + " (Δn)"
+                    )  
+                                  
+                    if flags['show_Rup_dn'] and Rup_dn is not None:
+                        ax_plot.plot(lam, Rup_dn, '--', color=color, linewidth=2, alpha=0.7, zorder=100, label=f"{name} (R + Δn)")
+                        
+
+                    # 1) half-level lines
+                    if flags['show_hlines']:
+                        ax_plot.hlines(ylev_dn_list[best_dip_index], lam_left_dn[best_dip_index], lam_right_dn[best_dip_index],
+                                        linestyles='--', linewidth=2,
+                                        color=color, alpha=0.7, zorder=99)
+
+                    # 2) dips
+                    if flags['show_dips']:
+                        ax_plot.scatter(lam_dip_dn_list, R_dip_dn_list, #lam[dip_idx_dn]
+                                        marker='x', s=40,
+                                        color=color, alpha=0.7, zorder=101)
+
+                    # 3) maxima
+                    if flags['show_maxima']:
+                        ax_plot.scatter(lam_max_l_dn, R_max_l_dn,
+                                        marker='x', s=30,
+                                        color=color, alpha=0.7, zorder=101)
+                        ax_plot.scatter(lam_max_r_dn, R_max_r_dn,
+                                        marker='x', s=30,
+                                        color=color, alpha=0.7, zorder=101)
+
+                    # 4) symmetry points
+                    if flags['show_symmetry_pts']:
+                        ax_plot.scatter(lam_sym_dn, R_sym_dn,
+                                        marker='x', s=30,
+                                        color=color, alpha=0.7, zorder=101)
+
+                    # 5) selected dip
+                    if flags['show_selected_dip']:
+                        ax_plot.scatter(lam_dip_dn_list[best_dip_index], 
+                                        R_dip_dn_list[best_dip_index],  
+                                        marker='o', s=70,
+                                        facecolor='none',
+                                        edgecolor=color, alpha=0.7, zorder=102)
+                        
+                        
+                
+                    if flags['show_sensitivity_marker']:
+                        if use_half:
+                            # 3 marqueurs en half-mode :
+                            # (1) base : demi-hauteur de Rup
+                            lam_half = compute_half_point(lam, Rup, lam_left_list[best_dip_index], lam_right_list[best_dip_index])
+                            ax_plot.scatter(
+                                [lam_half], [R0],
+                                marker='s', s=80,
+                                facecolor='none', edgecolor=color,
+                                alpha=0.7, zorder=102,
+                                label=f"{name} sens. half-base"
+                            )
+                            # (2) sur Rup_dn au même λ
+                            ax_plot.scatter(
+                                [lam_half], [R1],
+                                marker='s', s=80,
+                                facecolor='none', edgecolor=color,
+                                alpha=0.7, zorder=102
+                            )
+                            # (3) nouveau demi-point sur Rup_dn (même flank)
+                            lam_half_dn = compute_half_point(lam, Rup_dn, lam_left_dn[best_dip_index], lam_right_dn[best_dip_index])
+                            ax_plot.scatter(
+                                [lam_half_dn], [ylev_dn_list[best_dip_index]],
+                                marker='s', s=80,
+                                facecolor='none', edgecolor=color,
+                                alpha=0.7, zorder=102,
+                                label=f"{name} sens. half-Δn"
+                            )
+                        else:
+                            # 3 marqueurs en dip-mode :
+                            # (1) base : creux de Rup
+                            ax_plot.scatter(
+                                [lam_dip], [R_dip],
+                                marker='s', s=80,
+                                facecolor='none', edgecolor=color,
+                                alpha=0.7, zorder=102,
+                                label=f"{name} sens. dip-base"
+                            )
+                            # (2) sur Rup_dn au même λ_dip
+                            ax_plot.scatter(
+                                [lam_dip], [R1],
+                                marker='s', s=80,
+                                facecolor='none', edgecolor=color,
+                                alpha=0.7, zorder=102
+                            )
+                            # (3) vrai creux sur Rup_dn
+                            ax_plot.scatter(
+                                [lam_dip_dn_list[best_dip_index]], [R_dip_dn_list[best_dip_index]],
+                                marker='s', s=80,
+                                facecolor='none', edgecolor=color,
+                                alpha=0.7, zorder=102,
+                                label=f"{name} sens. dip-Δn"
+                            )
+                                                        
+                        
+                        
+                                        
+            else:
+                # Si on ne fait pas Δn, on n’appelle jamais _find_dip_core sur None
+                Rup_dn = None
+                lam_calc_dn = S_lambda = S_R = dR_half = None
+                # Il est préférable aussi de définir à vide ou None toutes les listes/variables
+                # qui seraient utilisées plus bas pour éviter des NameError.
+                dip_idx_dn = lam_dip_dn_list = R_dip_dn_list = []
+                ylev_dn_list = lam_left_dn = lam_right_dn = []
+                fwhm_dn = lam_max_l_dn = R_max_l_dn = []
+                lam_max_r_dn = R_max_r_dn = lam_sym_dn = R_sym_dn = []
+                depth_dn = []
+                        
                 
                 
             # ----- accumulateurs tableau ------------------------------
@@ -624,12 +763,9 @@ def create_simulation_tab(json_combined_path: str,
    
 
             # ----- tracé ------------------------------------------------
-            color = colors[idx % len(colors)]
             ax_plot.plot(lam, Rup, color=color, zorder=1,)
 
             # ----- overlays indépendants du verbose -----------------------
-            if flags['show_Rup_dn'] and Rup_dn is not None:
-                ax_plot.plot(lam, Rup_dn, '--', color=color, linewidth=2, alpha=0.7, zorder=100, label=f"{name} (R + Δn)")
 
             if flags['show_hlines']:
                 ax_plot.hlines(ylev, lam_left, lam_right, color=color)
@@ -649,113 +785,8 @@ def create_simulation_tab(json_combined_path: str,
                                 facecolor='none', edgecolor=color, s=70)
                 
                 
-            # → on redétecte les dips sur Rup_dn  
-            (dip_idx_dn, lam_dip_dn_list, R_dip_dn_list,
-            ylev_dn_list,
-            lam_left_dn, lam_right_dn, fwhm_dn,
-            lam_max_l_dn, R_max_l_dn,
-            lam_max_r_dn, R_max_r_dn,
-            lam_sym_dn, R_sym_dn,
-            depth_dn), _ = _find_dip_core(
-                wavelength=lam,
-                reflectance=Rup_dn,
-                smooth_win=0, polyorder=0,
-                dip_prom=1e-2, dip_dist=1, peak_dist=1,
-                verbose=False, cfg_name=name + " (Δn)"
-            )
 
-            # 1) half-level lines
-            if flags['show_hlines']:
-                ax_plot.hlines(ylev_dn_list[best_dip_index], lam_left_dn[best_dip_index], lam_right_dn[best_dip_index],
-                                linestyles='--', linewidth=2,
-                                color=color, alpha=0.7, zorder=99)
-
-            # 2) dips
-            if flags['show_dips']:
-                ax_plot.scatter(lam_dip_dn_list, R_dip_dn_list, #lam[dip_idx_dn]
-                                marker='x', s=40,
-                                color=color, alpha=0.7, zorder=101)
-
-            # 3) maxima
-            if flags['show_maxima']:
-                ax_plot.scatter(lam_max_l_dn, R_max_l_dn,
-                                marker='x', s=30,
-                                color=color, alpha=0.7, zorder=101)
-                ax_plot.scatter(lam_max_r_dn, R_max_r_dn,
-                                marker='x', s=30,
-                                color=color, alpha=0.7, zorder=101)
-
-            # 4) symmetry points
-            if flags['show_symmetry_pts']:
-                ax_plot.scatter(lam_sym_dn, R_sym_dn,
-                                marker='x', s=30,
-                                color=color, alpha=0.7, zorder=101)
-
-            # 5) selected dip
-            if flags['show_selected_dip']:
-                ax_plot.scatter(lam_dip_dn_list[best_dip_index], 
-                                R_dip_dn_list[best_dip_index],  
-                                marker='o', s=70,
-                                facecolor='none',
-                                edgecolor=color, alpha=0.7, zorder=102)
-                
-                
-            if flags['show_sensitivity_marker']:
-                if use_half:
-                    # 3 marqueurs en half-mode :
-                    # (1) base : demi-hauteur de Rup
-                    lam_half = compute_half_point(lam, Rup, lam_left_list[best_dip_index], lam_right_list[best_dip_index])
-                    #lam_half = lam_left_list[best_dip_index] if Rm_l < Rm_r else lam_right_list[best_dip_index]
-                    ax_plot.scatter(
-                        [lam_half], [R0],
-                        marker='s', s=80,
-                        facecolor='none', edgecolor=color,
-                        alpha=0.7, zorder=102,
-                        label=f"{name} sens. half-base"
-                    )
-                    # (2) sur Rup_dn au même λ
-                    ax_plot.scatter(
-                        [lam_half], [R1],
-                        marker='s', s=80,
-                        facecolor='none', edgecolor=color,
-                        alpha=0.7, zorder=102
-                    )
-                    # (3) nouveau demi-point sur Rup_dn (même flank)
-                    lam_half_dn = compute_half_point(lam, Rup_dn, lam_left_dn[best_dip_index], lam_right_dn[best_dip_index])
-                    #lam_half_dn = lam_left_dn[best_dip_index] if R_max_l_dn < R_max_r_dn else lam_right_dn[best_dip_index]
-                    ax_plot.scatter(
-                        [lam_half_dn], [ylev_dn_list[best_dip_index]],
-                        marker='s', s=80,
-                        facecolor='none', edgecolor=color,
-                        alpha=0.7, zorder=102,
-                        label=f"{name} sens. half-Δn"
-                    )
-                else:
-                    # 3 marqueurs en dip-mode :
-                    # (1) base : creux de Rup
-                    ax_plot.scatter(
-                        [lam_dip], [R_dip],
-                        marker='s', s=80,
-                        facecolor='none', edgecolor=color,
-                        alpha=0.7, zorder=102,
-                        label=f"{name} sens. dip-base"
-                    )
-                    # (2) sur Rup_dn au même λ_dip
-                    ax_plot.scatter(
-                        [lam_dip], [R1],
-                        marker='s', s=80,
-                        facecolor='none', edgecolor=color,
-                        alpha=0.7, zorder=102
-                    )
-                    # (3) vrai creux sur Rup_dn
-                    ax_plot.scatter(
-                        [lam_dip_dn_list[best_dip_index]], [R_dip_dn_list[best_dip_index]],
-                        marker='s', s=80,
-                        facecolor='none', edgecolor=color,
-                        alpha=0.7, zorder=102,
-                        label=f"{name} sens. dip-Δn"
-                    )
-                                            
+                  
                 
 
             # ----- debug : uniquement si verbose --------------------------
@@ -787,11 +818,11 @@ def create_simulation_tab(json_combined_path: str,
                     f"{name} : dips[{dips_nm}], λ0={lam_dip:.2f} nm, "
                     f"λΔn={lam_dip_dn_str} nm, "
                     f"Δλ={delta_lam_str},  "
-                    f"Δλ/Δn[{dLam_over_dn_str}],  best Δλ/Δn={S_lambda:.3f},  "
+                    f"Δλ/Δn[{dLam_over_dn_str}],  best Δλ/Δn={S_lambda_str},  "
                     f"depths[{depths_str}], depth={depth:.3f}  "
                     #f"slopes[{slopes_str}] slope={slope:.3f}  "
                     f"FWHMs[{fwhm_str}], FWHM={fwhm:.1f}  "
-                    f"ΔR/Δn[{dR_over_dn_str}], best ΔR/Δn=={best_S_R:.3f}"
+                    f"ΔR/Δn[{dR_over_dn_str}], best ΔR/Δn=={S_R_str}"
                 )
                 debug_lines.append("")
                 
@@ -812,10 +843,17 @@ def create_simulation_tab(json_combined_path: str,
                 )
 
         # ----- meilleure dip with respect to S_R max ---------------------------------------
-        if S_R_vals:
-            best = int(np.nanargmax(S_R_vals))
-            best_S_R_val = S_R_vals[best]
-            debug_lines.append(f"→ BEST_CONFIG (max ΔR/Δn): {cfg_labels[best]} (S_R = {best_S_R_val:.3f})")
+        
+        # On convertit S_R_vals en array pour gérer plus facilement les NaN
+        S_R_array = np.array(S_R_vals, dtype=float)
+
+        # Vérifier qu'il y a au moins un élément non-NaN
+        if S_R_array.size > 0 and not np.all(np.isnan(S_R_array)):
+            best_idx = int(np.nanargmax(S_R_array))
+            best_S_R_val = S_R_array[best_idx]
+            debug_lines.append(
+                f"→ BEST_CONFIG (max ΔR/Δn): {cfg_labels[best_idx]} (S_R = {best_S_R_val:.3f})"
+            )        
 
 
         # ----- debug ---------------------------------------------------

@@ -15,7 +15,7 @@ la variation absolue de Rup devient inférieure à la tolérance (ce qui signifi
 """
 
 import math
-
+import re
 import os
 import json
 import numpy as np
@@ -356,7 +356,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
 
         # --- JSON par config pour le spectre (inchangé) ---
         for cfg_name, modes, vals in zip(cfg_names, n_modes_all, Rup_all):
-            safe = cfg_name.replace(" ", "_")
+            safe = re.sub(r'[^\w\-\.]', '_', cfg_name)
             spec_path = convergence_dir / f"{safe}_spectrum.json"
             spectrum = [
                 {"n_mode": int(n), "Rup": float(r)}

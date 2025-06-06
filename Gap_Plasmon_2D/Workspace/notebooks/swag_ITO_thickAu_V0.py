@@ -376,7 +376,7 @@ perm_glass = 1.5 ** 2 # substrat Glass
 n_mod = 59
 n_mod_total = 2 * n_mod + 1
 
-list_metal = np.linspace(1,20,10)
+list_metal = np.linspace(1,70,10)
 list_wavelength = np.linspace(450,1000, 200)
 
 Ru_ito = np.empty((list_metal.size, list_wavelength.size))

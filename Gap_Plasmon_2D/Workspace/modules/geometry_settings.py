@@ -252,28 +252,60 @@ def create_geometry_widget():
         with output_area:
             clear_output()
             print(f"Configuration '{selected['config_name']}' chargée.")
-
+            
+            
     def update_config(_):
-        """
-        Met à jour la configuration actuellement chargée en récupérant la nouvelle valeur
-        des sliders, du nom et du compartiment, puis enregistre la configuration mise à jour.
-        """
         selected = config_dropdown.value
         if selected is None:
             with output_area:
                 clear_output()
                 print("Aucune configuration sélectionnée pour la mise à jour.")
             return
+
+        # --- Ici tu vas chercher le label de l'option sélectionnée ---
+        # label = le premier élément du tuple (label, obj)
+        old_label = None
+        for (label, obj) in config_dropdown.options:
+            if obj is selected:
+                old_label = label
+                break
+        if old_label:
+            # Format "Nom (Compartment)", on isole le nom pur AVANT modification
+            old_name = old_label.split(' (')[0]
+        else:
+            old_name = selected.get("config_name", "")
+
+        # Applique les modifications utilisateur
         for key, slider in geometry_sliders.items():
             selected["geometry"][key] = slider.value
-        new_name = config_name_text.value.strip() or selected["config_name"]
+        new_name = config_name_text.value.strip() or old_name
         selected["config_name"] = new_name
         selected["compartment"] = compartment_text.value.strip() or "Défaut"
+
+        # Patch convergence_results.json si nom changé
+        WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        convergence_json = os.path.join(WORKSPACE_DIR, "Convergence", "convergence_results.json")
+        if new_name != old_name and os.path.exists(convergence_json):
+            with open(convergence_json, "r", encoding="utf-8") as f:
+                master = json.load(f)
+            configs = master.get("configs", {})
+            if old_name in configs:
+                configs[new_name] = configs.pop(old_name)
+                with open(convergence_json, "w", encoding="utf-8") as f:
+                    json.dump(master, f, indent=2)
+                with output_area:
+                    print(f"[PATCH] convergence_results.json : {old_name} → {new_name}")
+            else:
+                with output_area:
+                    print(f"[INFO] Pas d'entrée à renommer dans convergence_results.json pour {old_name}.")
+
         update_dropdown_options()
         save_geometry_configs()
         with output_area:
             clear_output()
             print(f"Configuration mise à jour : {selected}")
+
+
 
     def delete_config(_):
         selected = config_dropdown.value

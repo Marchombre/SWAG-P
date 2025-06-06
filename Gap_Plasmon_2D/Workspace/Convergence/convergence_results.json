@@ -85,6 +85,15 @@
         "tolerance": 0.001,
         "stable_required": 3,
         "optimal_n_mode": 38
+      },
+      {
+        "timestamp": "2025-05-15T20:33:18.212343",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 38
       }
     ],
     "c30_g2_m10 - Mat_S2": [
@@ -785,6 +794,55 @@
         "tolerance": 0.002,
         "stable_required": 3,
         "optimal_n_mode": 78
+      }
+    ],
+    "Structure 1 - ITO / AU (10nm)": [
+      {
+        "timestamp": "2025-05-19T11:02:56.100671",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 59
+      },
+      {
+        "timestamp": "2025-05-19T11:12:30.246037",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 59
+      },
+      {
+        "timestamp": "2025-05-25T20:24:56.874750",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 59
+      }
+    ],
+    "Structure 2 - Verre / Al (3nm) / Au (10nm)": [
+      {
+        "timestamp": "2025-05-19T11:02:56.100822",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 71
+      },
+      {
+        "timestamp": "2025-05-19T11:12:30.246056",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 71
       }
     ]
   }

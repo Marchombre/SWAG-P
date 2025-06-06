@@ -1088,14 +1088,29 @@ class MaterialSelectorTabbedNotebook:
         self.config_name_text.value = selected["config_name"]
         with self.output:
             print(f"Configuration '{selected['config_name']}' loaded.")
-
-    
+            
+            
     def on_update_config(self, b):
         selected = self.config_dropdown.value
         if selected is None:
             with self.output:
                 print("No configuration selected for update.")
             return
+
+        # -------- RÉCUPÉRATION FIABLE DE L'ANCIEN NOM AVANT MODIF ----------
+        old_label = None
+        for (label, obj) in self.config_dropdown.options:
+            if obj is selected:
+                old_label = label
+                break
+        if old_label:
+            old_name = old_label  # Ici tu utilises directement le label, car config_name seul
+            # Si tu as un format "Nom (autre info)", isole juste le nom:
+            # old_name = old_label.split(" (")[0]
+        else:
+            old_name = selected.get("config_name", "")
+
+        # -------- APPLICATION DE LA MISE À JOUR ----------
         updated_config_list = []
         ri_overrides = {}
         for role, widget_role in self.role_widgets.items():
@@ -1103,14 +1118,37 @@ class MaterialSelectorTabbedNotebook:
             updated_config_list.append({"key": role, "material": mat_info})
             if mat_info.get("type") == "RefractiveIndex":
                 ri_overrides[role] = mat_info
+
+        new_name = self.config_name_text.value.strip() or old_name
         for cfg in self.all_configs:
-            if cfg["config_name"] == selected["config_name"]:
+            if cfg["config_name"] == old_name:
                 cfg["MATERIALS_CONFIG"] = updated_config_list
                 cfg["RI_OVERRIDES"] = ri_overrides
+                cfg["config_name"] = new_name
                 break
+
+        # -------- PATCH CONVERGENCE_RESULTS.JSON SI CHANGEMENT DE NOM ----------
+        convergence_json = os.path.join(WORKSPACE_DIR, "Convergence", "convergence_results.json")
+        if new_name != old_name and os.path.exists(convergence_json):
+            with open(convergence_json, "r", encoding="utf-8") as f:
+                master = json.load(f)
+            configs = master.get("configs", {})
+            if old_name in configs:
+                configs[new_name] = configs.pop(old_name)
+                with open(convergence_json, "w", encoding="utf-8") as f:
+                    json.dump(master, f, indent=2)
+                with self.output:
+                    print(f"[PATCH] convergence_results.json : {old_name} → {new_name}")
+            else:
+                with self.output:
+                    print(f"[INFO] Pas d'entrée à renommer dans convergence_results.json pour {old_name}.")
+
         self.update_config_dropdown()
+        self.config_dropdown.value = cfg  # sélectionne la config modifiée    
         with self.output:
-            print(f"Configuration '{selected['config_name']}' updated.")
+            print(f"Configuration '{old_name}' updated (nouveau nom : '{new_name}').")
+
+
     
     def on_delete_config(self, b):
         selected = self.config_dropdown.value

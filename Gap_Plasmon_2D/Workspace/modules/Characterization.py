@@ -137,9 +137,8 @@ def _find_dip_core(
         lam_sym = np.interp(ref_val, seg_R, seg_lam)
         R_sym   = ref_val
 
-        # 3d) profondeur et pente
+        # 3d) profondeur
         depth = ref_val - R_dip
-        #slope = grad[lm] + grad[rm]
 
         # 3e) FWHM manuel
         half = R_dip + 0.5*(ref_val - R_dip)
@@ -360,61 +359,150 @@ def find_best_dip(
         cfg_name=cfg_name
     )
 
+
+    lam_arr    = np.asarray(wavelength)      # vecteur des longueurs d’onde
+    R_arr      = np.asarray(reflectance)     # vecteur des réflectances
+
+    # 1) Lissage (identique à _find_dip_core)
+    if smooth_win > 1:
+        R_smooth   = savgol_filter(R_arr, smooth_win, polyorder)
+    else:
+        R_smooth   = R_arr.copy()
+
+
+    interp_R = interp1d(lam_arr, R_smooth, kind='cubic',
+                    bounds_error=False, fill_value='extrapolate')
+
+    # on récupère Δλ "basique" = pas de la grille
+    delta = lam_arr[1] - lam_arr[0]
+
+    # 2) Calcul du gradient lissé
+    dR_smooth   = np.gradient(R_smooth, lam_arr)   # dérivée dR/dλ du spectre lissé
+    grad_smooth = np.abs(dR_smooth)                # valeurs absolues des pentes
+
+
     if not dip_idx_list:
         # pas de dip
         return None, cfg_name, None
+    
+    # On instancie deux variantes de score :
+    #  - best_idx_dn : comparaison via S_R (ΔR/Δn), initialisé à -inf
+    best_idx_dn, best_dR = None, -np.inf
+    #  - best_idx_raw : comparaison via raw_score(depth, slope, fwhm), initialisé à -inf
+    best_idx_raw, best_raw_score = None, -np.inf
 
-    best_idx, best_dR = None, -np.inf
     best_Slam, best_dR_half = None, None
-
-    dR_over_dn_list   = []  # pour ΔR/Δn de chaque dip
-    dLam_over_dn_list = []  # pour Δλ/Δn de chaque dip
+    dR_over_dn_list   = [] # pour ΔR/Δn de chaque dip
+    dLam_over_dn_list = [] # pour Δλ/Δn de chaque dip
+        
+    dR_base = np.gradient(reflectance, wavelength)
 
     # 2) boucle sur chaque candidat dip
     for j in range(len(dip_idx_list)):
-        Rup_dn, lam0, R0, lam1, R1, S_lam, S_R, dR_half = simulate_delta_spectrum(
-            cfg=cfg,
-            lam=wavelength,
-            wave=wave,
-            n_modes=n_modes,
-            sel_layers=sel_layers,
-            delta_n=delta_n,
-            lam_dip=lam_dip_list[j],
-            R_dip=R_dip_list[j],
-            lam_left=lam_left_list[j],
-            lam_right=lam_right_list[j],
-            base_spectrum=reflectance,
-            json_combined_path=json_combined_path,
-            dip_index=j,
-            mode=mode
-        )
+        depth = depth_list[j]   # profondeur du j-ième dip
+        fwhm  = fwhm_list[j]    # largeur FWHM du j-ième dip
+        
+        # → Si on a au moins une couche dans `sel_layers`, on effectue la
+        #   simulation Δn pour ce dip j :
+        if sel_layers:
+            # simulate_delta_spectrum retourne aussi S_lam (Δλ/Δn) et S_R (ΔR/Δn)
+            Rup_dn, lam0, R0, lam1, R1, S_lam, S_R, dR_half = simulate_delta_spectrum(
+                cfg=cfg,
+                lam=wavelength,
+                wave=wave,
+                n_modes=n_modes,
+                sel_layers=sel_layers,
+                delta_n=delta_n,
+                lam_dip=lam_dip_list[j],
+                R_dip=R_dip_list[j],
+                lam_left=lam_left_list[j],
+                lam_right=lam_right_list[j],
+                base_spectrum=reflectance,
+                json_combined_path=json_combined_path,
+                dip_index=j,
+                mode=mode
+            )
+            dR_over_dn_list.append(S_R)
+            dLam_over_dn_list.append(S_lam)
 
-        dR_over_dn_list.append(S_R)
-        dLam_over_dn_list.append(S_lam)
+            # MISE À JOUR du meilleur dip en mode Δn (compare S_R)
+            if S_R > best_dR:
+                best_dR      = S_R
+                best_idx_dn  = j
+                best_Slam    = S_lam
+                best_dR_half = dR_half
+        else:
+            # Pas de Δn demandé → on calcule raw_score à partir de (depth, slope, fwhm)
+            # ─── Calcul de la pente au demi-hauteur ───
 
-        if S_R > best_dR:
-            best_dR      = S_R
-            best_idx     = j
-            best_Slam    = S_lam
-            best_dR_half = dR_half
+            # 1) récupère lam_left_list[j] et lam_right_list[j]
+            lam_left  = lam_left_list[j]
+            lam_right = lam_right_list[j]
+
+            # 2) trouve l’indice entier le plus proche de lam_left et lam_right dans lam_arr
+            idx_left  = np.argmin(np.abs(lam_arr - lam_left))
+            idx_right = np.argmin(np.abs(lam_arr - lam_right))
+            # (a) pente sur le flanc gauche au demi-hauteur :
+            y_plus_L  = interp_R(lam_left + delta)
+            y_minus_L = interp_R(lam_left - delta)
+            slope_left  = abs((y_plus_L - y_minus_L) / (2 * delta))
+
+            # (b) pente sur le flanc droit au demi-hauteur :
+            y_plus_R  = interp_R(lam_right + delta)
+            y_minus_R = interp_R(lam_right - delta)
+            slope_right = abs((y_plus_R - y_minus_R) / (2 * delta))
+
+            # (c) on retient la pente la plus raide parmi les deux flancs :
+            slope = max(slope_left, slope_right)
+
+
+
+            # Paramètres de pondération que vous avez donnés :
+            alpha = 2.0
+
+            # Calcul du raw_score
+            #   Attention : depth**alpha augmente le poids de la profondeur
+            raw_score = (depth**alpha) * (slope) / (fwhm)
+
+            # Mettre à jour le meilleur dip au sens de raw_score
+            if raw_score > best_raw_score:
+                best_raw_score = raw_score
+                best_idx_raw   = j
+
+            # On stocke toutefois S_R=0 et S_lam=0 dans les listes pour la cohérence des tableaux
+            dR_over_dn_list.append(0.0)
+            dLam_over_dn_list.append(0.0)
+
+    # 3) Fin de la boucle : si sel_layers non vide, on retient best_idx_dn ;
+    #    sinon, on retient best_idx_raw
+    if sel_layers:
+        best_idx = best_idx_dn
+        best_dR   = best_dR
+        # best_Slam et best_dR_half ont déjà été mis à jour dans la boucle
+    else:
+        best_idx = best_idx_raw
+        best_dR   = 0.0       # S_R n’a pas de sens ici
+        best_Slam = 0.0       # Δλ/Δn = 0, pas de Δn appliqué
+        best_dR_half = 0.0
 
     if best_idx is None:
         if verbose:
             print(f"[find_best_dip] Aucun dip retenu pour «{cfg_name}»")
         return None, cfg_name, None
 
-    # 3) on rassemble les scalaires du meilleur dip
-    lam_left   = lam_left_list[best_idx]
-    lam_right  = lam_right_list[best_idx]
-    fwhm       = fwhm_list[best_idx]
-    depth      = depth_list[best_idx]
-    lam_dip    = lam_dip_list[best_idx]
-    R_dip      = R_dip_list[best_idx]
-    ylev       = y_level_list[best_idx]
-    lam_max_l  = lam_max_l_list[best_idx]; R_max_l = R_max_l_list[best_idx]
-    lam_max_r  = lam_max_r_list[best_idx]; R_max_r = R_max_r_list[best_idx]
-    lam_sym    = lam_sym_list[best_idx];    R_sym   = R_sym_list[best_idx]
+    # 4) Extraction des données du creux sélectionné
+    lam_left  = lam_left_list[best_idx]
+    lam_right = lam_right_list[best_idx]
+    fwhm      = fwhm_list[best_idx]
+    depth     = depth_list[best_idx]
+    lam_dip   = lam_dip_list[best_idx]
+    R_dip     = R_dip_list[best_idx]
+    ylev      = y_level_list[best_idx]
+    lam_max_l = lam_max_l_list[best_idx]; R_max_l = R_max_l_list[best_idx]
+    lam_max_r = lam_max_r_list[best_idx]; R_max_r = R_max_r_list[best_idx]
+    lam_sym   = lam_sym_list[best_idx];   R_sym   = R_sym_list[best_idx]
 
+    # 5) Montage du tuple de sortie comme avant
     out = (
         lam_left, lam_right,
         fwhm, depth,
@@ -422,13 +510,14 @@ def find_best_dip(
         lam_max_l, R_max_l,
         lam_max_r, R_max_r,
         lam_sym, R_sym,
-        best_dR, best_Slam, best_dR_half,
+        best_dR,    # ΔR/Δn du creux retenu (sera 0 si pas de Δn)
+        best_Slam,  # Δλ/Δn du creux retenu (sera 0 si pas de Δn)
+        best_dR_half,
         dip_idx_list,
         dR_over_dn_list,
         dLam_over_dn_list
     )
     return out, cfg_name, best_idx
-
 
 
 

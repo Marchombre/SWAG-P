@@ -1,15 +1,15 @@
 Simulation Summary - All Geometry/Material Combos
-Timestamp: 20250606_121556
+Timestamp: 20250606_120457
 Wave parameters: {'angle': 0, 'polarization': 1}
 Number of RCWA modes: 5
 ---- COMBINATIONS ----
 
-Combo name: Structure 1 - Mat_Structure 1
+Combo name: Structure 1 - ITO / AU (10nm)
 Geometry:
 {'thick_super': 200.0, 'thick_reso': 30.0, 'width_reso': 30.0, 'thick_gap': 3.0, 'thick_mol': 0.0, 'thick_func': 0.0, 'thick_diel': 1.0, 'thick_metalliclayer': 10.0, 'thick_XIAOYI': 0.0, 'thick_accroche': 0.0, 'thick_sub': 200.0, 'period': 100.2153}
 Material config (df_config):
-[{'key': 'perm_env', 'material': {'type': 'None'}}, {'key': 'perm_gap', 'material': {'type': 'Custom', 'expression': '1.45**2', 'override': [300.0, 1000.0]}}, {'key': 'perm_diel', 'material': {'type': 'Custom', 'expression': '1.45**2', 'override': [300.0, 1000.0]}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}, {'key': 'perm_reso', 'material': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Ag', 'page': 'Rakic-BB', 'data': 'main/Ag/nk/Rakic-BB.yml', 'override': [247.97, 999.97]}}, {'key': 'perm_metalliclayer', 'material': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Au', 'page': 'Rakic-BB', 'data': 'main/Au/nk/Rakic-BB.yml', 'override': [247.97, 999.97]}}, {'key': 'perm_XIAOYI', 'material': {'type': 'None'}}, {'key': 'perm_accroche', 'material': {'type': 'None'}}, {'key': 'perm_sub', 'material': {'type': 'Standard', 'material': 'ITO', 'override': [193.05, 1681.72]}}]
-RI Overrides: {'perm_reso': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Ag', 'page': 'Rakic-BB', 'data': 'main/Ag/nk/Rakic-BB.yml', 'override': [247.97, 999.97]}, 'perm_metalliclayer': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Au', 'page': 'Rakic-BB', 'data': 'main/Au/nk/Rakic-BB.yml', 'override': [247.97, 999.97]}}
+[{'key': 'perm_env', 'material': {'type': 'None'}}, {'key': 'perm_gap', 'material': {'type': 'Custom', 'expression': '1.45**2', 'override': [300.0, 1000.0]}}, {'key': 'perm_diel', 'material': {'type': 'Custom', 'expression': '1.45**2', 'override': [300.0, 1000.0]}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}, {'key': 'perm_reso', 'material': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Ag', 'page': 'Rakic-BB', 'data': 'main/Ag/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}}, {'key': 'perm_metalliclayer', 'material': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Au', 'page': 'Rakic-BB', 'data': 'main/Au/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}}, {'key': 'perm_XIAOYI', 'material': {'type': 'None'}}, {'key': 'perm_accroche', 'material': {'type': 'None'}}, {'key': 'perm_sub', 'material': {'type': 'Standard', 'material': 'ITO', 'override': [193.05, 1681.72]}}]
+RI Overrides: {'perm_reso': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Ag', 'page': 'Rakic-BB', 'data': 'main/Ag/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}, 'perm_metalliclayer': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Au', 'page': 'Rakic-BB', 'data': 'main/Au/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}}
 Metrics:
   FWHM (nm)    : 145.6 nm
   Lam_res      : 769.4 nm

@@ -403,7 +403,7 @@
       }
     },
     {
-      "config_name": "Mat_Structure 1",
+      "config_name": "ITO / AU (10nm)",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
@@ -455,7 +455,7 @@
             "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              999.97
+              1936.97
             ]
           }
         },
@@ -469,7 +469,7 @@
             "data": "main/Au/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              999.97
+              1936.97
             ]
           }
         },
@@ -506,7 +506,7 @@
           "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            999.97
+            1936.97
           ]
         },
         "perm_metalliclayer": {
@@ -517,7 +517,7 @@
           "data": "main/Au/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            999.97
+            1936.97
           ]
         }
       }
@@ -751,7 +751,7 @@
       }
     },
     {
-      "config_name": "Mat_Structure 2",
+      "config_name": "Verre / Al (3nm) / Au (10nm)",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
@@ -803,7 +803,7 @@
             "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              1936.97
+              12398.0
             ]
           }
         },
@@ -817,7 +817,7 @@
             "data": "main/Au/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              1936.97
+              6199.2
             ]
           }
         },
@@ -836,8 +836,8 @@
             "page": "Rakic-BB",
             "data": "main/Al/nk/Rakic-BB.yml",
             "override": [
-              199.992,
-              128014.992
+              61.992,
+              247970.0
             ]
           }
         },
@@ -862,7 +862,7 @@
           "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            1936.97
+            12398.0
           ]
         },
         "perm_metalliclayer": {
@@ -873,7 +873,7 @@
           "data": "main/Au/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            1936.97
+            6199.2
           ]
         },
         "perm_accroche": {
@@ -883,8 +883,8 @@
           "page": "Rakic-BB",
           "data": "main/Al/nk/Rakic-BB.yml",
           "override": [
-            199.992,
-            128014.992
+            61.992,
+            247970.0
           ]
         }
       }

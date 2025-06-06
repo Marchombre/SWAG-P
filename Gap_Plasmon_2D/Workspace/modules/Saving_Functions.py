@@ -13,6 +13,19 @@ import numpy as np
 from data_readers import get_material_str_clean
 
 
+def sanitize_filename(name):
+    """Remplace les caractères non autorisés dans un nom de fichier par un underscore."""
+    # Interdit : / \ ? % * : | " < > et supprime les doubles espaces
+    import re
+    # Remplace slashs et caractères interdits par "_"
+    name = re.sub(r'[\\/*?:"<>|]', "_", name)
+    # Remplace aussi les slashs restants pour Unix
+    name = name.replace('/', '_')
+    # Optionnel : supprime les espaces multiples consécutifs
+    name = re.sub(r'\s+', ' ', name)
+    return name.strip()
+
+
 # --------------------------------------------------------------------------- #
 #                        RÉSUMÉ TEXTE DE SIMULATION                            #
 # --------------------------------------------------------------------------- #
@@ -45,7 +58,9 @@ def save_simulation_summary(
             base = "simulation_summary_RCWA_" + base
     else:
         base = "simulation_summary_RCWA_" + get_material_str_clean(simulation_details)
-    out_path = os.path.join(summary_dir, f"{base}.txt")
+    safe_base = sanitize_filename(base)
+    out_path = os.path.join(summary_dir, f"{safe_base}.txt")
+
 
     os.makedirs(summary_dir, exist_ok=True)
 
