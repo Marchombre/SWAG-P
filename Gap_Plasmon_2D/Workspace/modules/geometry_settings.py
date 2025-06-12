@@ -427,16 +427,16 @@ def create_geometry_widget():
             draw_layer(ax, 0, y_sub_bottom, p, bande_height, "none", "", hatch='///')
             
             # Partie centrale
-            draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "gold", "Accroche")
+            draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "orange", "Stick-on")
             draw_layer(ax, 0, y_XIAOYI_bottom, p, disp_XIAOYI, "purple", "XIAOYI")
-            draw_layer(ax, 0, y_metal_bottom, p, disp_metal, "silver", "Metallic")
-            draw_layer(ax, central_x, y_gap_bottom, w_reso, disp_gap, "lightgreen", "Gap (polymer)")
-            draw_layer(ax, central_x, y_cube_bottom, w_reso, disp_reso, "orange", "Nanocube")
+            draw_layer(ax, 0, y_metal_bottom, p, disp_metal, "gold", "Metallic layer")
+            draw_layer(ax, central_x, y_gap_bottom, w_reso, disp_gap, "lightgreen", "Gap (photopolymer)")
+            draw_layer(ax, central_x, y_cube_bottom, w_reso, disp_reso, "silver", "Nanocube")
             
             # Colonnes latérales
             y_curr_left = y_lat_start
-            draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_dielectric, "green", "Dielectric")
-            draw_layer(ax, right_x, y_curr_left, lateral_width, disp_dielectric, "green", "Dielectric")
+            draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_dielectric, "green", "Photopolymer")
+            draw_layer(ax, right_x, y_curr_left, lateral_width, disp_dielectric, "green", "Photopolymer")
             y_curr_left += disp_dielectric
             draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_func, "pink", "Functionalisation")
             draw_layer(ax, right_x, y_curr_left, lateral_width, disp_func, "pink", "Functionalisation")

@@ -269,6 +269,24 @@
         "thick_sub": 200.0,
         "period": 100.2153
       }
+    },
+    {
+      "config_name": "c0_g2_m50",
+      "compartment": "D\u00e9faut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 0.0,
+        "width_reso": 0.0,
+        "thick_gap": 2.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 2.0,
+        "thick_metalliclayer": 50.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
     }
   ]
 }

@@ -343,17 +343,17 @@ def create_geometry_widget():
             ax.set_title("Schematics (not to scale) - " + case_label_widget.value, fontsize=10, pad=5)
             
             # Draw Substrate and its hatch band
-            draw_layer(ax, 0, y_sub_bottom, p, disp_sub, "brown", "Substrate")
+            draw_layer(ax, 0, y_sub_bottom, p, disp_sub, "brown", "Substrate (SiO2)")
             draw_layer(ax, 0, y_sub_bottom, p, band_height, "none", "", hatch='///')
             
             # Draw Accroche and Metallic layers
-            draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "gold", "Accroche")
-            draw_layer(ax, 0, y_metal_bottom, p, disp_metal, "silver", "Metallic")
+            draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "orange", "Accroche")
+            draw_layer(ax, 0, y_metal_bottom, p, disp_metal, "gold", "Metallic layer (Au)")
             draw_layer(ax, 0, y_XIAOYI_bottom, p, t_XIAOYI, "purple", "XIAOYI")
             
             # Draw Central column: Gap (polymer) then Nanocube
-            draw_layer(ax, central_x, y_gap_bottom, w_reso, scale * t_gap, "lightgreen", "Gap (polymer)")
-            draw_layer(ax, central_x, y_cube_bottom, w_reso, t_reso, "orange", "Nanocube")
+            draw_layer(ax, central_x, y_gap_bottom, w_reso, scale * t_gap, "lightgreen", "Gap (molecules)")
+            draw_layer(ax, central_x, y_cube_bottom, w_reso, t_reso, "silver", "Nanocube (Ag)")
             
             # Draw Lateral columns: Dielectric, Functionalisation, Molecule
             y_curr_left = y_inter_bottom
@@ -373,11 +373,11 @@ def create_geometry_widget():
             y_curr_left += thickness_mol_scaled
 
             if lateral_filler > 0:
-                draw_layer(ax, left_x,  y_curr_left, lateral_width, lateral_filler, "lightblue", "Superstrate \n (environement)")
-                draw_layer(ax, right_x, y_curr_left, lateral_width, lateral_filler, "lightblue", "Superstrate \n (environement)")
+                draw_layer(ax, left_x,  y_curr_left, lateral_width, lateral_filler, "lightblue", "Superstrate \n (Air)")
+                draw_layer(ax, right_x, y_curr_left, lateral_width, lateral_filler, "lightblue", "Superstrate \n (Air)")
             
             # Draw Superstrate in central column
-            draw_layer(ax, 0, y_super_bottom, p, p - y_super_bottom, "lightblue", "Superstrate (environement)")
+            draw_layer(ax, 0, y_super_bottom, p, p - y_super_bottom, "lightblue", "Superstrate (Air)")
             draw_layer(ax, 0, p - band_height, p, band_height, "none", "", hatch='///')
             
             ax.set_xlim(0, p)

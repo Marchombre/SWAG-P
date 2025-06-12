@@ -3,7 +3,8 @@
 {
     "python.analysis.extraPaths": [
         "./Gap_Plasmon_2D/Workspace/modules",
-        "./Workspace/modules"
+        "./Workspace/modules",
+        "./BACK_UP"
     ],
     "python.analysis.autoImportCompletions": true
 }

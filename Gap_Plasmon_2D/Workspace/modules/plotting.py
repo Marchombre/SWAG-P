@@ -74,6 +74,7 @@ def create_plot_tab():
     custom_labels_dict = {}  # {original_label: custom_label}
     custom_labels_dn_dict = {}   # {original_label: custom_label for Rup_dn}
     custom_marker_labels = {}  # {label: {type: valeur}}
+    custom_colors = {}           # {lab: "#rrggbb"}
     
     # --------------------- widgets principaux ---------------------- #
     spectra_select = widgets.SelectMultiple(
@@ -113,6 +114,10 @@ def create_plot_tab():
     def on_update_labels(_=None):
         for row in labels_editors_box.children:
             for txt in row.children:
+                if isinstance(txt, widgets.ColorPicker):
+                    custom_colors[txt._orig_lab] = txt.value
+                    continue
+                
                 if hasattr(txt, "_carre_type"):
                     lab = txt._orig_lab
                     typ = txt._carre_type
@@ -167,6 +172,18 @@ def create_plot_tab():
         children = []
         for lab in labels:
             row = []
+            
+            # ── ColorPicker ──
+            col_init = custom_colors.get(lab, None)
+            color_picker = widgets.ColorPicker(
+                concise=True,
+                description='Couleur:',
+                value=col_init or '#1f77b4',  # couleur par défaut si non définie
+                layout=Layout(width='120px')
+            )
+            color_picker._orig_lab = lab
+            row.append(color_picker)
+
 
             # Label principal du spectre
             default_lab = custom_labels_dict.get(lab, clean_config_label(lab))
@@ -597,7 +614,10 @@ def create_plot_tab():
             S_lam_sym_vals.append(S_lam_sym_abs)
 
             # Tracé graphique
-            color = colors[idx % len(colors)]
+            # priorité à la couleur custom si définie, sinon palette par défaut
+            color = custom_colors.get(lab,
+                     colors[idx % len(colors)])
+            
             # Tracé principal restreint :
             label_affiche = custom_labels_dict.get(lab, clean_config_label(lab))
             
