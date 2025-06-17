@@ -287,6 +287,24 @@
         "thick_sub": 200.0,
         "period": 100.2153
       }
+    },
+    {
+      "config_name": "Test_opti_c30_g3_d3_m10",
+      "compartment": "D\u00e9faut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 3.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
     }
   ]
 }

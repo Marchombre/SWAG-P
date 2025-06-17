@@ -7121,6 +7121,142 @@
           }
         }
       }
+    },
+    {
+      "config_name": "Test_opti_c30_g3_d3_m10 - Mat_Test_opti_c30_g3_d3_m10",
+      "geometry": {
+        "config_name": "Test_opti_c30_g3_d3_m10",
+        "compartment": "Défaut",
+        "geometry": {
+          "thick_super": 200.0,
+          "thick_reso": 30.0,
+          "width_reso": 30.0,
+          "thick_gap": 3.0,
+          "thick_mol": 0.0,
+          "thick_func": 0.0,
+          "thick_diel": 3.0,
+          "thick_metalliclayer": 10.0,
+          "thick_XIAOYI": 0.0,
+          "thick_accroche": 0.0,
+          "thick_sub": 200.0,
+          "period": 100.2153
+        }
+      },
+      "material": {
+        "config_name": "Mat_Test_opti_c30_g3_d3_m10",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_gap",
+            "material": {
+              "type": "Custom",
+              "expression": "1.45**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_diel",
+            "material": {
+              "type": "Custom",
+              "expression": "1.45**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_func",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_mol",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "RefractiveIndex",
+              "shelf": "main",
+              "book": "Ag",
+              "page": "Rakic-BB",
+              "data": "main/Ag/nk/Rakic-BB.yml",
+              "override": [
+                247.97,
+                999.97
+              ]
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "RefractiveIndex",
+              "shelf": "main",
+              "book": "Au",
+              "page": "Rakic-BB",
+              "data": "main/Au/nk/Rakic-BB.yml",
+              "override": [
+                247.97,
+                999.97
+              ]
+            }
+          },
+          {
+            "key": "perm_XIAOYI",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "None"
+            }
+          }
+        ],
+        "RI_OVERRIDES": {
+          "perm_reso": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              999.97
+            ]
+          },
+          "perm_metalliclayer": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              999.97
+            ]
+          }
+        }
+      }
     }
   ]
 }

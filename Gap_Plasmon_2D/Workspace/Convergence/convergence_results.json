@@ -888,6 +888,26 @@
         "stable_required": 3,
         "optimal_n_mode": 4
       }
+    ],
+    "Test_opti_c30_g3_d3_m10 - Mat_Test_opti_c30_g3_d3_m10": [
+      {
+        "timestamp": "2025-06-13T09:38:52.981689",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 100
+      },
+      {
+        "timestamp": "2025-06-13T11:31:22.837203",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 100
+      }
     ]
   }
 }

@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Module: interactive_simulation.py
+interactive_simulation.py
 
-Assemble les onglets Simulation, Plot et Difference pour l'application interactive.
+Assemble les onglets Simulation, Plot, Difference et Optimisation
+pour l'application interactive.
 """
 
 import os
+import inspect
 import ipywidgets as widgets
 
-from simulation  import create_simulation_tab
-from plotting    import create_plot_tab
-from difference  import create_difference_tab
+from simulation import SimulationTab
+from plotting import PlotTab
+from difference import create_difference_tab
+from Optimisation import OptimizationTab  
 
-# Construction des chemins
+
+# --------------------------------------------------------------------- #
+#                          Construction des chemins                    #
+# --------------------------------------------------------------------- #
 module_dir         = os.path.dirname(os.path.abspath(__file__))
 workspace_dir      = os.path.dirname(module_dir)
 notebooks_dir      = os.path.join(workspace_dir, "notebooks")
@@ -22,30 +29,88 @@ data_dir           = os.path.join(workspace_dir, "data")
 json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
 
+# --------------------------------------------------------------------- #
+def _extract_widget(obj):
+    """
+    Si obj est déjà un Widget, on le renvoie.
+    Sinon, on cherche dans ses attributs un premier widget.
+    """
+    if isinstance(obj, widgets.Widget):
+        return obj
+
+    for name in ('widget', 'tab', 'container', 'layout', 'ui', 'root', 'view'):
+        val = getattr(obj, name, None)
+        if isinstance(val, widgets.Widget):
+            return val
+
+    for attr in dir(obj):
+        try:
+            val = getattr(obj, attr)
+            if isinstance(val, widgets.Widget):
+                return val
+        except Exception:
+            continue
+
+    raise RuntimeError(
+        f"Impossible de trouver un ipywidgets.Widget dans l'instance {obj!r}."
+    )
+
+
+# --------------------------------------------------------------------- #
 def create_advanced_app():
     """
-    Crée et retourne l'interface interactive complète, avec trois onglets :
-      - Simulation
-      - Plot
-      - Difference
+    Construit l'application interactive à onglets :
+      0) Simulation,
+      1) Plot,
+      2) Double checking (Difference),
+      3) Optimisation
     """
-    sim_tab  = create_simulation_tab(json_combined_path, summary_dir, exp_data_dir)
-    plot_tab = create_plot_tab()
-    diff_tab = create_difference_tab()
+    # 1) Instanciation de SimulationTab
+    sig    = inspect.signature(SimulationTab.__init__)
+    params = [p for p in sig.parameters if p != 'self']
+    mapping = {
+        'json_path':          json_combined_path,
+        'json_combined_path': json_combined_path,
+        'summary_dir':        summary_dir,
+        'exp_data_dir':       exp_data_dir,
+    }
+    args = []
+    for name in params:
+        if name in mapping:
+            args.append(mapping[name])
+        else:
+            raise RuntimeError(f"SimulationTab.__init__ attend '{name}' …")
+    sim_obj = SimulationTab(*args)
+    sim_tab = _extract_widget(sim_obj)
 
-    tabs = widgets.Tab(children=[sim_tab, plot_tab, diff_tab])
+    # 2) Onglet Plot (class-based)
+    plot_obj = PlotTab()                 # plus de fonction create_plot_tab
+    plot_tab = _extract_widget(plot_obj)
+
+    # 3) Onglet Difference (reste fonctionnel via la fonction)
+    diff_obj = create_difference_tab()
+    diff_tab = _extract_widget(diff_obj)
+
+    # 4) Onglet Optimisation (class-based)
+    opt_obj = OptimizationTab(sim_obj)
+    opt_tab = _extract_widget(opt_obj)
+
+    # 5) Assemblage des onglets
+    tabs = widgets.Tab(children=[sim_tab, plot_tab, diff_tab, opt_tab])
     tabs.set_title(0, "Simulation")
     tabs.set_title(1, "Plot")
     tabs.set_title(2, "Double checking")
-    
+    tabs.set_title(3, "Optimisation")
+
+    # 6) Rafraîchissement à la sélection d'un onglet
     def on_tab_change(change):
-        # si on passe à l’onglet Plot (index 1), on rafraîchit la liste des spectres
-        if change['new'] == 1:
-            plot_tab.update_spectra()
-        elif change['new'] == 2:
-            diff_tab.update_diff_options()    
+        idx = change.get('new')
+        if idx == 1 and hasattr(plot_obj, 'update_spectra'):
+            plot_obj.update_spectra()
+        elif idx == 2 and hasattr(diff_obj, 'update_diff_options'):
+            diff_obj.update_diff_options()
+        elif idx == 3 and hasattr(opt_obj, 'update_optimization'):
+            opt_obj.update_optimization()
 
     tabs.observe(on_tab_change, names='selected_index')
-    
-
     return widgets.VBox([tabs])
