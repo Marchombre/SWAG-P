@@ -908,6 +908,37 @@
         "stable_required": 3,
         "optimal_n_mode": 100
       }
+    ],
+    "test - test": [
+      {
+        "timestamp": "2025-06-19T10:39:05.049779",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 4
+      },
+      {
+        "timestamp": "2025-06-19T10:41:12.261783",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 4
+      }
+    ],
+    "Opti_n30_g3_m10 - Opti_mat": [
+      {
+        "timestamp": "2025-06-19T11:11:45.843341",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 92
+      }
     ]
   }
 }

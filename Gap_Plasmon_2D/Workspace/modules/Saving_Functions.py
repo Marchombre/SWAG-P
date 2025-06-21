@@ -9,7 +9,8 @@ Génération / écriture des résumés de simulation et sauvegarde des figures.
 import os, re
 from datetime import datetime
 import numpy as np
-
+import h5py
+from pathlib import Path
 from data_readers import get_material_str_clean
 
 
@@ -159,3 +160,86 @@ def save_figure(fig, title, figures_dir, material_str_clean: str | None = None):
     fig.savefig(path, bbox_inches="tight")
     print(f"Figure saved : {path}")
     return path
+
+
+
+
+
+# --------------------------------------------------------------------------- #
+#                               Optimization files                            #
+# --------------------------------------------------------------------------- #
+def save_optimization_hdf5(
+    notebook_dir: str,
+    run_id: str,
+    budget: int,
+    Npop: int,
+    keys: list[str],
+    lowers: np.ndarray,
+    uppers: np.ndarray,
+    conv: np.ndarray,
+    cf_final: np.ndarray,
+    best: np.ndarray,
+    best_final: np.ndarray,
+    mode: str,
+    lam: np.ndarray | None = None,
+    Rup: np.ndarray | None = None,
+    Rdown: np.ndarray | None = None
+) -> str:
+    """
+    Enregistre les résultats de DE_general dans :
+      <notebook_dir>/Summary_Optimization/Opt_<run_id>_<timestamp>.h5
+
+    - notebook_dir   : chemin vers notebooks/ (ex. './notebooks')
+    - run_id         : identifiant court pour la passe (ex. 'budget100_pop30')
+    - budget, Npop   : paramètres DE
+    - keys, lowers, uppers : dimensions optimisées et leurs bornes
+    - conv, cf_final : historiques de coût
+    - best, best_final : vecteurs optimaux
+    - mode           : 'dip' ou 'half'
+    """
+    summary_opti_dir = Path(notebook_dir) / "Summary_Optimization"
+    summary_opti_dir.mkdir(parents=True, exist_ok=True)
+
+    stamp    = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"Opt_{run_id}_{stamp}.h5"
+    h5path   = summary_opti_dir / filename
+
+    with h5py.File(h5path, "a") as f:
+        grp = f.require_group(f"{run_id}_{stamp}")
+
+        # 1) Méta
+        grp.attrs.update({
+            "date":   datetime.now().isoformat(),
+            "run_id": run_id,
+            "budget": budget,
+            "Npop":   Npop,
+            "mode":   mode
+        })
+
+        # 2) Paramètres optimisés
+        p = grp.require_group("parameters")
+        p.create_dataset("keys",   data=np.array(keys, dtype='S'))
+        p.create_dataset("lowers", data=lowers)
+        p.create_dataset("uppers", data=uppers)
+
+        # 3) Convergence et coûts
+        grp.create_dataset("convergence", data=conv,     compression="gzip")
+        grp.create_dataset("cf_final",    data=cf_final, compression="gzip")
+
+        # 4) Meilleurs vecteurs
+        grp.create_dataset("best",       data=best,       compression="gzip")
+        grp.create_dataset("best_final", data=best_final, compression="gzip")
+        
+        
+        # 5) Spectres du meilleur, s’ils sont fournis
+        if lam is not None and Rup is not None:
+            spec = grp.require_group("spectra")
+            spec.create_dataset("wavelength", data=lam,  compression="gzip")
+            spec.create_dataset("Rup",        data=Rup,  compression="gzip")
+            if Rdown is not None:
+                spec.create_dataset("Rdown",   data=Rdown,compression="gzip")        
+        
+
+    print(f"[Saving] Optimization saved to {h5path}")
+    return str(h5path)
+

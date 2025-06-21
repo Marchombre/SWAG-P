@@ -22,11 +22,6 @@ from ipywidgets import Layout, HBox, VBox, ToggleButton, HTML
 from IPython.display import HTML as DHTML, display, Javascript
 from scipy.interpolate import interp1d
 
-# pour surveiller les changements de fichiers
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-import threading
-from IPython import get_ipython
 
 from file_watchers import start_watcher
 
@@ -123,12 +118,30 @@ class SimulationTab:
             style={'description_width': 'initial'})
         self.custom_modes_box = VBox()
 
-        # --------- gestion des fichiers .npz --------------------
+        # --------- gestion des fichiers  --------------------
         self.sim_files_dropdown = widgets.Dropdown(
             options=list_sim_summary_files(summary_dir),
             description="Simulation files:",
             layout=Layout(width='500px'),
             style={'description_width': 'initial'})
+        
+        # --- Watchdog pour la liste de fichiers  ---
+        self._files_observer = start_watcher(
+            path=summary_dir,
+            callback=lambda: self.sim_files_dropdown.set_trait(
+                "options", list_sim_summary_files(summary_dir)
+            ),
+            extensions=['.npz'],  # ou None pour tout fichier
+            recursive=False
+        )
+
+        # --- Watchdog pour la liste des configurations  ---
+        self._configs_observer = start_watcher(
+            path=configurations_dir,
+            callback=self._refresh_configs,
+            extensions=['.json'],
+            recursive=False
+        )
 
         self.sim_download_button = widgets.Button(
             description="Download", button_style="danger",
@@ -195,18 +208,11 @@ class SimulationTab:
             value=False, description="Select your configuration and Δn",
             icon='caret-down', layout=Layout(width='520px'), button_style='warning')
         self.toggle_btn.observe(self._toggle_config_list, names='value')
-        
-        self.config_refresh_btn = widgets.Button(
-            description="Refresh Configs",
-            button_style="info",
-            tooltip="Refresh configurations previously saved",
-            layout=Layout(width='auto', margin='0 5px 5px 0')
-        )
-        self.config_refresh_btn.on_click(self._refresh_configs)
+
         
         
         self.config_selector = VBox(
-            [ HBox([ self.toggle_btn, self.config_refresh_btn ]),  # ajoutez ici
+            [ HBox([ self.toggle_btn ]),  # ajoutez ici
             self.config_list ],
             layout=Layout(padding='5px')
         )
@@ -435,35 +441,44 @@ class SimulationTab:
         self.toggle_btn.icon = 'caret-up' if change['new'] else 'caret-down'
 
 
-    def _refresh_configs(self, _):
-            # 1) Recharge le JSON
-            cfg_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
-            if os.path.exists(cfg_file):
-                with open(cfg_file, encoding="utf-8") as f:
-                    self.all_configs = json.load(f)["ALL_COMBINED_CONFIGS"]
-            else:
-                self.all_configs = []
+    def _refresh_configs(self, _event=None):
+        print(">>> _refresh_configs déclenché !")
+        # 1) Recharge le JSON
+        cfg_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
+        if os.path.exists(cfg_file):
+            with open(cfg_file, encoding="utf-8") as f:
+                self.all_configs = json.load(f)["ALL_COMBINED_CONFIGS"]
+        else:
+            self.all_configs = []
 
-            # 2) Reconstruit les cases à cocher
-            self.config_checkboxes.clear()
-            self.dn_checkboxes.clear()
-            config_rows = []
+        # 2) Mise à jour incrémentale : ne rebuild que si la liste a changé
+        new_names = [cfg["config_name"] for cfg in self.all_configs]
+        old_names = list(self.config_checkboxes.keys())
+        if new_names != old_names:
+            # 2a) Supprime les widgets obsolètes
+            for name in set(old_names) - set(new_names):
+                self.config_checkboxes.pop(name)
+                self.dn_checkboxes.pop(name)
+            # 2b) Crée les nouveaux widgets
             for cfg in self.all_configs:
                 name = cfg["config_name"]
-                chk = widgets.Checkbox(value=False, description=name, indent=False)
-                dn  = widgets.Checkbox(value=False, description='Δn', indent=False,
-                                    layout=Layout(width='46px'))
-                self.config_checkboxes[name] = chk
-                self.dn_checkboxes[name] = dn
-                config_rows.append(HBox([chk, dn], layout=Layout(grid_gap='5px')))
-
-            # 3) Met à jour le conteneur avec le header et les boutons
-            header = HTML("<b>Configurations et Δn</b>")
+                if name not in old_names:
+                    chk = widgets.Checkbox(value=False, description=name, indent=False)
+                    dn  = widgets.Checkbox(value=False, description='Δn', indent=False,
+                                           layout=Layout(width='46px'))
+                    self.config_checkboxes[name] = chk
+                    self.dn_checkboxes[name] = dn
+            # 2c) Reconstitue l’ordre des lignes
+            config_rows = [
+                HBox([self.config_checkboxes[name], self.dn_checkboxes[name]],
+                     layout=Layout(grid_gap='5px'))
+                for name in new_names
+            ]
+            header  = HTML("<b>Configurations et Δn</b>")
             buttons = HBox([self.select_all_cfg_btn, self.select_all_dn_btn],
-                        layout=Layout(grid_gap='10px'))
-            self.config_list.children = [header, buttons, *config_rows]
-
-            # 4) Conserve l’état ouvert/fermé et rafraîchit les modes custom
+                           layout=Layout(grid_gap='10px'))
+            self.config_list.children = [header, buttons] + config_rows
+            # 2d) Restaure l’état ouvert/fermé et les modes custom
             self._toggle_config_list({'new': self.toggle_btn.value})
             self._refresh_custom_modes()
 

@@ -27,8 +27,9 @@ import zipfile
 from pathlib import Path
 import ipywidgets as widgets
 from IPython.display import FileLink, display
-from simulate_reflectance import simulate_reflectance_single
 
+from simulate_reflectance import simulate_reflectance_single
+from file_watchers import start_watcher
 
 def compute_convergence(lambda_fixed, n_mode_max, geometry, wave, df_config, json_combined_path, ri_overrides, tolerance, n_step, stable_required, progress_bar=None):
     """
@@ -114,23 +115,33 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         style={'description_width': 'initial'}
     )
     
-    # Bouton pour rafraîchir les configurations de convergence
-    refresh_conv_configs_button = widgets.Button(
-        description="Refresh Configs", 
-        button_style="info",
-        tooltip="Rafraîchir les configurations de convergence"
+
+    # --- Watchdog : recharge automatiquement la liste des configs JSON ---
+    # Chemin vers le JSON des combinaisons
+    combos_file = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "CONFIGURATIONS",
+        "geom_mat_combinations.json"
+    )
+    # Handler qui recharge conv_config_selector.options
+    def _on_config_change(event):
+        if event.src_path.endswith(".json"):
+            try:
+                with open(combos_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                new = [(cfg["config_name"], cfg) for cfg in data.get("ALL_COMBINED_CONFIGS", [])]
+                conv_config_selector.set_trait("options", new)
+            except Exception:
+                pass
+
+    # Démarrage du watcher
+    start_watcher(
+        path=os.path.dirname(combos_file),
+        callback=lambda: _on_config_change(type("E", (), {"src_path": combos_file})()),
+        extensions=['.json'],
+        recursive=False
     )
     
-    def refresh_conv_configs(b):
-        combos_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CONFIGURATIONS", "geom_mat_combinations.json")
-        new_configs = []
-        if os.path.exists(combos_file):
-            with open(combos_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            new_configs = data.get("ALL_COMBINED_CONFIGS", [])
-        if new_configs:
-            conv_config_selector.options = [(cfg["config_name"], cfg) for cfg in new_configs]
-    refresh_conv_configs_button.on_click(refresh_conv_configs)
     
     # On place le sélecteur et le bouton refresh côte à côte.
     conv_config_selector_box = widgets.HBox([conv_config_selector],
@@ -168,7 +179,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     tolerance_widget.observe(validate_positive, names='value')
 
     # Répartition des champs numériques sur deux lignes.
-    row1 = widgets.HBox([lambda_fixed_widget, n_mode_max_widget, refresh_conv_configs_button])
+    row1 = widgets.HBox([lambda_fixed_widget, n_mode_max_widget])
     row2 = widgets.HBox([n_mode_step_widget, tolerance_widget, stable_required_widget])
     numeric_controls = widgets.VBox([row1, row2])
 

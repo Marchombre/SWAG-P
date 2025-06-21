@@ -305,6 +305,42 @@
         "thick_sub": 200.0,
         "period": 100.2153
       }
+    },
+    {
+      "config_name": "test",
+      "compartment": "D\u00e9faut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 0.0,
+        "width_reso": 0.0,
+        "thick_gap": 0.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 0.0,
+        "thick_metalliclayer": 0.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 300.0,
+        "period": 100.0
+      }
+    },
+    {
+      "config_name": "Opti_n30_g3_m10",
+      "compartment": "Optimization",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 2.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 0.0,
+        "period": 100.2153
+      }
     }
   ]
 }

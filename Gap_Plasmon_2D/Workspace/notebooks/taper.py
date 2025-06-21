@@ -145,56 +145,130 @@ def taper(X): #verif ok
     cost=1-abs(S[b+n,a])**2
     return cost
 
-def DE_general(budget,Npop,Nlayers,Ncubes, bornes,periode,Nopt):
-    Ngen=int(budget/Npop)
-    F1=0.9
-    F2=0.8
-    cf=np.zeros(Npop)
-    conv=np.zeros(Ngen)
-    Nparam = Ncubes+1
+def DE_general(budget, Npop, Nlayers, Ncubes, bornes, periode, Nopt):
+    """
+    Algorithme Differential Evolution “current-to-best/1/bin”.
+    Arguments :
+      - budget : nombre total d’évaluations de la fonction de coût
+      - Npop   : taille de la population (nombre d’individus)
+      - Nlayers: nombre de couches à optimiser
+      - Ncubes : nombre de « cubes » (paramètres horizontaux) par couche
+      - bornes : tuple/list [t_min, t_max, w_min, w_max] 
+                 bornes pour l’épaisseur (dim 0) et la largeur (dim 1)
+      - periode: période (non utilisée dans cette version)
+      - Nopt   : identifiant de l’optimisation, pour nommer les fichiers de sortie
+    Retour :
+      - conv   : vecteur de convergence (meilleur coût par génération)
+      - best   : individu optimal trouvé (paramètres)
+    """
 
-    #initialisation pop
-    arr = np.random.rand(Npop,Nlayers,Nparam)
-    #contraintes sur les epaisseurs
-    arr[:,:,0] = bornes[0] + (bornes[1]-bornes[0])*arr[:,:,0]
-    #contraintes sur les largeurs
-    arr[:,:,1] = bornes[2]+(bornes[3]-bornes[2])*arr[:,:,1]
+    # 1) Nombre de générations = budget ÷ taille population
+    Ngen = int(budget / Npop)
 
+    # 2) Facteurs de mutation pour DE (poids des vecteurs)
+    F1 = 0.9
+    F2 = 0.8
+
+    # 3) Buffers pour stocker :
+    #    cf[g]    = coût (fonction taper) de chaque individu
+    #    conv[g]  = meilleur coût observé à chaque génération g
+    cf   = np.zeros(Npop)
+    conv = np.zeros(Ngen)
+
+    # 4) Nombre de paramètres par couche : 1 épaisseur + Ncubes largeurs
+    Nparam = Ncubes + 1
+
+    # ──────────────────────────────────────────────────────────────── #
+    # 5) INITIALISATION DE LA POPULATION
+    # ──────────────────────────────────────────────────────────────── #
+    #    arr shape = (Npop, Nlayers, Nparam), valeurs uniformes [0,1)
+    arr = np.random.rand(Npop, Nlayers, Nparam)
+
+    # 6) Application des contraintes continues :
+    #    - pour la dimension 0 (épaisseurs) : map de [0,1) → [bornes[0], bornes[1]]
+    arr[:, :, 0] = bornes[0] + (bornes[1] - bornes[0]) * arr[:, :, 0]
+
+    #    - pour la dimension 1 (largeurs) : map de [0,1) → [bornes[2], bornes[3]]
+    arr[:, :, 1] = bornes[2] + (bornes[3] - bornes[2]) * arr[:, :, 1]
+
+
+    # 7) ÉVALUATION INITIALE DE CHAQUE INDIVIDU
+    #    taper(individu) calcule le coût pour la matrice de taille (Nlayers, Nparam)
     for l in range(Npop):
-        cf[l]=taper(arr[l])
+        cf[l] = taper(arr[l])
 
+
+    # ──────────────────────────────────────────────────────────────── #
+    # 8) BOUCLE PRINCIPALE DE DE SUR Ngen GÉNÉRATIONS
+    # ──────────────────────────────────────────────────────────────── #
     for g in range(Ngen):
         for p in range(Npop):
-            index=np.random.randint(Npop,size=(3))
-            a=arr[index[0]]
-            b=arr[index[1]]
-            c=arr[index[2]]
-            best=arr[np.argmin(cf)]
-            y=c+F1*(a-b)+F2*(best-c)
-            #print("y=", y)
-            cr=0.8
-            ii=np.random.rand(Nlayers,1)
-            z = np.zeros((Nlayers, Nparam))
+            # 8a) Sélection aléatoire de 3 indices distincts dans [0..Npop-1]
+            idxs = np.random.randint(Npop, size=(3,))
+            a, b, c = arr[idxs[0]], arr[idxs[1]], arr[idxs[2]]
+
+            # 8b) Récupère l’individu « best » au plus petit coût actuel
+            best = arr[np.argmin(cf)]
+
+            # 8c) MUTATION current-to-best/1
+            #     y = c + F1*(a - b) + F2*(best - c)
+            y = c + F1 * (a - b) + F2 * (best - c)
+
+            # 8d) CROSSOVER binomial (probabilité cr pour chaque ligne)
+            cr = 0.8
+            ii = np.random.rand(Nlayers, 1)  # une probabilité par couche
+            z  = np.zeros((Nlayers, Nparam))
             for nl in range(Nlayers):
-                z[nl,:] = (ii[nl]<=cr)*y[nl,:] + (ii[nl]>cr)*arr[p,nl,:]
-                for idx in range(0,2):
-                    cond_min = z[nl,idx] < bornes[2*idx]
-                    cond_max = z[nl,idx] > bornes[2*idx+1]
-                    z[nl,idx] = (cond_min==cond_max)*z[nl,idx]+cond_min*arr[p,nl,idx]+cond_max*arr[p,nl,idx]
-            #print("z=", z)
-            cfz=taper(z)
-            if cfz<cf[p]:
-                arr[p]=z
-                cf[p]=cfz
-        conv[g]=np.min(cf)
+                # si ii[nl] <= cr → on prend y[nl], sinon arr[p,nl]
+                z[nl, :] = (ii[nl] <= cr) * y[nl, :] + \
+                           (ii[nl] >  cr) * arr[p, nl, :]
+
+                # 8e) REMISE AUX BORNES si hors [min,max]
+                #     bornes[0..3] mappent sur idx=0..1 respectivamente
+                for idx in range(2):  
+                    cond_min = z[nl, idx] < bornes[2*idx]
+                    cond_max = z[nl, idx] > bornes[2*idx+1]
+                    # si hors bornes, on remet la valeur précédente arr[p,nl,idx]
+                    z[nl, idx] = (cond_min == cond_max) * z[nl, idx] \
+                                + cond_min * arr[p, nl, idx] \
+                                + cond_max * arr[p, nl, idx]
+
+            # 8f) Évaluation du vecteur candidat z
+            cfz = taper(z)
+
+            # 8g) SÉLECTION : si z est meilleur, on remplace p par z
+            if cfz < cf[p]:
+                arr[p] = z.copy()
+                cf[p]  = cfz
+
+        # 8h) Convergence : stocke le plus petit coût de cette génération
+        conv[g] = cf.min()
+
+
+    # ──────────────────────────────────────────────────────────────── #
+    # 9) RÉÉVALUATION FINALE (pour avoir best_final fiable)
+    # ──────────────────────────────────────────────────────────────── #
     cf_final = np.zeros(Npop)
     for l in range(Npop):
-        cf_final[l]=taper(arr[l])
-    best=arr[np.argmin(cf)]
-    best_final=arr[np.argmin(cf_final)]
-    savemat('taper_%d.mat' %Nopt,{'conv':conv,'best':best,'cf_final' : cf_final,'best_final': best_final})
-    np.savez("taper_%d.npz" %Nopt,conv=conv,best=best)
-    return(conv,best)
+        cf_final[l] = taper(arr[l])
+
+    best       = arr[np.argmin(cf)]        # meilleur selon évaluation initiale
+    best_final = arr[np.argmin(cf_final)]  # meilleur selon ré-évaluation
+
+    # 10) Sauvegarde des résultats
+    savemat(f'taper_{Nopt}.mat', {
+        'conv':      conv,
+        'best':      best,
+        'cf_final':  cf_final,
+        'best_final':best_final
+    })
+    np.savez(f"taper_{Nopt}.npz", conv=conv, best=best)
+
+    # 11) Retourne l’historique de convergence et le meilleur individu
+    return conv, best
+
+
+
 #Optimisation
 budget = 100 #32000
 Npop = 30

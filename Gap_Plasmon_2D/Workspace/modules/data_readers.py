@@ -31,6 +31,8 @@ import os, glob, re, ast
 from collections import defaultdict
 import numpy as np
 import pandas as pd
+import h5py
+from pathlib import Path
 
 # ------------------------------------------------------------------ #
 #                       extraction utilitaires                       #
@@ -511,3 +513,77 @@ def get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params):
         # (pas de spectre Rup_dn pour les données expérimentales)
 
     return Rup_dict, Rup_dn_dict, summaries, metrics_dict, delta_n_dict
+
+
+
+
+
+
+def find_latest_optimization(summary_opt_dir: str) -> Path | None:
+    """
+    Retourne le Path du fichier HDF5 d’optimisation le plus récent,
+    ou None s’il n’y en a pas.
+    """
+    p = Path(summary_opt_dir)
+    files = sorted(p.glob("Opt_*.h5"))
+    return files[-1] if files else None
+
+
+def read_optimization_hdf5(h5path: str) -> dict:
+    """
+    Lit un fichier d’optimisation HDF5 et renvoie un dict :
+      {
+        'run_id': str,
+        'budget': int,
+        'Npop':   int,
+        'mode':   str,
+        'keys':   [str,...],
+        'lowers': np.ndarray,
+        'uppers': np.ndarray,
+        'conv':   np.ndarray,
+        'cf_final':   np.ndarray,
+        'best':       np.ndarray,
+        'best_final': np.ndarray
+      }
+    """
+    with h5py.File(h5path, "r") as f:
+        grp_name = list(f.keys())[0]
+        grp = f[grp_name]
+
+        out = {
+            'run_id':   grp.attrs['run_id'],
+            'budget':   int(grp.attrs['budget']),
+            'Npop':     int(grp.attrs['Npop']),
+            'mode':     grp.attrs['mode'].decode() 
+                        if isinstance(grp.attrs['mode'], bytes)
+                        else grp.attrs['mode'],
+            'keys':     [k.decode() for k in grp['parameters']['keys'][:]],
+            'lowers':   grp['parameters']['lowers'][:],
+            'uppers':   grp['parameters']['uppers'][:],
+            'conv':     grp['convergence'][:],
+            'cf_final': grp['cf_final'][:],
+            'best':     grp['best'][:],
+            'best_final': grp['best_final'][:]
+        }
+        
+        # si le groupe 'spectra' existe, on l'ajoute au dict
+        if 'spectra' in grp:
+            spec = grp['spectra']
+            out['spectra'] = {
+                'wavelength': spec['wavelength'][:],
+                'Rup':        spec['Rup'][:],
+                'Rdown':      spec['Rdown'][:] if 'Rdown' in spec else None
+            }
+            
+    return out
+
+
+def list_optimization_files(summary_opt_dir: str) -> list[str]:
+    """
+    Retourne la liste triée des chemins de tous les fichiers
+    Opt_*.h5 dans summary_opt_dir.
+    """
+    p = Path(summary_opt_dir)
+    files = sorted(p.glob("Opt_*.h5"), key=lambda f: f.name)
+    # On renvoie des str pour qu’ils rentrent directement dans un Dropdown
+    return [str(f) for f in files]
