@@ -4,6 +4,7 @@ optional plugin qtquickcontrols2universalstyleimplplugin
 classname QtQuickControls2UniversalStyleImplPlugin
 typeinfo plugins.qmltypes
 depends QtQuick auto
+depends QtQuick
 prefer :/qt-project.org/imports/QtQuick/Controls/Universal/impl/
 CheckIndicator 6.0 CheckIndicator.qml
 CheckIndicator 2.0 CheckIndicator.qml

@@ -5,6 +5,7 @@ classname QtQuickControls2UniversalStylePlugin
 typeinfo plugins.qmltypes
 import QtQuick.Controls.Basic auto
 depends QtQuick auto
+depends QtQuick
 prefer :/qt-project.org/imports/QtQuick/Controls/Universal/
 ApplicationWindow 6.0 ApplicationWindow.qml
 ApplicationWindow 2.0 ApplicationWindow.qml

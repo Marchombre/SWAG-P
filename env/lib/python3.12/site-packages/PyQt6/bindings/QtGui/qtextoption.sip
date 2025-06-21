@@ -55,6 +55,12 @@ public:
         AddSpaceForLineAndParagraphSeparators,
         SuppressColors,
         ShowDocumentTerminator,
+%If (Qt_6_9_0 -)
+        ShowDefaultIgnorables,
+%End
+%If (Qt_6_9_0 -)
+        DisableEmojiParsing,
+%End
     };
 
     typedef QFlags<QTextOption::Flag> Flags;

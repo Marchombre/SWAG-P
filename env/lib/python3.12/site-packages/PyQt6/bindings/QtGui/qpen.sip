@@ -101,3 +101,21 @@ public:
 
 QDataStream &operator<<(QDataStream &, const QPen &) /ReleaseGIL/;
 QDataStream &operator>>(QDataStream &, QPen & /Constrained/) /ReleaseGIL/;
+%If (Qt_6_9_0 -)
+bool operator!=(const QPen &lhs, const Qt::PenStyle &rhs);
+%End
+%If (Qt_6_9_0 -)
+bool operator!=(const QPen &lhs, const QColor &rhs);
+%End
+%If (Qt_6_9_0 -)
+bool operator!=(const QColor &lhs, const QPen &rhs);
+%End
+%If (Qt_6_9_0 -)
+bool operator==(const QPen &lhs, const Qt::PenStyle &rhs);
+%End
+%If (Qt_6_9_0 -)
+bool operator==(const QPen &lhs, const QColor &rhs);
+%End
+%If (Qt_6_9_0 -)
+bool operator==(const QColor &lhs, const QPen &rhs);
+%End

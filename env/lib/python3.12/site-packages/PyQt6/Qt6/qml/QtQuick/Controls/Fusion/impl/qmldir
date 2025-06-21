@@ -4,6 +4,7 @@ optional plugin qtquickcontrols2fusionstyleimplplugin
 classname QtQuickControls2FusionStyleImplPlugin
 typeinfo plugins.qmltypes
 depends QtQuick auto
+depends QtQuick
 prefer :/qt-project.org/imports/QtQuick/Controls/Fusion/impl/
 ButtonPanel 6.0 ButtonPanel.qml
 ButtonPanel 2.0 ButtonPanel.qml

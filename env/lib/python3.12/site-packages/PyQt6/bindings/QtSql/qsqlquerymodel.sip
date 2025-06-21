@@ -72,4 +72,7 @@ protected:
 
 public:
     virtual QHash<int, QByteArray> roleNames() const;
+%If (Qt_6_9_0 -)
+    void refresh();
+%End
 };

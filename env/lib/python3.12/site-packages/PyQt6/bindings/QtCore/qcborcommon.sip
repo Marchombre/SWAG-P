@@ -28,7 +28,7 @@
 // Cast-XML has a bug which means that it places this definition in qmetatype.h
 // (where it is first declared).
 
-enum class QCborSimpleType {
+enum class QCborSimpleType : quint8 {
     False /PyName=False_/,
     True /PyName=True_/,
     Null,

@@ -344,7 +344,7 @@ static void qpycore_gc_modelroledata(PyObject *mrd_obj);
 // The capsule destructor for a QModelRoleData array.
 static void qpycore_gc_modelroledata(PyObject *mrd_obj)
 {
-    delete[] reinterpret_cast<QList<QModelRoleData>* >(PyCapsule_GetPointer(mrd_obj, NULL));
+    delete reinterpret_cast<QList<QModelRoleData>* >(PyCapsule_GetPointer(mrd_obj, NULL));
 }
 %End
 

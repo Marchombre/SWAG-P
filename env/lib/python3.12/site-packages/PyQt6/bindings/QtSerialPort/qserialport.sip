@@ -277,6 +277,19 @@ public:
 signals:
     void breakEnabledChanged(bool set);
     void errorOccurred(QSerialPort::SerialPortError error);
+
+public:
+%If (Qt_6_9_0 -)
+    bool settingsRestoredOnClose() const;
+%End
+%If (Qt_6_9_0 -)
+    void setSettingsRestoredOnClose(bool restore);
+%End
+
+signals:
+%If (Qt_6_9_0 -)
+    void settingsRestoredOnCloseChanged(bool restore);
+%End
 };
 
 %End

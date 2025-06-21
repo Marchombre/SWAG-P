@@ -117,6 +117,9 @@ public:
     QColorSpace(QPointF whitePoint, QColorSpace::TransferFunction transferFunction, float gamma = 0.F);
 %End
     QColorSpace(const QColorSpace &colorSpace);
+%If (Qt_6_9_0 -)
+    QColorSpace(const QColorSpace::PrimaryPoints &primaryPoints, QColorSpace::TransferFunction transferFunction, float gamma = 0.F);
+%End
     ~QColorSpace();
     void swap(QColorSpace &colorSpace /Constrained/);
     QColorSpace::Primaries primaries() const;
@@ -162,6 +165,25 @@ public:
 %End
 %If (Qt_6_8_0 -)
     bool isValidTarget() const;
+%End
+%If (Qt_6_9_0 -)
+
+    struct PrimaryPoints
+    {
+%TypeHeaderCode
+#include <qcolorspace.h>
+%End
+
+        static QColorSpace::PrimaryPoints fromPrimaries(QColorSpace::Primaries primaries);
+        bool isValid() const;
+    };
+
+%End
+%If (Qt_6_9_0 -)
+    void setPrimaryPoints(const QColorSpace::PrimaryPoints &primaryPoints);
+%End
+%If (Qt_6_9_0 -)
+    QColorSpace::PrimaryPoints primaryPoints() const;
 %End
 };
 

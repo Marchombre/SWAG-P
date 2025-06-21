@@ -87,4 +87,7 @@ public:
     virtual bool dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent);
     virtual QSize span(const QModelIndex &index) const;
     QList<QAbstractItemModel *> sourceModels() const;
+%If (Qt_6_9_0 -)
+    virtual QHash<int, QByteArray> roleNames() const;
+%End
 };

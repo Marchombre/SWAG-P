@@ -58,16 +58,8 @@ public:
     QString password() const;
     void setPassword(const QString &password);
     void clearPassword();
-    void setTransferTimeout(qint64 timeout);
-%MethodCode
-        sipCpp->setTransferTimeout(std::chrono::milliseconds(a0));
-%End
-
-    qint64 transferTimeout() const;
-%MethodCode
-        sipRes = sipCpp->transferTimeout().count();
-%End
-
+    void setTransferTimeout(std::chrono::milliseconds timeout);
+    std::chrono::milliseconds transferTimeout() const;
     QUrlQuery queryParameters() const;
     void setQueryParameters(const QUrlQuery &query);
     void clearQueryParameters();

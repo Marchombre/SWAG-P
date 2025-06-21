@@ -127,6 +127,9 @@ public:
         Py_END_ALLOW_THREADS
 %End
 
+%If (Qt_6_9_0 -)
+    bool readLineInto(QByteArray *result, qint64 maxSize = 0) /ReleaseGIL/;
+%End
     QByteArray readAll() /ReleaseGIL/;
     virtual bool canReadLine() const;
     void startTransaction();

@@ -88,4 +88,20 @@ public:
 %If (Qt_6_8_0 -)
     bool isCurrentThread() const;
 %End
+%If (Qt_6_9_0 -)
+
+    enum class QualityOfService
+    {
+        Auto,
+        High,
+        Eco,
+    };
+
+%End
+%If (Qt_6_9_0 -)
+    void setServiceLevel(QThread::QualityOfService serviceLevel);
+%End
+%If (Qt_6_9_0 -)
+    QThread::QualityOfService serviceLevel() const;
+%End
 };

@@ -43,4 +43,7 @@ public:
     bool exactMatch() const;
     QString styleName() const;
     void swap(QFontInfo &other /Constrained/);
+%If (Qt_6_9_0 -)
+    QList<QFontVariableAxis> variableAxes() const;
+%End
 };

@@ -45,6 +45,9 @@ public:
         Name,
         Random,
         Sha1,
+%If (Qt_6_9_0 -)
+        UnixEpoch,
+%End
     };
 
     enum StringFormat
@@ -106,14 +109,17 @@ public:
 %If (- Qt_6_8_0)
     static QUuid createUuidV3(const QUuid &ns, const QByteArray &baseData);
 %End
+    static QUuid createUuidV3(const QUuid &ns, const QString &baseData);
 %If (Qt_6_8_0 -)
     static QUuid createUuidV5(QUuid ns, QByteArrayView baseData);
 %End
 %If (- Qt_6_8_0)
     static QUuid createUuidV5(const QUuid &ns, const QByteArray &baseData);
 %End
-    static QUuid createUuidV3(const QUuid &ns, const QString &baseData);
     static QUuid createUuidV5(const QUuid &ns, const QString &baseData);
+%If (Qt_6_9_0 -)
+    static QUuid createUuidV7();
+%End
     QUuid::Variant variant() const;
     QUuid::Version version() const;
     QByteArray toByteArray(QUuid::StringFormat mode = QUuid::WithBraces) const;

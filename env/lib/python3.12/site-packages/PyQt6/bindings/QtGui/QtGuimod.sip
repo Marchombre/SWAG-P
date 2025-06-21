@@ -66,6 +66,7 @@ WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 %Include qfontdatabase.sip
 %Include qfontinfo.sip
 %Include qfontmetrics.sip
+%Include qfontvariableaxis.sip
 %Include qgenericmatrix.sip
 %Include qglyphrun.sip
 %Include qguiapplication.sip
@@ -91,6 +92,7 @@ WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 %Include qpaintengine.sip
 %Include qpainter.sip
 %Include qpainterpath.sip
+%Include qpainterstateguard.sip
 %Include qpalette.sip
 %Include qpdfoutputintent.sip
 %Include qpdfwriter.sip

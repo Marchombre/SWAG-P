@@ -42,6 +42,9 @@ public:
     typedef QFlags<QStringConverterBase::Flag> Flags;
 
 protected:
+%If (Qt_6_9_0 -)
+    QStringConverterBase();
+%End
     ~QStringConverterBase();
 };
 

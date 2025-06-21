@@ -69,6 +69,18 @@ public:
     };
 
     void setOptionsAfterPositionalArgumentsMode(QCommandLineParser::OptionsAfterPositionalArgumentsMode mode);
+%If (Qt_6_9_0 -)
+
+    enum class MessageType
+    {
+        Information,
+        Error,
+    };
+
+%End
+%If (Qt_6_9_0 -)
+    static void showMessageAndExit(QCommandLineParser::MessageType type, const QString &message, int exitCode = 0);
+%End
 
 private:
     QCommandLineParser(const QCommandLineParser &);

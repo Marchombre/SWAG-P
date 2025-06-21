@@ -20,6 +20,8 @@
 // WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
 
+%If (- Qt_6_9_0)
+
 struct QJsonParseError
 {
 %TypeHeaderCode
@@ -49,6 +51,8 @@ struct QJsonParseError
     int offset;
     QJsonParseError::ParseError error;
 };
+
+%End
 
 class QJsonDocument
 {

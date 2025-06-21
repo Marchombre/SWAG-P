@@ -35,6 +35,15 @@ namespace QtSvg
 %If (Qt_6_8_0 -)
         AssumeTrustedSource,
 %End
+%If (Qt_6_9_0 -)
+        DisableSMILAnimations,
+%End
+%If (Qt_6_9_0 -)
+        DisableCSSAnimations,
+%End
+%If (Qt_6_9_0 -)
+        DisableAnimations,
+%End
     };
 
     typedef QFlags<QtSvg::Option> Options;

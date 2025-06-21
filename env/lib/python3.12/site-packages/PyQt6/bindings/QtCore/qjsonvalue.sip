@@ -81,6 +81,16 @@ public:
 %MethodCode
         sipRes = qHash(*sipCpp);
 %End
+
+%If (Qt_6_9_0 -)
+    typedef QJsonDocument::JsonFormat JsonFormat;
+%End
+%If (Qt_6_9_0 -)
+    static QJsonValue fromJson(QByteArrayView json, QJsonParseError *error /Out/ = 0);
+%End
+%If (Qt_6_9_0 -)
+    QByteArray toJson(QJsonValue::JsonFormat format = QJsonDocument::Indented) const;
+%End
 };
 
 QDataStream &operator<<(QDataStream &, const QJsonValue & /Constrained/) /ReleaseGIL/;

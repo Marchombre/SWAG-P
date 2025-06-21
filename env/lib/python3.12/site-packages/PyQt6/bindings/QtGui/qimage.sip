@@ -342,6 +342,12 @@ public:
 %If (Qt_6_8_0 -)
     QImage colorTransformed(const QColorTransform &transform, QImage::Format format, Qt::ImageConversionFlags flags = Qt::AutoColor);
 %End
+%If (Qt_6_9_0 -)
+    QImage flipped(Qt::Orientations orient = Qt::Vertical) const;
+%End
+%If (Qt_6_9_0 -)
+    void flip(Qt::Orientations orient = Qt::Vertical);
+%End
 };
 
 QDataStream &operator<<(QDataStream &, const QImage &) /ReleaseGIL/;

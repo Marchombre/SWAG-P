@@ -217,6 +217,9 @@ public:
 %If (Qt_6_7_0 -)
         ParentWindowChange,
 %End
+%If (Qt_6_9_0 -)
+        SafeAreaMarginsChange,
+%End
         User,
         MaxUser,
     };
@@ -262,6 +265,9 @@ public:
         sipRes = qToUnderlying<Qt::TimerId>(sipCpp->id());
 %End
 
+%End
+%If (Qt_6_9_0 -)
+    bool matches(const QBasicTimer &timer) const;
 %End
 };
 

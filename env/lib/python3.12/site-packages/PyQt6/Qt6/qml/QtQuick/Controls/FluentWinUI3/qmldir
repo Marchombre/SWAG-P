@@ -4,6 +4,7 @@ plugin qtquickcontrols2fluentwinui3styleplugin
 classname QtQuickControls2FluentWinUI3StylePlugin
 typeinfo plugins.qmltypes
 import QtQuick.Controls.Fusion auto
+depends QtQuick
 prefer :/qt-project.org/imports/QtQuick/Controls/FluentWinUI3/
 ApplicationWindow 6.0 ApplicationWindow.qml
 ApplicationWindow 2.0 ApplicationWindow.qml

@@ -10,3 +10,7 @@ voila
 PyQt6
 PyMoosh
 ipyevents
+watchdog
+h5py
+tqdm
+joblib

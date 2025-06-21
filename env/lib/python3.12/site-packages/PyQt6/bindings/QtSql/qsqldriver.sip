@@ -156,4 +156,7 @@ public:
 
     QSqlDriver::DbmsType dbmsType() const;
     virtual int maximumIdentifierLength(QSqlDriver::IdentifierType type) const;
+%If (Qt_6_9_0 -)
+    QString connectionName() const;
+%End
 };

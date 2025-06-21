@@ -5,6 +5,7 @@ classname QtQuickControls2BasicStylePlugin
 typeinfo plugins.qmltypes
 depends QtQuick auto
 depends QtQuick.Templates auto
+depends QtQuick
 prefer :/qt-project.org/imports/QtQuick/Controls/Basic/
 AbstractButton 6.0 AbstractButton.qml
 AbstractButton 2.0 AbstractButton.qml
@@ -126,6 +127,7 @@ CalendarModel 6.3 CalendarModel.qml
 DayOfWeekRow 6.3 DayOfWeekRow.qml
 MonthGrid 6.3 MonthGrid.qml
 WeekNumberColumn 6.3 WeekNumberColumn.qml
+TableViewDelegate 6.9 TableViewDelegate.qml
 TreeViewDelegate 6.0 TreeViewDelegate.qml
 TreeViewDelegate 2.0 TreeViewDelegate.qml
 

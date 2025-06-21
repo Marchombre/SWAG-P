@@ -1,21 +1,26 @@
-# Dossiers et fichiers Jupyter
+# ─── Environnement virtuel ────────────────────────────────────────
+env/
+
+# ─── Python compilé (inutile à versionner) ────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ─── Fichiers temporaires Jupyter ─────────────────────────────────
 .ipynb_checkpoints/
 
-# Dossiers spécifiques à votre projet
-/Optimisation/
-/PyMoosh/
-/STAGE_SWAG_P/
-/Sensors/
-/Venv_PyMoosh/
+# ─── Résultats lourds NON versionnés volontairement ──────────────
+Gap_Plasmon_2D/Workspace/notebooks/Summary_Simulation/
+Gap_Plasmon_2D/Workspace/notebooks/Summary_Optimization/
 
-# Fichiers spécifiques
-/SiA_Rup.jpg
-/data_accroches_all_Rdown-Rup.npz
-/material_test_Rup.jpg
+# ─── Fichiers de log, caches, sauvegardes ────────────────────────
+*.log
+*.bak
+*.tmp
+*~
 
-# Fichiers générés ou temporaires
-json
-np
-plt
-pm
-sys
+# ─── Fichiers persos ou IDE ───────────────────────────────────────
+.vscode/
+.DS_Store
+Thumbs.db

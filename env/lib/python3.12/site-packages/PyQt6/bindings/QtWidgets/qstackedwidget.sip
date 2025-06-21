@@ -44,6 +44,9 @@ public slots:
 
 signals:
     void currentChanged(int);
+%If (Qt_6_9_0 -)
+    void widgetAdded(int index);
+%End
     void widgetRemoved(int index);
 
 protected:

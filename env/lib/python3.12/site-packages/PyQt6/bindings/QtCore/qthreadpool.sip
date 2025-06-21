@@ -177,4 +177,10 @@ public:
 %End
 
 %End
+%If (Qt_6_9_0 -)
+    void setServiceLevel(QThread::QualityOfService serviceLevel);
+%End
+%If (Qt_6_9_0 -)
+    QThread::QualityOfService serviceLevel() const;
+%End
 };

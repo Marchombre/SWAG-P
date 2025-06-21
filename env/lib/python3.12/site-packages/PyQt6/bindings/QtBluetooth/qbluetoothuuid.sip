@@ -336,9 +336,10 @@ public:
     static QString characteristicToString(QBluetoothUuid::CharacteristicType uuid);
     static QString descriptorToString(QBluetoothUuid::DescriptorType uuid);
 %If (Qt_6_7_0 -)
+    // This is reimplemented because the == and != operators prevent the
+    // super-class's implementation from being inherited.
     Py_hash_t __hash__() const;
 %MethodCode
-        // The tp_hash slot (from QUuid) should be inherited.  Is this a SIP bug?
         sipRes = qHash(*sipCpp);
 %End
 

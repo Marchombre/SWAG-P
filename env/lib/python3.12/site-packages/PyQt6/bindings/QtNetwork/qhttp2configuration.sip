@@ -41,6 +41,12 @@ public:
     bool setMaxFrameSize(unsigned int size);
     unsigned int maxFrameSize() const;
     void swap(QHttp2Configuration &other /Constrained/);
+%If (Qt_6_9_0 -)
+    void setMaxConcurrentStreams(unsigned int value);
+%End
+%If (Qt_6_9_0 -)
+    unsigned int maxConcurrentStreams() const;
+%End
 };
 
 bool operator==(const QHttp2Configuration &lhs, const QHttp2Configuration &rhs);

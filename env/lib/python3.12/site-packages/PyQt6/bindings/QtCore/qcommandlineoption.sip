@@ -47,6 +47,9 @@ public:
     {
         HiddenFromHelp,
         ShortOptionStyle,
+%If (Qt_6_9_0 -)
+        IgnoreOptionsAfter,
+%End
     };
 
     typedef QFlags<QCommandLineOption::Flag> Flags;

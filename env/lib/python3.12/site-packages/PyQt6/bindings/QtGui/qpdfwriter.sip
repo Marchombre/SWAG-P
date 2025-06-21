@@ -77,4 +77,10 @@ public:
 %If (Qt_6_8_0 -)
     void setOutputIntent(const QPdfOutputIntent &intent);
 %End
+%If (Qt_6_9_0 -)
+    QString author() const;
+%End
+%If (Qt_6_9_0 -)
+    void setAuthor(const QString &author);
+%End
 };

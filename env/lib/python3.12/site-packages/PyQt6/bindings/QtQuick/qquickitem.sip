@@ -57,6 +57,12 @@ public:
         ItemAntialiasingHasChanged,
         ItemDevicePixelRatioHasChanged,
         ItemEnabledHasChanged,
+%If (Qt_6_9_0 -)
+        ItemScaleHasChanged,
+%End
+%If (Qt_6_9_0 -)
+        ItemTransformHasChanged,
+%End
     };
 
     struct ItemChangeData

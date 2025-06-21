@@ -515,4 +515,10 @@ public:
     void setWindowFlag(Qt::WindowType, bool on = true);
     QScreen *screen() const;
     void setScreen(QScreen *);
+%If (Qt_6_9_0 -)
+    QString accessibleIdentifier() const;
+%End
+%If (Qt_6_9_0 -)
+    void setAccessibleIdentifier(const QString &identifier);
+%End
 };

@@ -113,6 +113,18 @@ public:
 %If (Qt_6_8_0 -)
     static QStringList applicationFallbackFontFamilies(QChar::Script script);
 %End
+%If (Qt_6_9_0 -)
+    static void addApplicationEmojiFontFamily(const QString &familyName);
+%End
+%If (Qt_6_9_0 -)
+    static bool removeApplicationEmojiFontFamily(const QString &familyName);
+%End
+%If (Qt_6_9_0 -)
+    static void setApplicationEmojiFontFamilies(const QStringList &familyNames);
+%End
+%If (Qt_6_9_0 -)
+    static QStringList applicationEmojiFontFamilies();
+%End
 
 private:
     QFontDatabase();

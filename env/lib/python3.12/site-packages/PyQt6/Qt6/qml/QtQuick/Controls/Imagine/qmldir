@@ -4,6 +4,7 @@ plugin qtquickcontrols2imaginestyleplugin
 classname QtQuickControls2ImagineStylePlugin
 typeinfo plugins.qmltypes
 import QtQuick.Controls.Basic auto
+depends QtQuick
 prefer :/qt-project.org/imports/QtQuick/Controls/Imagine/
 ApplicationWindow 6.0 ApplicationWindow.qml
 ApplicationWindow 2.0 ApplicationWindow.qml

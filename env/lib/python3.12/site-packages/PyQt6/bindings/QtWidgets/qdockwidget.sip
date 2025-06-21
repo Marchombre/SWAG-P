@@ -67,4 +67,12 @@ protected:
     virtual void closeEvent(QCloseEvent *event);
     virtual void paintEvent(QPaintEvent *event);
     virtual bool event(QEvent *event);
+
+public:
+%If (Qt_6_9_0 -)
+    void setDockLocation(Qt::DockWidgetArea area);
+%End
+%If (Qt_6_9_0 -)
+    Qt::DockWidgetArea dockLocation() const;
+%End
 };

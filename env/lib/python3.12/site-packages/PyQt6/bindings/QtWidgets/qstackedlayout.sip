@@ -99,6 +99,9 @@ public:
 signals:
     void widgetRemoved(int index);
     void currentChanged(int index);
+%If (Qt_6_9_0 -)
+    void widgetAdded(int index);
+%End
 
 public slots:
     void setCurrentIndex(int index);

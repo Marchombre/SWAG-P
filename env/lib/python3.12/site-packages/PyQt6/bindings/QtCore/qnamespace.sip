@@ -220,6 +220,12 @@ namespace Qt
         BypassWindowManagerHint,
         CoverWindow,
         MaximizeUsingFullscreenGeometryHint,
+%If (Qt_6_9_0 -)
+        ExpandedClientAreaHint,
+%End
+%If (Qt_6_9_0 -)
+        NoTitleBarBackgroundHint,
+%End
     };
 
     typedef QFlags<Qt::WindowType> WindowFlags;

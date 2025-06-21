@@ -221,4 +221,12 @@ public:
 %If (PyQt_Vulkan)
     QVulkanInstance *vulkanInstance() const;
 %End
+%If (Qt_6_9_0 -)
+    QMargins safeAreaMargins() const;
+%End
+
+signals:
+%If (Qt_6_9_0 -)
+    void safeAreaMarginsChanged(QMargins arg);
+%End
 };
