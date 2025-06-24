@@ -1,0 +1,88 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\usepackage[utf8]{inputenc}
+\usepackage{newunicodechar}
+\newunicodechar{├}{|}      % or \ensuremath{\vert}
+\newunicodechar{─}{-}      % a hyphen
+\newunicodechar{│}{|}      % vertical bar
+\newunicodechar{└}{'}      % maybe a quote
+
+\title{Hierarchical Data Format Version 5 (HDF5)}
+\author{Yann Chardon-Grossard}
+\date{June 2025}
+
+\begin{document}
+\maketitle
+
+\section*{Key Concepts}
+
+\begin{quotation}
+An HDF5 file is a container for two kinds of objects: \emph{datasets}, which are collections of data in array form, and \emph{groups}, which are folder‐like containers holding datasets and other groups.  Groups behave like dictionaries, and datasets like NumPy arrays.
+\end{quotation}
+\noindent\href{https://docs.h5py.org/en/stable/quick.html}{Reference: h5py Quick Start}.
+
+\section*{What is HDF5?}
+HDF5 (Hierarchical Data Format version 5) is a binary format optimized for storing large volumes of numerical data, together with an API (via \texttt{h5py} or \texttt{PyTables} in Python) that provides:
+\begin{itemize}
+  \item \emph{Hierarchical} organization into groups and datasets, similar to a file system;
+  \item the ability to add \emph{attributes} (metadata) to any object;
+  \item high‐performance \emph{random access} thanks to chunking and compression.
+\end{itemize}
+
+\section*{1. Hierarchical Model}
+\begin{itemize}
+  \item \textbf{Groups} (\texttt{Group}): folder‐like containers.
+  \item \textbf{Datasets} (\texttt{Dataset}): multidimensional arrays (\texttt{numpy.ndarray}).
+  \item \textbf{Attributes} (\texttt{attrs}): key–value pairs attached to a group or dataset.
+\end{itemize}
+
+\newpage
+\medskip
+\noindent Example structure:
+\begin{verbatim}
+/                             % root
+├─ measurements/              % group
+│  ├─ time             (dataset)
+│  └─ temperature      (dataset)
+├─ parameters/                % group
+│  ├─ voltage          (dataset)
+│  └─ current          (dataset)
+└─ metadata                   % group
+   ├─ experiment_date (attribute)
+   └─ operator        (attribute)
+\end{verbatim}
+
+\section*{2. Why HDF5 Excels at Organizing Data}
+
+HDF5 delivers clear and efficient data management thanks to several strengths:
+
+\begin{enumerate}
+  \item \textbf{Natural Organization}\\
+    You arrange your data in a simple tree structure, like folders and files on your computer.  
+    For example, \texttt{/measurements/temperature} or \texttt{/parameters/pressure}.  
+    This lets you locate and navigate directly to the information you need.
+
+  \item \textbf{Built‐in Metadata}\\
+    Each group or dataset can carry its own labels (attributes), such as measurement units, creation date, or a description.  
+    All relevant information stays together in one place, without external sidecar files.
+
+  \item \textbf{Partial, High‐Performance Access}\\
+    When your arrays are very large, HDF5 can split them into “chunks” and compress them.  
+    You can read or write a single chunk without loading the entire dataset into memory.  
+    The result: fast access, even for multi‐gigabyte datasets.
+
+  \item \textbf{Interoperability}\\
+    HDF5 is a standard format recognized by many tools and languages (C, Fortran, MATLAB, R, Julia, etc.).  
+    You can share your file and open it elsewhere without complex conversion.
+
+  \item \textbf{Scalability}\\
+    Whether your data are a few megabytes or multiple terabytes, HDF5 scales.  
+    Performance remains high for both data access and updates, thanks to its internal indexing and caching mechanisms.
+\end{enumerate}
+
+\end{document}

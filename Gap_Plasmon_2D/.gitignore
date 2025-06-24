@@ -11,8 +11,11 @@ __pycache__/
 .ipynb_checkpoints/
 
 # ─── Résultats lourds NON versionnés volontairement ──────────────
-Gap_Plasmon_2D/Workspace/notebooks/Summary_Simulation/
-Gap_Plasmon_2D/Workspace/notebooks/Summary_Optimization/
+Gap_Plasmon_2D/Workspace/notebooks/results/summary_simulation/
+Gap_Plasmon_2D/Workspace/notebooks/results/summary_optimization/
+
+Gap_Plasmon_2D/BACK_UP/
+
 
 # ─── Fichiers de log, caches, sauvegardes ────────────────────────
 *.log
@@ -24,3 +27,6 @@ Gap_Plasmon_2D/Workspace/notebooks/Summary_Optimization/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Ignorer tous les fichiers de sauvegarde créés par les scripts de migration
+*.bak

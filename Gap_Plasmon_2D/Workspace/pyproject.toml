@@ -1,0 +1,19 @@
+# pyproject.toml  — minimal mais suffisant pour un install editable
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gap_plasmon_2d"
+version = "0.1.0"
+description = "Gap-plasmon 2D simulation & optimisation"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]          # ← dit à setuptools d’aller chercher sous src/

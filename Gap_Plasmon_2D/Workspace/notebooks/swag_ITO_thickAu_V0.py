@@ -1,3 +1,4 @@
+from gap_plasmon_2d import paths
 import PyMoosh as pm
 import os, sys
 import numpy as np
@@ -20,16 +21,16 @@ tools_path = os.path.abspath(os.path.join(os.getcwd(), "..", "tools"))
 if tools_path not in sys.path:
     sys.path.append(tools_path)
 
-notebooks_dir = os.path.join(workspace_dir, "notebooks")
+notebooks_dir = os.path.join(str(paths.RESULTS_DIR))
 if notebooks_dir not in sys.path:
     sys.path.append(notebooks_dir)
 
-summary_dir = os.path.join(notebooks_dir, "Summary_Simulation")
+summary_dir = os.path.join(notebooks_dir, "summary_simulation")
 if summary_dir not in sys.path:
     sys.path.append(summary_dir)
 
 # Path Data
-data_dir = os.path.join(workspace_dir, "data")
+data_dir = os.path.join(str(paths.DATA_DIR))
 ITO_path = os.path.join('/home/chardon-grossard/Bureau/SWAG-P/Gap_Plasmon_2D/Workspace/data', "ITO.txt")
 
 

@@ -2,7 +2,8 @@
 
 {
     "python.analysis.extraPaths": [
-        "./Gap_Plasmon_2D/Workspace/modules"
+        "./Gap_Plasmon_2D/Workspace/modules",
+        "./Gap_Plasmon_2D/Workspace/src"
     ],
     "python.analysis.autoImportCompletions": true
 }
