@@ -1,7 +1,7 @@
 from gap_plasmon_2d import paths
 #!/usr/bin/env python3
 """
-Module: difference.py
+Module: Validation.py
 
 Gère l'onglet « Ratio ». Version mise à jour pour la nouvelle API
 de data_readers.get_all_spectra_and_summaries, qui renvoie maintenant :

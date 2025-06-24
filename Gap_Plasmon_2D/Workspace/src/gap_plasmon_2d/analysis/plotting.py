@@ -137,7 +137,7 @@ class PlotTab:
         # ────────────────────────────────────────────────────────────
         self.labels_editors_box = VBox()
         self.update_labels_btn  = widgets.Button(
-            description="Mettre à jour les labels",
+            description="Updates labels",
             button_style="primary",
             layout=Layout(width="170px")
         )
@@ -154,7 +154,7 @@ class PlotTab:
         )
 
         self.labels_editors_panel = VBox([
-            HTML("<b>Modifier les labels des spectres :</b>"),
+            HTML("<b> Modify labels spectra :</b>"),
             self.labels_editors_box,
             self.update_labels_btn
         ], layout=Layout(display='none'))
@@ -259,8 +259,8 @@ class PlotTab:
             HTML("<h3>Plot</h3>"),
             self.spectra_select,
             self.verbose_chk,
-            HTML("<b>Métriques à afficher :</b>"), self.metrics_hbox,
-            HTML("<b>Overlays graphiques :</b>"), self.overlays_hbox,
+            HTML("<b>Shown metrics :</b>"), self.metrics_hbox,
+            HTML("<b>Graphical overlays :</b>"), self.overlays_hbox,
             self.range_box,
             HBox([
                 self.show_labels_chk,
@@ -410,7 +410,7 @@ class PlotTab:
         # ── INITIALISATION DU VERBOSE
         debug_lines: list[str] = []
         if verbose:
-            debug_lines.append("[Plot] Début du Draw()")
+            debug_lines.append("[Plot] Start Draw()")
 
         labels = list(self.spectra_select.value) or list(self.Rup_dict.keys())
         if not labels:
@@ -437,7 +437,7 @@ class PlotTab:
         # 4) Boucle sur chaque spectre sélectionné
         for idx, lab in enumerate(labels):
             if verbose:
-                debug_lines.append(f"[Plot] Spectre #{idx} «{lab}»")
+                debug_lines.append(f"[Plot] Spectrum #{idx} «{lab}»")
             lam, Rup = self.Rup_dict[lab]
             Rup_dn_tuple = self.Rup_dn_dict.get(lab)
 
@@ -474,7 +474,7 @@ class PlotTab:
             )
             if not dip_idx:
                 if verbose:
-                    debug_lines.append(f"[Plot] Aucun dip détecté pour « {lab} »")
+                    debug_lines.append(f"[Plot] No dip detected for « {lab} »")
                 continue
 
             # 4.4) Calcul métriques Δn ou raw_score
@@ -560,7 +560,7 @@ class PlotTab:
                 best_S_lambda = None
                 if verbose:
                     debug_lines.append(
-                        f"[Plot] Pas de Δn → sélection raw_score idx={best_idx}"
+                        f"[Plot] No Δn → selection raw_score idx={best_idx}"
                     )
 
             # 4.5) Extraction métriques du dip retenu
@@ -802,7 +802,7 @@ class PlotTab:
         # Avertissement si S_R demandé mais pas de données
         if flags['show_S_dn'] and not any(dRdn_sum) and verbose:
             self.debug_out.value += (
-                "\n[Plot] Aucune donnée ΔR/Δn trouvée, S_R ne sera pas affichée."
+                "\n[Plot] no data ΔR/Δn found, S_R will not be displayed."
             )
 
         # Filtrage geometry / material

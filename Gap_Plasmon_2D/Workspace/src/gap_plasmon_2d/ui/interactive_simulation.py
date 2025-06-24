@@ -14,7 +14,7 @@ import ipywidgets as widgets
 
 from gap_plasmon_2d.simulation.simulation import SimulationTab
 from gap_plasmon_2d.analysis.plotting import PlotTab
-from gap_plasmon_2d.simulation.difference import create_difference_tab
+from gap_plasmon_2d.analysis.difference import create_difference_tab
 from gap_plasmon_2d.optimisation.optimisation import OptimizationTab  
 
 
@@ -63,7 +63,7 @@ def create_advanced_app():
     Construit l'application interactive à onglets :
       0) Simulation,
       1) Plot,
-      2) Double checking (Difference),
+      2) Validation (Difference),
       3) Optimisation
     """
     # 1) Instanciation de SimulationTab
@@ -99,8 +99,8 @@ def create_advanced_app():
     # 5) Assemblage des onglets
     tabs = widgets.Tab(children=[sim_tab, plot_tab, diff_tab, opt_tab])
     tabs.set_title(0, "Simulation")
-    tabs.set_title(1, "Plot")
-    tabs.set_title(2, "Double checking")
+    tabs.set_title(1, "Plot: Multi-spectra")
+    tabs.set_title(2, "Validation")
     tabs.set_title(3, "Optimisation")
 
     # 6) Rafraîchissement à la sélection d'un onglet
