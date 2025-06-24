@@ -905,7 +905,7 @@
             "expression": "1.45**2",
             "override": [
               300.0,
-              1000.0
+              1100.0
             ]
           }
         },
@@ -916,7 +916,7 @@
             "expression": "1.45**2",
             "override": [
               300.0,
-              1000.0
+              1100.0
             ]
           }
         },
@@ -942,7 +942,7 @@
             "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              999.97
+              12398.0
             ]
           }
         },
@@ -956,7 +956,7 @@
             "data": "main/Au/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              999.97
+              6199.2
             ]
           }
         },
@@ -988,7 +988,7 @@
           "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            999.97
+            12398.0
           ]
         },
         "perm_metalliclayer": {
@@ -999,7 +999,7 @@
           "data": "main/Au/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            999.97
+            6199.2
           ]
         }
       }
@@ -1217,7 +1217,7 @@
             "material": "Air",
             "override": [
               300.0,
-              1000.0
+              1100.0
             ]
           }
         },
@@ -1228,7 +1228,7 @@
             "expression": "1.45**2",
             "override": [
               300.0,
-              1000.0
+              1100.0
             ]
           }
         },
@@ -1239,7 +1239,7 @@
             "expression": "1.45**2",
             "override": [
               300.0,
-              1000.0
+              1100.0
             ]
           }
         },
@@ -1265,7 +1265,7 @@
             "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              1936.97
+              2622.97
             ]
           }
         },
@@ -1311,7 +1311,7 @@
           "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            1936.97
+            2622.97
           ]
         },
         "perm_metalliclayer": {

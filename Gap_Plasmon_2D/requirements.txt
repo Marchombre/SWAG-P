@@ -1,0 +1,16 @@
+PyYAML
+ipykernel
+scipy
+numpy
+pandas
+matplotlib
+ipywidgets
+IPython
+voila
+PyQt6
+PyMoosh
+ipyevents
+joblib
+tqdm
+h5py
+watchdog

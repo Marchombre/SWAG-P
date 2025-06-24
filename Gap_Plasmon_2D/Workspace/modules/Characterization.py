@@ -280,12 +280,32 @@ def simulate_delta_spectrum(
     # calcul demi-hauteur
     step = lam[1]-lam[0]
     base_interp = interp1d(lam, base_spectrum, kind='cubic')
-    slope_l = (base_interp(lam_left+step) - base_interp(lam_left-step))/(2*step)
-    slope_r = (base_interp(lam_right+step)- base_interp(lam_right-step))/(2*step)
+    
+    lam_min, lam_max = lam[0], lam[-1]
+    x_l = np.clip(lam_left + step, lam_min, lam_max)
+    x_r = np.clip(lam_right - step, lam_min, lam_max)
+    x_lm = np.clip(lam_left - step, lam_min, lam_max)
+    x_rm = np.clip(lam_right + step, lam_min, lam_max)
+    
+    slope_l = (base_interp(x_l) - base_interp(x_lm))/(2*step)
+    slope_r = (base_interp(x_r) - base_interp(x_rm))/(2*step)
+    
+    
+    #slope_l = (base_interp(lam_left+step) - base_interp(lam_left-step))/(2*step)
+    #slope_r = (base_interp(lam_right+step)- base_interp(lam_right-step))/(2*step)
     lambda_half_pt = lam_left if abs(slope_l)>abs(slope_r) else lam_right
+    
+    
     R_half_base = float(base_interp(lambda_half_pt))
-    R_half_dn   = float(interp1d(lam, Rup_dn, kind='cubic')(lambda_half_pt))
+   
 
+    x_hp = np.clip(lambda_half_pt, lam_min, lam_max)
+
+    delta_interp = interp1d(lam, Rup_dn, kind='cubic', bounds_error=False, fill_value='extrapolate')
+    R_half_dn = float(delta_interp(x_hp))
+    
+    #R_half_dn   = float(interp1d(lam, Rup_dn, kind='cubic')(lambda_half_pt))
+    
     # choix du point
     if mode=="half":
         lam_calc = lambda_half_pt

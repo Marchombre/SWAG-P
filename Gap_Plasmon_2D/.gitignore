@@ -1,3 +1,6 @@
+__pycache__/
+*.pyc
+
 # Dossiers et fichiers Jupyter
 .ipynb_checkpoints/
 
@@ -19,3 +22,6 @@ np
 plt
 pm
 sys
+
+
+venv/

@@ -939,6 +939,17 @@
         "stable_required": 3,
         "optimal_n_mode": 92
       }
+    ],
+    "Opti_n30_g3_m10 - Mat_Test_opti_c30_g3_d3_m10": [
+      {
+        "timestamp": "2025-06-21T10:19:10.769062",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 100
+      }
     ]
   }
 }
