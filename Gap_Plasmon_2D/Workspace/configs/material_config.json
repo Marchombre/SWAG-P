@@ -1326,6 +1326,112 @@
           ]
         }
       }
+    },
+    {
+      "config_name": "Mat_Bragg",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.7**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "Custom",
+            "expression": "1.7**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "Custom",
+            "expression": "1.7**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Custom",
+            "expression": "1.7**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        }
+      ],
+      "RI_OVERRIDES": {}
     }
   ]
 }

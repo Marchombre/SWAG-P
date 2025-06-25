@@ -7238,6 +7238,133 @@
           }
         }
       }
+    },
+    {
+      "config_name": "Geom_Bragg - Mat_Bragg",
+      "geometry": {
+        "config_name": "Geom_Bragg",
+        "compartment": "Optimization",
+        "geometry": {
+          "thick_super": 0.0,
+          "thick_reso": 0.0,
+          "width_reso": 0.0,
+          "thick_gap": 0.0,
+          "thick_mol": 0.0,
+          "thick_func": 0.0,
+          "thick_diel": 0.0,
+          "thick_metalliclayer": 1.0,
+          "thick_XIAOYI": 1.0,
+          "thick_accroche": 1.0,
+          "thick_sub": 200.0,
+          "period": 100.2153
+        }
+      },
+      "material": {
+        "config_name": "Mat_Bragg",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "Custom",
+              "expression": "1.4**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_gap",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_diel",
+            "material": {
+              "type": "Custom",
+              "expression": "1.7**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_func",
+            "material": {
+              "type": "Custom",
+              "expression": "1.4**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_mol",
+            "material": {
+              "type": "Custom",
+              "expression": "1.7**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "None"
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "Custom",
+              "expression": "1.4**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_XIAOYI",
+            "material": {
+              "type": "Custom",
+              "expression": "1.7**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "Custom",
+              "expression": "1.4**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "Custom",
+              "expression": "1.7**2",
+              "override": [
+                300.0,
+                1000.0
+              ]
+            }
+          }
+        ],
+        "RI_OVERRIDES": {}
+      }
     }
   ]
 }

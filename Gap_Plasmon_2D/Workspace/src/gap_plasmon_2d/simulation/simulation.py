@@ -1162,7 +1162,7 @@ class SimulationTab:
         sel = [c for c in self.all_configs
             if self.config_checkboxes[c["config_name"]].value]
         if not sel:
-            raise RuntimeError("Cochez une configuration.")
+            raise RuntimeError("Select configuration.")
         cfg = deepcopy(sel[0])
 
         # 2) Injecte uniquement les paramètres optimisés
@@ -1176,7 +1176,7 @@ class SimulationTab:
         wave    = {"angle": 0, "polarization": 1}
         n_modes = self._get_n_modes_for(cfg["config_name"])  # fixed/custom/auto
         sel_layers = list(self.layer_selector.value)
-        delta_n    = max(self.delta_n_widget.value, 1e-9)
+        delta_n    = max(self.delta_n_widget.value, 1e-6)
 
         # 4) Simule le spectre de base
         Rup0, _, _ = run_simulation_one_combo(
@@ -1201,7 +1201,6 @@ class SimulationTab:
             cfg_name=cfg["config_name"],
             mode=('half' if mode=="half" else 'dip')
         )
-
         # 6) Si aucun dip trouvé, on pénalise au maximum
         if best_out is None:
             return 1.0
@@ -1215,9 +1214,18 @@ class SimulationTab:
         #     dip_idx_list, dR_over_dn_list, dLam_over_dn_list)
         #    On récupère best_dR (position 13)
         best_dR = best_out[12]
-
+        lam_dip = best_out[4]
+        
+        # Pour obtenir la reflectance à la longueur d'onde d'absorption (lam_dip),
+        # il faut interpoler Rup0 car lam_dip n'est pas forcément un index entier.
+        reflectance_at_lam_dip = np.interp(lam_dip, lam, Rup0)
+        # Si vous voulez maximiser la reflectance à 700 nm, il suffit de calculer la reflectance à cette longueur d'onde :
+        reflectance_at_700nm = np.interp(700, lam, Rup0)
+        
         # 8) Retourne le coût 1 – ΔR/Δn (plus ΔR/Δn est grand, plus le coût est petit)
-        return 1.0 - float(best_dR)
+        return  1 - reflectance_at_700nm
+    
+                # 1.0 - float(best_dR)
 
 
 # instanciation globale

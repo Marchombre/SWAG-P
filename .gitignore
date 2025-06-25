@@ -27,6 +27,3 @@ Gap_Plasmon_2D/BACK_UP/
 .vscode/
 .DS_Store
 Thumbs.db
-
-# Ignorer tous les fichiers de sauvegarde créés par les scripts de migration
-*.bak

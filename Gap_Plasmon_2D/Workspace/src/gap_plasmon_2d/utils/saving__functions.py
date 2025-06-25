@@ -188,7 +188,7 @@ def save_optimization_hdf5(
 ) -> str:
     """
     Enregistre les résultats de DE_general dans :
-      <notebook_dir>/Summary_Optimization/Opt_<run_id>_<timestamp>.h5
+      /summary_optimization/Opt_<run_id>_<timestamp>.h5
 
     - notebook_dir   : chemin vers notebooks/ (ex. './notebooks')
     - run_id         : identifiant court pour la passe (ex. 'budget100_pop30')
@@ -224,7 +224,7 @@ def save_optimization_hdf5(
         p.create_dataset("uppers", data=uppers)
 
         # 3) Convergence et coûts
-        grp.create_dataset("convergence", data=conv,     compression="gzip")
+        grp.create_dataset("conv", data=conv,     compression="gzip")
         grp.create_dataset("cf_final",    data=cf_final, compression="gzip")
 
         # 4) Meilleurs vecteurs

@@ -16,6 +16,7 @@ import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import multiprocessing
 
 from joblib import Parallel, delayed
 import ipywidgets as widgets
@@ -49,6 +50,31 @@ configurations_dir = os.path.join(str(paths.CONFIGS_DIR))
 data_dir           = os.path.join(str(paths.DATA_DIR))
 json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
+
+# ——————————————————————————————————————————————
+# Worker‐side globals & helpers (au niveau module)
+# ——————————————————————————————————————————————
+_WORKER_SIM = None
+
+def init_worker(selected_config_name):
+    """
+    Initializer called once in each new process. 
+    Recreates a SimulationTab and re-selects the desired configuration.
+    """
+    global _WORKER_SIM
+    _WORKER_SIM = SimulationTab()               # init sans UI
+    # Rejoue la sélection de config dans ce worker
+    for name, cb in _WORKER_SIM.config_checkboxes.items():
+        cb.value = (name == selected_config_name)
+
+
+def cost_worker(args):
+    """
+    Picklable wrapper for cost evaluation in worker.
+    args = (x, keys, mode)
+    """
+    x, keys, mode = args
+    return _WORKER_SIM.cost(x, keys, mode=mode)
 
 
 class OptimizationTab:
@@ -291,78 +317,83 @@ class OptimizationTab:
         # ──────────────────────────────────────────────────────────
         # 6) ÉVALUATION INITIALE
         # ──────────────────────────────────────────────────────────
-        #    On calcule cost() une fois pour chaque individu de la population
-        #for i in range(Npop):
-        #    # self.sim.cost(x, keys, mode) renvoie un scalaire de coût
-        #    cf[i] = self.sim.cost(pop[i], keys, mode=mode)
+        
+        # 1) Récupérer le nom de la config cochée
+        sel = [
+            name for name, cb in self.sim.config_checkboxes.items()
+            if cb.value
+        ]
+        if len(sel) != 1:
+            raise RuntimeError("Sélectionnez exactement une configuration avant de lancer DE.")
+        selected_config_name = sel[0]
+        
+        # 5) Ouvrir le pool de processes
+        with multiprocessing.Pool(
+            processes=None,    # None → os.cpu_count()
+            initializer=init_worker,
+            initargs=(selected_config_name,)        # aucun argument
+        ) as pool:
+            # 5a) Évaluation initiale
+            args0 = [(pop[i], keys, mode) for i in range(Npop)]
+            cf = np.array(pool.map(cost_worker, args0))  
+        
+            conv = np.zeros(Ngen)
             
-        # Évaluation initiale // PARALLÈLE
-        cf = np.array(Parallel(n_jobs=n_jobs)(
-            delayed(self.sim.cost)(pop[i], keys, mode=mode)
-            for i in range(Npop)
-        ))    
-        
-        conv = np.zeros(Ngen)
-        
-        # ──────────────────────────────────────────────────────────
-        # 7) BOUCLE PRINCIPALE DE DE (“current-to-best/1/bin”)
-        # ──────────────────────────────────────────────────────────
-        #    Définition des hyper-paramètres du DE :
-        F1, F2, cr = 0.9, 0.8, 0.8  # mutation weights et taux de crossover
-        
-        self.out.clear_output()
-        with self.out:
-            for g in trange(Ngen, desc="Differential Evolution in progress"):
-                # Générer TOUTES les propositions z
-                z_list = []
+            # ──────────────────────────────────────────────────────────
+            # 7) BOUCLE PRINCIPALE DE DE (“current-to-best/1/bin”)
+            # ──────────────────────────────────────────────────────────
+            #    Définition des hyper-paramètres du DE :
+            F1, F2, cr = 0.9, 0.8, 0.8  # mutation weights et taux de crossover
+            
+            self.out.clear_output()
+            with self.out:
+                for g in trange(Ngen, desc="Differential Evolution in progress"):
+                    # Générer TOUTES les propositions z
+                    z_list = []
+                    
+                    # pour chaque génération g
+                    for p in range(Npop):
+                        # 7a) Sélection aléatoire de 3 individus distincts
+                        idxs = np.random.choice(Npop, 3, replace=False)
+                        a, b, c = pop[idxs[0]], pop[idxs[1]], pop[idxs[2]]
+
+                        # 7b) Recherche de l’individu “best” (plus petit coût)
+                        best = pop[np.argmin(cf)]
+
+                        # 7c) Mutation (current-to-best/1) :
+                        y = c + F1 * (a - b) + F2 * (best - c)
+
+                        # 7d) Crossover binomial :
+                        #     mask[j] = True si on prend y[j], False si on garde pop[p,j]
+                        mask = np.random.rand(n_params) < cr
+                        #    S’assurer qu’au moins un paramètre est issu de y
+                        if not mask.any():
+                            mask[np.random.randint(n_params)] = True
+
+                        #    Construction de l’individu candidat z
+                        z = np.where(mask, y, pop[p])
+
+                        # 7e) Remise aux bornes :
+                        #     clip fait pop[:, j] = min(max(val, low[j]), high[j])
+                        z = np.clip(z, lowers, uppers)
+                        z_list.append((p, z))
+
+                    # 6f) évaluation parallèle des enfants
+                    args_child = [(z, keys, mode) for (_, z) in z_list]
+                    cfz = pool.map(cost_worker, args_child)
+
+                    # 6g) sélection
+                    for (i, z), cval in zip(z_list, cfz):
+                        if cval < cf[i]:
+                            pop[i], cf[i] = z, cval
+
+                    conv[g] = cf.min()
+            # ──────────────────────────────────────────────────────────
+            # 8) RÉÉVALUATION FINALE // PARALLÈLE
+            # ──────────────────────────────────────────────────────────
+                argsf = [(pop[i], keys, mode) for i in range(Npop)]
+                cf_final = np.array(pool.map(cost_worker, argsf))
                 
-                # pour chaque génération g
-                for p in range(Npop):
-                    # 7a) Sélection aléatoire de 3 individus distincts
-                    idxs = np.random.choice(Npop, 3, replace=False)
-                    a, b, c = pop[idxs[0]], pop[idxs[1]], pop[idxs[2]]
-
-                    # 7b) Recherche de l’individu “best” (plus petit coût)
-                    best = pop[np.argmin(cf)]
-
-                    # 7c) Mutation (current-to-best/1) :
-                    y = c + F1 * (a - b) + F2 * (best - c)
-
-                    # 7d) Crossover binomial :
-                    #     mask[j] = True si on prend y[j], False si on garde pop[p,j]
-                    mask = np.random.rand(n_params) < cr
-                    #    S’assurer qu’au moins un paramètre est issu de y
-                    if not mask.any():
-                        mask[np.random.randint(n_params)] = True
-
-                    #    Construction de l’individu candidat z
-                    z = np.where(mask, y, pop[p])
-
-                    # 7e) Remise aux bornes :
-                    #     clip fait pop[:, j] = min(max(val, low[j]), high[j])
-                    z = np.clip(z, lowers, uppers)
-                    z_list.append((p, z))
-
-                # 2b) Évaluer **tous** les candidats en parallèle
-                cfz_list = Parallel(n_jobs=n_jobs)(
-                    delayed(self.sim.cost)(z, keys, mode=mode)
-                    for (_, z) in z_list
-                )
-
-                # --- (6) Sélection ---
-                for (p, z), cfz in zip(z_list, cfz_list):
-                    if cfz < cf[p]:
-                        pop[p], cf[p] = z, cfz
-
-                conv[g] = cf.min()
-        # ──────────────────────────────────────────────────────────
-        # 8) RÉÉVALUATION FINALE // PARALLÈLE
-        # ──────────────────────────────────────────────────────────
-        cf_final = np.array(Parallel(n_jobs=n_jobs)(
-            delayed(self.sim.cost)(pop[i], keys, mode=mode)
-            for i in range(Npop)
-        ))
-        
         best_final = pop[np.argmin(cf_final)]
 
         # 9) Générer le spectre pour le meilleur individu

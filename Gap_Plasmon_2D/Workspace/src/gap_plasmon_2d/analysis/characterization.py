@@ -535,8 +535,8 @@ def find_best_dip(
         lam_max_l, R_max_l,
         lam_max_r, R_max_r,
         lam_sym, R_sym,
-        best_dR,    # ΔR/Δn du creux retenu (sera 0 si pas de Δn)
-        best_Slam,  # Δλ/Δn du creux retenu (sera 0 si pas de Δn)
+        best_dR,    # ΔR/Δn du creux retenu 
+        best_Slam,  # Δλ/Δn du creux retenu
         best_dR_half,
         dip_idx_list,
         dR_over_dn_list,
