@@ -15,5 +15,8 @@ dependencies = [
     "matplotlib",
 ]
 
+
+[tool.setuptools]
+package-dir = {"" = "Gap_Plasmon_2D/Workspace"}  # ← dit à setuptools où chercher le code source
 [tool.setuptools.packages.find]
-where = ["src"]          # ← dit à setuptools d’aller chercher sous src/
+where = ["Gap_Plasmon_2D/Workspace/src"]          # ← dit à setuptools d’aller chercher sous src/
