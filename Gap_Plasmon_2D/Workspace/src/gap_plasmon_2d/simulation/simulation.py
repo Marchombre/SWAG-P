@@ -91,7 +91,7 @@ class SimulationTab:
             value=300.0, description="λ min (nm):",
             layout=Layout(width='150px'), style={'description_width': 'initial'})
         self.sim_lambda_max = widgets.FloatText(
-            value=1100.0, description="λ max (nm):",
+            value=900.0, description="λ max (nm):",
             layout=Layout(width='150px'), style={'description_width': 'initial'})
         self.sim_n_points = widgets.IntText(
             value=400, description="Points:",
@@ -106,17 +106,58 @@ class SimulationTab:
                   self.sim_n_mod):
             w.observe(_positive, names='value')
 
-        self.mode_calc_radio = widgets.RadioButtons(
-            options=[('Dip (min)', 'dip'),
-                     ('FWHM (half)', 'half')],
-            value='dip',
-            description='Mode calc:',
-            style={'description_width':'initial'},
-            layout=Layout(width='200px')
+        # --- widgets λ₀ / bande utilisés par la fonction-coût -------------
+        self.lambda0_in   = widgets.FloatText(
+            value=700.0, description="λ₀ (nm):",
+            layout=Layout(width='130px'),
+            style={'description_width': 'initial'}
         )
+        self.band_min_in  = widgets.FloatText(
+            value=650.0, description="λmin:",
+            layout=Layout(width='120px'),
+            style={'description_width': 'initial'}
+        )
+        self.band_max_in  = widgets.FloatText(
+            value=750.0, description="λmax:",
+            layout=Layout(width='120px'),
+            style={'description_width': 'initial'}
+        )
+        # conteneur horizontal
+        self.band_box_in = HBox([self.band_min_in, self.band_max_in],
+                                layout=Layout(gap='5px'))
+
+
+
+        self.mode_calc_radio = widgets.RadioButtons(
+            options=[('Dip (ΔR/Δn)',    'dip'),
+                    ('FWHM (half)',    'half'),
+                    ('Custum fixed λ₀', 'fixed_lambda')],     # ← nouveau libellé
+            value='dip',
+            description='Compute R(λ) at fixe λ: :',
+            style={'description_width': 'initial'},
+            layout=Layout(width='220px')
+        )
+
+        
+        
+        # juste après la création de self.mode_calc_radio
+        self.lambda0_in = widgets.FloatText(
+            value=700.0, description="λ₀ (nm):",
+            layout=Layout(width='130px'),
+            style={'description_width': 'initial'}
+        )
+
+        def _toggle_lambda0(change):
+            self.lambda0_in.layout.display = '' if change['new']=='fixed_lambda' else 'none'
+
+        _toggle_lambda0({'new': self.mode_calc_radio.value})
+        self.mode_calc_radio.observe(_toggle_lambda0, names='value')
+
+
+        
         self.sim_run_button = widgets.Button(
             description="Run simulation", button_style="success",
-            tooltip="Lancer la simulation")
+            tooltip="Start simulation",)
 
         self.mode_selection = widgets.RadioButtons(
             options=[('Fixe', 'fixed'),
@@ -135,7 +176,7 @@ class SimulationTab:
 
         self.sim_download_button = widgets.Button(
             description="Download", button_style="danger",
-            tooltip="Télécharger le fichier")
+            tooltip="Download selected file",)
 
 
         self.sim_download_button.on_click(self._download_file)
@@ -145,6 +186,7 @@ class SimulationTab:
             value="", placeholder="Nom de simulation (auto si vide)",
             description="Sim Name:", layout=Layout(width='500px'),
             style={'description_width': 'initial'})
+
 
         # --------- sélecteur Config / Δn -------------------------
         self.config_checkboxes = {}
@@ -363,8 +405,10 @@ class SimulationTab:
                        self.layer_selector ]),
                 self.custom_modes_box,
                 HBox([ self.delta_n_widget,
-                       self.mode_calc_radio,
-                       self.sim_run_button ]),
+                        self.mode_calc_radio,
+                        self.lambda0_in,          
+                        self.sim_run_button ]),
+
                 self.verbose_toggle
             ],
             layout=Layout(
@@ -428,9 +472,19 @@ class SimulationTab:
             cb.value = not sel
 
     def _toggle_all_dn(self, _):
-        sel = all(dn.value for dn in self.dn_checkboxes.values())
-        for dn in self.dn_checkboxes.values():
-            dn.value = not sel
+        """
+        (Dé)sélectionne d’un coup toutes les cases ‘Δn’.
+
+        - Si elles sont toutes cochées → on les décoche.
+        - Sinon → on les coche toutes.
+        """
+        # True si TOUTES les cases sont déjà cochées
+        all_selected = all(chk.value for chk in self.dn_checkboxes.values())
+
+        # On applique la valeur opposée à chacune
+        for chk in self.dn_checkboxes.values():
+            chk.value = not all_selected
+
 
     def _toggle_config_list(self, change):
         show = 'block' if change['new'] else 'none'
@@ -572,8 +626,13 @@ class SimulationTab:
         # préparer figure
         fig      = plt.figure(figsize=(13, 9))
         ax_plot  = fig.add_axes([0.10, 0.50, 0.80, 0.35])
+        # --- titres d’axes ---------------------------------------------------
+        ax_plot.set_xlabel("λ (nm)")
+        ax_plot.set_ylabel("Reflectance R")
+
         ax_table = fig.add_axes([0.10, 0.05, 0.80, 0.35])
         ax_table.axis('off')
+        plt.close(fig)          # ← empêche l’affichage implicite
 
         # accumulateurs
         cfg_labels            = []
@@ -623,7 +682,17 @@ class SimulationTab:
                 cfg, json_combined_path
             )
             Rup = np.asarray(Rup, dtype=float)
-            simulation_details = details
+            
+            
+            # ───── tracé du spectre “brut” AVANT toute décision sur le dip ──────
+            ax_plot.plot(
+                lam_range, Rup,
+                color=color, linewidth=1.5, zorder=1,
+                label=name                           # pour la légende éventuelle
+            )
+            
+            
+            #simulation_details = details
 
             # find_best_dip
             Best_values_out, who, best_dip_index = find_best_dip(
@@ -694,6 +763,14 @@ class SimulationTab:
                 name in dn_cfgs and
                 sel_layers
             )
+
+
+            if self.mode_calc_radio.value == 'fixed_lambda':
+                lam_dip = self.lambda0_in.value          # on force le point étudié
+                R_dip   = float(np.interp(lam_dip, lam_range, Rup))
+                # pas de recherche de dip : on se place exactement à λ₀
+
+
 
             if compute_delta:
                 Rup_dn, lam_calc, R0, lam_calc_dn, R1, \
@@ -904,7 +981,7 @@ class SimulationTab:
             }
 
             # tracé de base
-            ax_plot.plot(lam_range, Rup, color=color, zorder=1)
+            ax_plot.plot(lam_range, Rup, color=color, zorder=1, label='_nolegend_')       # ← ignore ce tracé dans la légende
 
             # overlays non-verbose
             if flags['show_hlines']:
@@ -1008,11 +1085,56 @@ class SimulationTab:
             self.debug_out.value = "\n".join(debug_lines)
 
         # si aucune config valide
+        # ─────────────────────────────────────────────────────────────
         if not cfg_labels:
+            # Widgets de confirmation
+            msg = widgets.HTML(
+                "<b>Aucun dip valide trouvé :</b> pas de tableau à afficher.<br>"
+                "Tracer quand même&nbsp;?"
+            )
+            btn_yes = widgets.Button(description="Yes", button_style="success")
+            btn_no  = widgets.Button(description="No",  button_style="danger")
+
+            # --- callbacks ----------------------------------------------------
+            def _show_figure(_=None, _fig=fig):
+                """Affiche le spectre et le lien de téléchargement."""
+                
+                
+                # --------- légende même en cas de ‘no-dip’ ----------
+                handles, labels = ax_plot.get_legend_handles_labels()
+                handles = [h for h, lab in zip(handles, labels) if lab and not lab.startswith('_')]
+                labels  = [lab for lab in labels  if lab and not lab.startswith('_')]
+                if labels:
+                    ax_plot.legend(handles, labels, loc='best', fontsize=9, frameon=False)
+            
+                # --------- mise en page compacte ---------------------
+                _fig.tight_layout()
+                
+                
+                with self.sim_output:
+                    self.sim_output.clear_output(wait=True)
+                    display(_fig)
+                    display(_download_link(
+                        _fig,
+                        f"simulation_{datetime.now():%Y%m%d_%H%M%S}.png"
+                    ))
+                plt.close(_fig)          # libère la mémoire
+
+            def _cancel_figure(_=None, _fig=fig):
+                """Ferme la figure et nettoie la sortie."""
+                plt.close(_fig)
+                self.sim_output.clear_output()
+
+            btn_yes.on_click(_show_figure)
+            btn_no.on_click(_cancel_figure)
+
+            # --- affichage du message + boutons -------------------------------
             with self.sim_output:
-                print("Aucun dip valide trouvé : pas de tableau à afficher.")
-            plt.close(fig)
-            return
+                self.sim_output.clear_output(wait=True)
+                display(widgets.VBox([msg, widgets.HBox([btn_yes, btn_no])]))
+
+            return                 # on sort de _run sans afficher la figure pour l’instant
+
 
         # filtrer Geometry & Material
         base_geom = set(geom_sum[0].splitlines())
@@ -1113,6 +1235,19 @@ class SimulationTab:
             if r in row_heights:
                 cell.set_height(0.04 * row_heights[r])
 
+
+
+        # ───── légende globale (spectres) ─────────────────────────────
+        handles, labels = ax_plot.get_legend_handles_labels()
+        # filtre les labels vides ou commençant par '_' (convention Matplotlib)
+        handles = [h for h, lab in zip(handles, labels) if lab and not lab.startswith('_')]
+        labels  = [lab for lab in labels if lab and not lab.startswith('_')]
+
+        if labels:                         # au moins une courbe « nommée »
+            ax_plot.legend(handles, labels, loc='best', fontsize=9, frameon=False)
+
+
+
         # affichage final
         with self.sim_output:
             self.sim_output.clear_output(wait=True)
@@ -1121,6 +1256,11 @@ class SimulationTab:
                 fig,
                 f"simulation_{datetime.now():%Y%m%d_%H%M%S}.png"
             ))
+            
+            
+ 
+ 
+            
         plt.close(fig)
         
         # 1) Ouvrir/créer le fichier HDF5
@@ -1152,7 +1292,7 @@ class SimulationTab:
     #                            fonction de coût                       #
     # ----------------------------------------------------------------- #
 
-    def cost(self, x, keys, mode="dip"):
+    def cost(self, x, keys, mode="dip", fixed_lambda=None, range_lambda=None):
         """
         Injection de x sur les clés `keys`, simulation, puis on choisit
         le dip optimal via find_best_dip (max ΔR/Δn ou Δλ/Δn selon mode).
@@ -1184,8 +1324,24 @@ class SimulationTab:
         )
         Rup0 = np.asarray(Rup0, float)
 
-        # 5) Trouve le dip le plus sensible
-        best_out, _, _ = find_best_dip(
+        # valeurs λ issues des widgets si non fournies
+        fixed_lambda = fixed_lambda or self.lambda0_in.value
+
+        if mode == 'fixed_lambda':
+            R = float(np.interp(fixed_lambda, lam, Rup0))
+            return 1.0 - R
+
+        elif mode == 'range_lambda':
+            lam_min, lam_max = range_lambda
+            mask = (lam >= lam_min) & (lam <= lam_max)
+            R_mean = float(np.mean(Rup0[mask]))
+            return 1.0 - R_mean
+
+        
+        # 8) Retourne le coût 1 – ΔR/Δn (plus ΔR/Δn est grand, plus le coût est petit)
+        # ↓ ne lance la recherche de dip que si nécessaire
+        if mode in ('dip', 'half'):
+            best_out, _, _ = find_best_dip(
             cfg=cfg,
             wavelength=lam,
             reflectance=Rup0,
@@ -1201,31 +1357,17 @@ class SimulationTab:
             cfg_name=cfg["config_name"],
             mode=('half' if mode=="half" else 'dip')
         )
-        # 6) Si aucun dip trouvé, on pénalise au maximum
-        if best_out is None:
-            return 1.0
+            
+            
+            if best_out is None:
+                return 1.0
+            
+            idx_dR = 13 if mode == 'dip' else 15   # 15 = best_dR_half
+            best_dR = float(best_out[idx_dR])
+            return 1.0 - best_dR
 
-        # 7) best_out est un tuple :
-        #    (lam_left, lam_right, fwhm, depth,
-        #     lam_dip, R_dip, ylev,
-        #     lam_max_l, R_max_l, lam_max_r, R_max_r,
-        #     lam_sym, R_sym,
-        #     best_dR (=ΔR/Δn), best_Slam (=Δλ/Δn), best_dR_half,
-        #     dip_idx_list, dR_over_dn_list, dLam_over_dn_list)
-        #    On récupère best_dR (position 13)
-        best_dR = best_out[12]
-        lam_dip = best_out[4]
         
-        # Pour obtenir la reflectance à la longueur d'onde d'absorption (lam_dip),
-        # il faut interpoler Rup0 car lam_dip n'est pas forcément un index entier.
-        reflectance_at_lam_dip = np.interp(lam_dip, lam, Rup0)
-        # Si vous voulez maximiser la reflectance à 700 nm, il suffit de calculer la reflectance à cette longueur d'onde :
-        reflectance_at_700nm = np.interp(700, lam, Rup0)
-        
-        # 8) Retourne le coût 1 – ΔR/Δn (plus ΔR/Δn est grand, plus le coût est petit)
-        return  1 - reflectance_at_700nm
     
-                # 1.0 - float(best_dR)
 
 
 # instanciation globale

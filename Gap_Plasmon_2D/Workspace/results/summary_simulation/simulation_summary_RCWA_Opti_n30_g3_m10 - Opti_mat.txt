@@ -1,5 +1,5 @@
 Simulation Summary - All Geometry/Material Combos
-Timestamp: 20250624_105315
+Timestamp: 20250626_172346
 Wave parameters: {'angle': 0, 'polarization': 1}
 Number of RCWA modes: 5
 ---- COMBINATIONS ----
@@ -11,16 +11,16 @@ Material config (df_config):
 [{'key': 'perm_env', 'material': {'type': 'Standard', 'material': 'Air', 'override': [300.0, 1000.0]}}, {'key': 'perm_gap', 'material': {'type': 'Custom', 'expression': '1.45**2', 'override': [300.0, 1000.0]}}, {'key': 'perm_diel', 'material': {'type': 'Custom', 'expression': '1.45**2', 'override': [300.0, 1000.0]}}, {'key': 'perm_func', 'material': {'type': 'None'}}, {'key': 'perm_mol', 'material': {'type': 'None'}}, {'key': 'perm_reso', 'material': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Ag', 'page': 'Rakic-BB', 'data': 'main/Ag/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}}, {'key': 'perm_metalliclayer', 'material': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Au', 'page': 'Rakic-BB', 'data': 'main/Au/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}}, {'key': 'perm_XIAOYI', 'material': {'type': 'None'}}, {'key': 'perm_accroche', 'material': {'type': 'None'}}, {'key': 'perm_sub', 'material': {'type': 'None'}}]
 RI Overrides: {'perm_reso': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Ag', 'page': 'Rakic-BB', 'data': 'main/Ag/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}, 'perm_metalliclayer': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Au', 'page': 'Rakic-BB', 'data': 'main/Au/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}}
 Metrics:
-  FWHM (nm)    : 21.2 nm
-  Lam_res      : 842.4 nm
-  Δλ / λmin or λsym: 0.027 & 0.017
-  Q-factor     : 39.8
-  best_S_R     : 0.060
-  Sλ (nm/RIU)  : 40.727
-  ΔR/Δn (1/RIU): 0.060
-  ΔR_half      : 0.001
-  S_lam_min    : 0.027
-  S_lam_sym    : 0.017
+  FWHM (nm)    : 43.6 nm
+  Lam_res      : 700.0 nm
+  Δλ / λmin or λsym: 0.070 & 0.031
+  Q-factor     : 16.1
+  best_S_R     : 
+  Sλ (nm/RIU)  : 0.000
+  ΔR/Δn (1/RIU): 0.000
+  ΔR_half      : 0.000
+  S_lam_min    : 0.070
+  S_lam_sym    : 0.031
   Δn           : 1.000e-02
 Reflectance points (Rup, Rdown):
   λ=300.0 nm -> Rup=0.10175273229592689, Rdown=0.2101495242692047

@@ -531,51 +531,41 @@ def find_latest_optimization(summary_opt_dir: str) -> Path | None:
 
 def read_optimization_hdf5(h5path: str) -> dict:
     """
-    Lit un fichier d’optimisation HDF5 et renvoie un dict :
-      {
-        'run_id': str,
-        'budget': int,
-        'Npop':   int,
-        'mode':   str,
-        'keys':   [str,...],
-        'lowers': np.ndarray,
-        'uppers': np.ndarray,
-        'conv':   np.ndarray,
-        'cf_final':   np.ndarray,
-        'best':       np.ndarray,
-        'best_final': np.ndarray
-      }
+    Lecture d’un fichier *.h5* produit par `save_optimization_hdf5`.
     """
     with h5py.File(h5path, "r") as f:
-        grp_name = list(f.keys())[0]
-        grp = f[grp_name]
+        grp_key = next(iter(f.keys()))
+        grp = f[grp_key]
 
-        out = {
-            'run_id':   grp.attrs['run_id'],
-            'budget':   int(grp.attrs['budget']),
-            'Npop':     int(grp.attrs['Npop']),
-            'mode':     grp.attrs['mode'].decode() 
-                        if isinstance(grp.attrs['mode'], bytes)
-                        else grp.attrs['mode'],
-            'keys':     [k.decode() for k in grp['parameters']['keys'][:]],
-            'lowers':   grp['parameters']['lowers'][:],
-            'uppers':   grp['parameters']['uppers'][:],
-            'conv':     grp['convergence'][:],
-            'cf_final': grp['cf_final'][:],
-            'best':     grp['best'][:],
-            'best_final': grp['best_final'][:]
-        }
-        
-        # si le groupe 'spectra' existe, on l'ajoute au dict
-        if 'spectra' in grp:
-            spec = grp['spectra']
-            out['spectra'] = {
-                'wavelength': spec['wavelength'][:],
-                'Rup':        spec['Rup'][:],
-                'Rdown':      spec['Rdown'][:] if 'Rdown' in spec else None
-            }
-            
+        out = dict(
+            run_id=grp.attrs["run_id"],
+            budget=int(grp.attrs["budget"]),
+            Npop=int(grp.attrs["Npop"]),
+            mode=grp.attrs["mode"].decode()
+            if isinstance(grp.attrs["mode"], bytes)
+            else grp.attrs["mode"],
+            keys=[k.decode() for k in grp["parameters"]["keys"][:]],
+            lowers=grp["parameters"]["lowers"][:],
+            uppers=grp["parameters"]["uppers"][:],
+            conv_best=grp["conv_best"][:],
+            conv_evals=grp["conv_evals"][:],
+            cf_final=grp["cf_final"][:],
+            best=grp["best"][:],
+            best_final=grp["best_final"][:],
+            best_cost=float(grp.attrs["best_cost"]),
+        )
+
+        if "spectra" in grp:
+            spec = grp["spectra"]
+            out["spectra"] = dict(
+                wavelength=spec["wavelength"][:],
+                Rup=spec["Rup"][:],
+                Rdown=spec["Rdown"][:] if "Rdown" in spec else None,
+            )
+
     return out
+
+
 
 
 def list_optimization_files(summary_opt_dir: str) -> list[str]:

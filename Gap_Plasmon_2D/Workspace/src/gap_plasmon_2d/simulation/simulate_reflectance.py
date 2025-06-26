@@ -3,8 +3,7 @@
 Module: simulate_reflectance.py
 
 Ce module se charge de la simulation de la réflectance pour une ou plusieurs combinaisons 
-géométrie/matériaux. Il utilise une compréhension de liste pour maximiser les performances 
-et retourne à la fois les résultats et les détails complets de la simulation.
+géométrie/matériaux.
 """
 
 

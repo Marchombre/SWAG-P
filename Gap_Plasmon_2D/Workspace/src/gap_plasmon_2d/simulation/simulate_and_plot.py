@@ -271,5 +271,5 @@ def run_simulation_one_combo(lam_range, wave, n_mod, combo, json_combined_path):
     }
 
     # on retourne Rup, Absorption et le dict complet pour usage ultérieur
-    return Rup, Absorption, simulation_details
+    return Rup, Rdown, simulation_details
 
