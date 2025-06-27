@@ -165,7 +165,6 @@ def save_figure(fig, title, figures_dir, material_str_clean: str | None = None):
 
 
 
-
 # --------------------------------------------------------------------------- #
 #                       Optimization files (HDF5)                             #
 # --------------------------------------------------------------------------- #
@@ -173,6 +172,7 @@ def save_optimization_hdf5(
     *,
     notebook_dir: str,
     run_id: str,
+    config_name: str,                   # ← NOUVEAU : structure optimisée
     budget: int,
     Npop: int,
     keys: list[str],
@@ -184,6 +184,7 @@ def save_optimization_hdf5(
     best: np.ndarray,
     best_final: np.ndarray,
     best_cost: float,
+    best_after_eval: np.ndarray | None = None,
     mode: str,
     lam: np.ndarray | None = None,
     Rup: np.ndarray | None = None,
@@ -194,10 +195,12 @@ def save_optimization_hdf5(
 
     Paramètres nouveaux
     -------------------
+    config_name
+        Nom (ou identifiant) de la configuration/structure optimisée.
     conv_best
         Meilleure valeur de la CF à chaque génération.
     conv_evals
-        Évaluations cumulées correspondantes.
+        Meilleure valeur de la CF à chaque *évaluation* (granularité fine).
     best_cost
         Valeur min(cf_final) = coût associé à *best_final*.
     """
@@ -210,40 +213,45 @@ def save_optimization_hdf5(
     with h5py.File(h5path, "a") as f:
         grp = f.require_group(f"{run_id}_{stamp}")
 
-        # Meta-données
+        # ─── Méta-données générales ──────────────────────────────────────
         grp.attrs.update(
             date=datetime.now().isoformat(),
             run_id=run_id,
+            config_name=config_name,    
             budget=budget,
             Npop=Npop,
             mode=mode,
+            best_cost=best_cost,
         )
 
-        # Paramètres
+        # ─── Paramètres de l’espace de recherche ────────────────────────
         p = grp.require_group("parameters")
-        p.create_dataset("keys", data=np.array(keys, dtype="S"))
+        p.create_dataset("keys",   data=np.array(keys, dtype="S"))
         p.create_dataset("lowers", data=lowers)
         p.create_dataset("uppers", data=uppers)
 
-        # Convergence
-        grp.create_dataset("conv_best", data=conv_best, compression="gzip")
+        # ─── Convergence ────────────────────────────────────────────────
+        grp.create_dataset("conv_best",  data=conv_best,  compression="gzip")
         grp.create_dataset("conv_evals", data=conv_evals, compression="gzip")
 
-        # Population finale
+        # ─── Population finale ─────────────────────────────────────────
         grp.create_dataset("cf_final", data=cf_final, compression="gzip")
 
-        # Best vectors & cost
-        grp.create_dataset("best", data=best, compression="gzip")
-        grp.create_dataset("best_final", data=best_final, compression="gzip")
-        grp.attrs["best_cost"] = best_cost
+        # ─── Meilleurs individus ───────────────────────────────────────
+        grp.create_dataset("best",           data=best,         compression="gzip")
+        grp.create_dataset("best_final",     data=best_final,   compression="gzip")
+        if best_after_eval is not None:
+            grp.create_dataset("best_after_eval",
+                               data=best_after_eval,
+                               compression="gzip")
 
-        # Spectres éventuels
+        # ───    Spectres  ─────────────────────────────────────────────
         if lam is not None and Rup is not None:
             spec = grp.require_group("spectra")
             spec.create_dataset("wavelength", data=lam, compression="gzip")
-            spec.create_dataset("Rup", data=Rup, compression="gzip")
+            spec.create_dataset("Rup",        data=Rup, compression="gzip")
             if Rdown is not None:
-                spec.create_dataset("Rdown", data=Rdown, compression="gzip")
+                spec.create_dataset("Rdown",  data=Rdown, compression="gzip")
 
     print(f"[Saving] Optimization saved to {h5path}")
     return str(h5path)

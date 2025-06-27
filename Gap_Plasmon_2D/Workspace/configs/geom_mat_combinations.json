@@ -7248,7 +7248,7 @@
           "thick_super": 200.0,
           "thick_reso": 2.0,
           "width_reso": 100.0,
-          "thick_gap": 1.0,
+          "thick_gap": 2.0,
           "thick_mol": 0.0,
           "thick_func": 0.0,
           "thick_diel": 0.0,
@@ -7266,7 +7266,7 @@
             "key": "perm_env",
             "material": {
               "type": "Custom",
-              "expression": "1.7**2",
+              "expression": "1.9**2",
               "override": [
                 300.0,
                 1000.0
@@ -7277,7 +7277,7 @@
             "key": "perm_gap",
             "material": {
               "type": "Custom",
-              "expression": "1.7**2",
+              "expression": "1.9**2",
               "override": [
                 300.0,
                 1000.0
@@ -7321,7 +7321,7 @@
             "key": "perm_reso",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.2**2",
               "override": [
                 300.0,
                 1000.0
@@ -7332,7 +7332,7 @@
             "key": "perm_metalliclayer",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.2**2",
               "override": [
                 300.0,
                 1000.0
@@ -7343,7 +7343,7 @@
             "key": "perm_XIAOYI",
             "material": {
               "type": "Custom",
-              "expression": "1.7**2",
+              "expression": "1.9**2",
               "override": [
                 300.0,
                 1000.0
@@ -7354,7 +7354,7 @@
             "key": "perm_accroche",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.2**2",
               "override": [
                 300.0,
                 1000.0
@@ -7365,7 +7365,7 @@
             "key": "perm_sub",
             "material": {
               "type": "Custom",
-              "expression": "1.7**2",
+              "expression": "1.9**2",
               "override": [
                 300.0,
                 1000.0

@@ -349,7 +349,7 @@
         "thick_super": 200.0,
         "thick_reso": 2.0,
         "width_reso": 100.0,
-        "thick_gap": 1.0,
+        "thick_gap": 2.0,
         "thick_mol": 0.0,
         "thick_func": 0.0,
         "thick_diel": 0.0,

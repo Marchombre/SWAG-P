@@ -1334,7 +1334,7 @@
           "key": "perm_env",
           "material": {
             "type": "Custom",
-            "expression": "1.7**2",
+            "expression": "1.9**2",
             "override": [
               300.0,
               1000.0
@@ -1345,7 +1345,7 @@
           "key": "perm_gap",
           "material": {
             "type": "Custom",
-            "expression": "1.7**2",
+            "expression": "1.9**2",
             "override": [
               300.0,
               1000.0
@@ -1389,7 +1389,7 @@
           "key": "perm_reso",
           "material": {
             "type": "Custom",
-            "expression": "1.4**2",
+            "expression": "1.2**2",
             "override": [
               300.0,
               1000.0
@@ -1400,7 +1400,7 @@
           "key": "perm_metalliclayer",
           "material": {
             "type": "Custom",
-            "expression": "1.4**2",
+            "expression": "1.2**2",
             "override": [
               300.0,
               1000.0
@@ -1411,7 +1411,7 @@
           "key": "perm_XIAOYI",
           "material": {
             "type": "Custom",
-            "expression": "1.7**2",
+            "expression": "1.9**2",
             "override": [
               300.0,
               1000.0
@@ -1422,7 +1422,7 @@
           "key": "perm_accroche",
           "material": {
             "type": "Custom",
-            "expression": "1.4**2",
+            "expression": "1.2**2",
             "override": [
               300.0,
               1000.0
@@ -1433,7 +1433,7 @@
           "key": "perm_sub",
           "material": {
             "type": "Custom",
-            "expression": "1.7**2",
+            "expression": "1.9**2",
             "override": [
               300.0,
               1000.0

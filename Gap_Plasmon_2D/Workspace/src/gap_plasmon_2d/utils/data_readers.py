@@ -518,62 +518,73 @@ def get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params):
 
 
 
-
-def find_latest_optimization(summary_opt_dir: str) -> Path | None:
-    """
-    Retourne le Path du fichier HDF5 d’optimisation le plus récent,
-    ou None s’il n’y en a pas.
-    """
-    p = Path(summary_opt_dir)
-    files = sorted(p.glob("Opt_*.h5"))
-    return files[-1] if files else None
-
-
+# --------------------------------------------------------------------------- #
+#             Lecture d’un fichier HDF5 produit par save_optimization_hdf5   #
+# --------------------------------------------------------------------------- #
 def read_optimization_hdf5(h5path: str) -> dict:
     """
-    Lecture d’un fichier *.h5* produit par `save_optimization_hdf5`.
+    Charge un fichier *.h5* d’optimisation et renvoie toutes les
+    données pertinentes dans un dictionnaire Python.
     """
     with h5py.File(h5path, "r") as f:
-        grp_key = next(iter(f.keys()))
+        grp_key = next(iter(f.keys()))     # ex. "budget1000_pop30_20250627_123456"
         grp = f[grp_key]
 
+        # ─── Lecture sécurisée des attributs ───────────────────────────
+        def _decode(v):
+            return v.decode() if isinstance(v, (bytes, np.bytes_)) else v
+
         out = dict(
-            run_id=grp.attrs["run_id"],
-            budget=int(grp.attrs["budget"]),
-            Npop=int(grp.attrs["Npop"]),
-            mode=grp.attrs["mode"].decode()
-            if isinstance(grp.attrs["mode"], bytes)
-            else grp.attrs["mode"],
-            keys=[k.decode() for k in grp["parameters"]["keys"][:]],
-            lowers=grp["parameters"]["lowers"][:],
-            uppers=grp["parameters"]["uppers"][:],
-            conv_best=grp["conv_best"][:],
-            conv_evals=grp["conv_evals"][:],
-            cf_final=grp["cf_final"][:],
-            best=grp["best"][:],
-            best_final=grp["best_final"][:],
-            best_cost=float(grp.attrs["best_cost"]),
+            run_id         = _decode(grp.attrs["run_id"]),
+            config_name    = _decode(grp.attrs.get("config_name", "")),  # <- NEW
+            budget         = int(grp.attrs["budget"]),
+            Npop           = int(grp.attrs["Npop"]),
+            mode           = _decode(grp.attrs["mode"]),
+            best_cost      = float(grp.attrs["best_cost"]),
         )
 
+        # ─── Espace de recherche ───────────────────────────────────────
+        params_grp = grp["parameters"]
+        out.update(
+            keys   = [_decode(k) for k in params_grp["keys"][:]],
+            lowers = params_grp["lowers"][:],
+            uppers = params_grp["uppers"][:],
+        )
+
+        # ─── Convergence et population finale ──────────────────────────
+        out["conv_best"]  = grp["conv_best"][:]
+        out["conv_evals"] = grp["conv_evals"][:]
+        out["cf_final"]   = grp["cf_final"][:]
+
+        # ─── Meilleurs individus ───────────────────────────────────────
+        out["best"]       = grp["best"][:]
+        out["best_final"] = grp["best_final"][:]
+        if "best_after_eval" in grp:
+            out["best_after_eval"] = grp["best_after_eval"][:]
+        else:
+            out["best_after_eval"] = None
+
+        # ─── Spectres (optionnels) ─────────────────────────────────────
         if "spectra" in grp:
             spec = grp["spectra"]
             out["spectra"] = dict(
-                wavelength=spec["wavelength"][:],
-                Rup=spec["Rup"][:],
-                Rdown=spec["Rdown"][:] if "Rdown" in spec else None,
+                wavelength = spec["wavelength"][:],
+                Rup        = spec["Rup"][:],
+                Rdown      = spec["Rdown"][:] if "Rdown" in spec else None,
             )
 
     return out
 
 
-
-
+# --------------------------------------------------------------------------- #
+#                       Lister les fichiers d’optimisation                    #
+# --------------------------------------------------------------------------- #
 def list_optimization_files(summary_opt_dir: str) -> list[str]:
     """
-    Retourne la liste triée des chemins de tous les fichiers
-    Opt_*.h5 dans summary_opt_dir.
+    Retourne la liste triée (par nom) de tous les fichiers Opt_*.h5
+    présents dans `summary_opt_dir`.
     """
     p = Path(summary_opt_dir)
     files = sorted(p.glob("Opt_*.h5"), key=lambda f: f.name)
-    # On renvoie des str pour qu’ils rentrent directement dans un Dropdown
+    # On renvoie des str pour utilisation directe dans un Dropdown IPywidgets
     return [str(f) for f in files]

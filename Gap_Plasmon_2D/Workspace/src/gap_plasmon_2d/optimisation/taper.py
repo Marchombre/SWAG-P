@@ -147,7 +147,7 @@ def taper(X): #verif ok
 
 def DE_general(budget, Npop, Nlayers, Ncubes, bornes, periode, Nopt):
     """
-    Algorithme Differential Evolution “current-to-best/1/bin”.
+    Algorithme Differential Evolution “variant DE/rand-to-best/1/bin ”.
     Arguments :
       - budget : nombre total d’évaluations de la fonction de coût
       - Npop   : taille de la population (nombre d’individus)

@@ -1,5 +1,5 @@
 Simulation Summary - All Geometry/Material Combos
-Timestamp: 20250626_172346
+Timestamp: 20250627_101604
 Wave parameters: {'angle': 0, 'polarization': 1}
 Number of RCWA modes: 5
 ---- COMBINATIONS ----
@@ -12,13 +12,13 @@ Material config (df_config):
 RI Overrides: {'perm_reso': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Ag', 'page': 'Rakic-BB', 'data': 'main/Ag/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}, 'perm_metalliclayer': {'type': 'RefractiveIndex', 'shelf': 'main', 'book': 'Au', 'page': 'Rakic-BB', 'data': 'main/Au/nk/Rakic-BB.yml', 'override': [247.97, 1936.97]}}
 Metrics:
   FWHM (nm)    : 43.6 nm
-  Lam_res      : 700.0 nm
+  Lam_res      : 764.7 nm
   Δλ / λmin or λsym: 0.070 & 0.031
-  Q-factor     : 16.1
-  best_S_R     : 
-  Sλ (nm/RIU)  : 0.000
-  ΔR/Δn (1/RIU): 0.000
-  ΔR_half      : 0.000
+  Q-factor     : 17.5
+  best_S_R     : 0.226
+  Sλ (nm/RIU)  : 26.491
+  ΔR/Δn (1/RIU): 0.226
+  ΔR_half      : 0.002
   S_lam_min    : 0.070
   S_lam_sym    : 0.031
   Δn           : 1.000e-02

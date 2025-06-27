@@ -81,10 +81,20 @@ class SimulationTab:
         else:
             self.all_configs = []
 
+        self.json_combined_path = json_combined_path    
+
         # ------------- garde-fou valeurs négatives ---------------
         def _positive(change):
-            if change['new'] < 0:
-                change['owner'].value = 0
+            owner = change['owner']
+            val   = change['new']
+            if val < 0:
+                owner.value = 0
+            # λmin ne doit pas dépasser λmax
+            if owner is self.sim_lambda_min and val > self.sim_lambda_max.value:
+                owner.value = self.sim_lambda_max.value
+            # λmax ne doit pas être plus petit que λmin
+            if owner is self.sim_lambda_max and val < self.sim_lambda_min.value:
+                owner.value = self.sim_lambda_min.value
 
         # --------- widgets paramètres généraux -------------------
         self.sim_lambda_min = widgets.FloatText(
@@ -106,12 +116,7 @@ class SimulationTab:
                   self.sim_n_mod):
             w.observe(_positive, names='value')
 
-        # --- widgets λ₀ / bande utilisés par la fonction-coût -------------
-        self.lambda0_in   = widgets.FloatText(
-            value=700.0, description="λ₀ (nm):",
-            layout=Layout(width='130px'),
-            style={'description_width': 'initial'}
-        )
+        # --- widgets lambda range optimization utilisés par la fonction-coût -------------
         self.band_min_in  = widgets.FloatText(
             value=650.0, description="λmin:",
             layout=Layout(width='120px'),
@@ -133,7 +138,7 @@ class SimulationTab:
                     ('FWHM (half)',    'half'),
                     ('Custum fixed λ₀', 'fixed_lambda')],     # ← nouveau libellé
             value='dip',
-            description='Compute R(λ) at fixe λ: :',
+            description='Compute R(λ) at fixe λ:',
             style={'description_width': 'initial'},
             layout=Layout(width='220px')
         )
@@ -434,6 +439,8 @@ class SimulationTab:
     #                    méthodes utilitaires                           #
     # ----------------------------------------------------------------- #
     
+
+    
     
     def _get_n_modes_for(self, cfg_name):
         """
@@ -632,7 +639,7 @@ class SimulationTab:
 
         ax_table = fig.add_axes([0.10, 0.05, 0.80, 0.35])
         ax_table.axis('off')
-        plt.close(fig)          # ← empêche l’affichage implicite
+        #plt.close(fig)          # ← empêche l’affichage implicite
 
         # accumulateurs
         cfg_labels            = []
@@ -981,7 +988,7 @@ class SimulationTab:
             }
 
             # tracé de base
-            ax_plot.plot(lam_range, Rup, color=color, zorder=1, label='_nolegend_')       # ← ignore ce tracé dans la légende
+            #ax_plot.plot(lam_range, Rup, color=color, zorder=1, label='_nolegend_')       # ← ignore ce tracé dans la légende
 
             # overlays non-verbose
             if flags['show_hlines']:
@@ -1057,18 +1064,19 @@ class SimulationTab:
                 debug_lines.append("")
 
             # sauvegarde par config
-            save_simulation_summary(
-                {name: details},
-                lam_range, wave, n_modes, summary_dir,
-                custom_name=name,
-                fwhm_summaries=[fwhm_sum[-1]],
-                lam_summaries=[lam_sum[-1]],
-                delta_lam_over_midLam_summaries=[
-                    delta_lam_over_midLam[-1]
-                ],
-                Q_factor=[Q_fac[-1]],
-                best_S_R=[S_R_sum[-1]]
-            )
+            if cfg_labels:
+                save_simulation_summary(
+                    {name: details},
+                    lam_range, wave, n_modes, summary_dir,
+                    custom_name=name,
+                    fwhm_summaries=[fwhm_sum[-1]],
+                    lam_summaries=[lam_sum[-1]],
+                    delta_lam_over_midLam_summaries=[
+                        delta_lam_over_midLam[-1]
+                    ],
+                    Q_factor=[Q_fac[-1]],
+                    best_S_R=[S_R_sum[-1]]
+                )
 
         # meilleur ΔR/Δn
         arr = np.array(S_R_vals, dtype=float)
@@ -1257,12 +1265,14 @@ class SimulationTab:
                 f"simulation_{datetime.now():%Y%m%d_%H%M%S}.png"
             ))
             
-            
- 
- 
-            
-        plt.close(fig)
         
+        plt.close(fig)
+
+
+
+        if not cfg_labels:        # aucune courbe n’a été tracée
+            return                # on ne crée pas d’entrée HDF5 inutile
+
         # 1) Ouvrir/créer le fichier HDF5
         with h5py.File(h5_path, "a") as f:
             grp = f.require_group(
@@ -1315,12 +1325,13 @@ class SimulationTab:
                         self.sim_n_points.value)
         wave    = {"angle": 0, "polarization": 1}
         n_modes = self._get_n_modes_for(cfg["config_name"])  # fixed/custom/auto
+
         sel_layers = list(self.layer_selector.value)
         delta_n    = max(self.delta_n_widget.value, 1e-6)
 
         # 4) Simule le spectre de base
         Rup0, _, _ = run_simulation_one_combo(
-            lam, wave, n_modes, cfg, json_combined_path
+            lam, wave, n_modes, cfg, self.json_combined_path
         )
         Rup0 = np.asarray(Rup0, float)
 
@@ -1349,7 +1360,7 @@ class SimulationTab:
             n_modes=n_modes,
             sel_layers=sel_layers,
             delta_n=delta_n,
-            json_combined_path=json_combined_path,
+            json_combined_path=self.json_combined_path,
             smooth_win=0, polyorder=0,
             dip_prom=1e-2, dip_dist=1,
             peak_dist=1,
