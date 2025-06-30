@@ -123,6 +123,85 @@ def cost_worker(args: Tuple[np.ndarray, List[str], str, Dict[str, Any]]) -> floa
 
 
 
+
+class OptimizationFileArboWidget:
+    """
+    Widget 3-niveaux pour parcourir :
+      summary_opt_dir/
+      ├─ <family>/
+      │  ├─ <cost_mode>/
+      │  │  └─ .../*.h5
+      │  └─ ...
+      └─ ...
+    """
+    def __init__(self, summary_opt_dir: str):
+        self.base_dir = Path(summary_opt_dir)
+        # Niveau 1 : family (multi_layer, gap_plasmon_resonator, …)
+        self.family_dd = widgets.Dropdown(description="Family:")
+        # Niveau 2 : cost_mode (lambda_fix, range_lambda, dip, half, …)
+        self.cost_mode_dd = widgets.Dropdown(description="Cost mode:")
+        # Niveau 3 : liste plate des fichiers .h5 disponibles
+        self.file_dd = widgets.Dropdown(description="File:")
+        # Conteneur horizontal
+        self.container = widgets.HBox([self.family_dd, self.cost_mode_dd, self.file_dd],
+                                     layout=widgets.Layout(gap="10px"))
+        
+        # 1) Enregistre d’abord les observers
+        self.family_dd.observe(self._on_family_changed, names="value")
+        self.cost_mode_dd.observe(self._on_cost_mode_changed, names="value")
+        
+        # 2) Puis remplis les familles (le set value() déclenchera automatiquement _on_family_changed)
+        self._populate_families()
+
+
+    def _populate_families(self):
+        # lister tous les sous-dossiers de base_dir
+        fams = sorted([d.name for d in self.base_dir.iterdir() if d.is_dir()])
+        self.family_dd.options = [(f, f) for f in fams]
+        # par défaut, on déclenche le premier
+        if fams:
+            self.family_dd.value = fams[0]
+
+    def _on_family_changed(self, change):
+        fam = change["new"]
+        if not fam:
+            self.cost_mode_dd.options = []
+            self.file_dd.options = []
+            return
+        cost_dir = self.base_dir / fam
+        modes = sorted([d.name for d in cost_dir.iterdir() if d.is_dir()])
+        self.cost_mode_dd.options = [(m, m) for m in modes]
+        # reset des fichiers
+        self.file_dd.options = []
+        if modes:
+            self.cost_mode_dd.value = modes[0]
+
+    def _on_cost_mode_changed(self, change):
+        fam = self.family_dd.value
+        mode = change["new"]
+        if not (fam and mode):
+            self.file_dd.options = []
+            return
+        # récupère tous les .h5 dans le sous-arbre fam/mode
+        search_dir = self.base_dir / fam / mode
+        files = sorted(search_dir.rglob("*.h5"), key=lambda f: f.as_posix())
+        opts = [ (f.relative_to(self.base_dir).as_posix(), str(f)) for f in files ]
+        self.file_dd.options = opts
+        if opts:
+            # sélectionne automatiquement le premier fichier
+            self.file_dd.value = opts[0][1]
+
+    def get_selected_file(self) -> str | None:
+        """Renvoie le chemin complet du fichier HDF5 sélectionné."""
+        return self.file_dd.value
+
+
+    def refresh(self):
+        """Force la remise à jour de la liste des fichiers."""
+        mode = self.cost_mode_dd.value
+        if mode is not None:
+            self._on_cost_mode_changed({"new": mode})
+
 # -----------------------------------------------------------------------------#
 #  Main widget class                                                           #
 # -----------------------------------------------------------------------------#
@@ -145,6 +224,14 @@ class OptimizationTab:
             )
         )
 
+        # Choix de la famille (racine de la branche)
+        self.family_dd = widgets.Dropdown(
+            options=['multi_layer', 'gap_plasmon_resonator'],
+            value='multi_layer',
+            description='Family:',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='220px')
+        )
 
 
 
@@ -191,20 +278,18 @@ class OptimizationTab:
 
 
 
-        # Dropdown listant les fichiers HDF5 d’optimisation
+        # Widget arborescent pour filtrer les fichiers HDF5
         self.summary_opt_dir = summary_opt_dir
-        self.opt_file_dd = widgets.Dropdown(
-            options=list_optimization_files(str(self.summary_opt_dir)),
-            description="files Opt:",
-            layout=widgets.Layout(width="400px"),
-        )
+
+        self.opt_file_arbo = OptimizationFileArboWidget(str(self.summary_opt_dir))
+        
 
         # Watcher pour maj auto de la liste
         self._observer = start_watcher(
             path=str(self.summary_opt_dir),
             callback=self._refresh_file_list,
             extensions=[".h5"],
-            recursive=False,
+            recursive=True,
         )
 
         # Contrôles DE
@@ -224,8 +309,8 @@ class OptimizationTab:
 
         # Assemblage des contrôles supérieurs
         controls = widgets.HBox(
-            [ self.budget_w, self.pop_w, self.run_btn,
-            self.opt_file_dd, self.plot_btn ],
+            [self.family_dd, self.budget_w, self.pop_w, self.run_btn,
+            self.opt_file_arbo.container, self.plot_btn ],
             layout=widgets.Layout(margin='10px', flex_wrap='wrap',
                                 align_items='center')
         )
@@ -271,11 +356,10 @@ class OptimizationTab:
     # ------------------------------------------------------------------#
     #  UI helpers                                                       #
     # ------------------------------------------------------------------#
-    def _refresh_file_list(self) -> None:
-        """Met à jour le dropdown lorsqu’un nouveau fichier est créé."""
-        files = list_optimization_files(str(self.summary_opt_dir))
-        if set(files) != set(self.opt_file_dd.options):
-            self.opt_file_dd.options = files
+    def _refresh_file_list(self):
+        self.opt_file_arbo.refresh()
+
+
 
     def _toggle_refl_widgets(self, change: Dict[str, Any]) -> None:
         """Affiche/masque les widgets selon le mode calcul choisi."""
@@ -485,6 +569,10 @@ class OptimizationTab:
         custom_map     = {n: w.value for n, w in self.sim.custom_n_mod_inputs.items()}
 
 
+        lam_min, lam_max = self.sim.sim_lambda_min.value, self.sim.sim_lambda_max.value
+
+
+
         with mp.get_context("spawn").Pool(
                 initializer=init_worker,
                 initargs=(selected_config, lam_min, lam_max, n_pts,
@@ -576,8 +664,6 @@ class OptimizationTab:
         Rdown = np.asarray(Rdown, float)
 
         # -------------------- 6) SAUVEGARDE HDF5 ------------------------ #
-        run_id = f"budget{budget}_pop{Npop}"
-
         # Nom de la configuration actuellement cochée
         config_name = next(
             n for n, cb in self.sim.config_checkboxes.items() if cb.value
@@ -586,14 +672,16 @@ class OptimizationTab:
         # Sauvegarde complète du run d’optimisation dans un fichier HDF5
         save_optimization_hdf5(
             notebook_dir=str(BASE_NOTEBOOKS),   # Dossier racine où créer le .h5
-            run_id=run_id,                      # Identifiant unique (ex. "budget1000_pop30")
-
+            family=self.family_dd.value,
+            cost_mode=mode,                       # dip / half / fixed_lambda / range_lambda
             # — méta-données pour filtrage futur —
             config_name=config_name,            # Structure optimisée (pour comparer uniquement les runs compatibles)
 
             # — paramètres DE —
             budget=budget,                      # Budget d’évaluations
             Npop=Npop,                          # Taille de population
+            
+            wavelength_range=(lam_min, lam_max),
 
             # — espace de recherche —
             keys=keys,                          # Paramètres optimisés
@@ -634,7 +722,7 @@ class OptimizationTab:
         Trace : convergence, consistency, bar des paramètres, spectre final.
         """
         self._refresh_file_list()
-        h5file = self.opt_file_dd.value
+        h5file = self.opt_file_arbo.get_selected_file()
         if h5file is None:
             raise RuntimeError("Aucun fichier HDF5 sélectionné.")
 

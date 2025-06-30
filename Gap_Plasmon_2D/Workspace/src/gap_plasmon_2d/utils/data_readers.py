@@ -33,6 +33,7 @@ import numpy as np
 import pandas as pd
 import h5py
 from pathlib import Path
+from typing import List
 
 # ------------------------------------------------------------------ #
 #                       extraction utilitaires                       #
@@ -535,7 +536,6 @@ def read_optimization_hdf5(h5path: str) -> dict:
             return v.decode() if isinstance(v, (bytes, np.bytes_)) else v
 
         out = dict(
-            run_id         = _decode(grp.attrs["run_id"]),
             config_name    = _decode(grp.attrs.get("config_name", "")),  # <- NEW
             budget         = int(grp.attrs["budget"]),
             Npop           = int(grp.attrs["Npop"]),
@@ -579,12 +579,17 @@ def read_optimization_hdf5(h5path: str) -> dict:
 # --------------------------------------------------------------------------- #
 #                       Lister les fichiers d’optimisation                    #
 # --------------------------------------------------------------------------- #
-def list_optimization_files(summary_opt_dir: str) -> list[str]:
+def list_optimization_files(summary_opt_dir: str) -> List[str]:
     """
-    Retourne la liste triée (par nom) de tous les fichiers Opt_*.h5
-    présents dans `summary_opt_dir`.
+    Retourne la liste (triée) de *tous* les fichiers .h5
+    situés dans summary_opt_dir et ses sous-dossiers.
     """
     p = Path(summary_opt_dir)
-    files = sorted(p.glob("Opt_*.h5"), key=lambda f: f.name)
-    # On renvoie des str pour utilisation directe dans un Dropdown IPywidgets
+    # On attrape TOUTES les .h5, ou on peut restreindre
+    # à ceux dont le nom commence par "B" et contient "_P"
+    files = sorted(
+        p.rglob("B*_P*.h5"),
+        key=lambda f: f.as_posix()
+    )
     return [str(f) for f in files]
+

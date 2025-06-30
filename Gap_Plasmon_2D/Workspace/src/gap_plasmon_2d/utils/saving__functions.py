@@ -165,16 +165,53 @@ def save_figure(fig, title, figures_dir, material_str_clean: str | None = None):
 
 
 
+
+# ------------------------------------------------------------------ #
+#  Helpers : construire le chemin hiérarchique                       #
+# ------------------------------------------------------------------ #
+def _sanitize(name: str) -> str:
+    """Remplace les caractères gênants pour un nom de dossier/fichier."""
+    return re.sub(r'[^A-Za-z0-9_\-\.]+', '_', name.strip())
+
+def build_optim_path(base_dir: Path,
+                     family: str,
+                     cost_mode: str,
+                     config_name: str,
+                     budget: int,
+                     pop: int,
+                     wl_min: float,
+                     wl_max: float) -> Path:
+    """
+    Crée et retourne le dossier où ranger le .h5 d’optimisation, par ex. :
+
+    results/summary_optimisation/
+        multi_layer/lambda_fix/MyConfig/
+            budget10_pop30/wavelength_range_300:900/
+    """
+    path = ( base_dir
+             / _sanitize(family)
+             / _sanitize(cost_mode)
+             / _sanitize(config_name)
+             / f"budget{budget:02d}_pop{pop:02d}"
+             / f"wavelength_range_{int(wl_min)}:{int(wl_max)}" )
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+
 # --------------------------------------------------------------------------- #
 #                       Optimization files (HDF5)                             #
 # --------------------------------------------------------------------------- #
 def save_optimization_hdf5(
     *,
-    notebook_dir: str,
-    run_id: str,
-    config_name: str,                   # ← NOUVEAU : structure optimisée
+    notebook_dir: str,          # = paths.RESULTS_DIR   (racine "results/")
+    family: str,                # multi_layer | gap_plasmon_resonator | …
+    cost_mode: str,             # lambda_fix | lambda_range | lambda_dip | lambda_fwhm
+    config_name: str,
     budget: int,
     Npop: int,
+    wavelength_range: tuple[float, float],   # (lam_min, lam_max)
+    # --- le reste est inchangé ---
     keys: list[str],
     lowers: np.ndarray,
     uppers: np.ndarray,
@@ -204,19 +241,31 @@ def save_optimization_hdf5(
     best_cost
         Valeur min(cf_final) = coût associé à *best_final*.
     """
-    summary_dir = Path(notebook_dir) / "summary_optimisation"
-    summary_dir.mkdir(parents=True, exist_ok=True)
+    from gap_plasmon_2d.utils.saving__functions import build_optim_path  # déjà présent en bas
 
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    h5path = summary_dir / f"Opt_{run_id}_{stamp}.h5"
+    # 1) Dossier racine « summary_optimisation »
+    root = Path(notebook_dir) / "summary_optimisation"
+
+    # 2) Crée / récupère le dossier hiérarchique adéquat
+    lam_min, lam_max = wavelength_range
+    dest_dir = build_optim_path(
+        root, family, cost_mode, config_name,
+        budget, Npop, lam_min, lam_max
+    )
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # 3) Nom du fichier .h5 (BXX_PYY.h5)
+    h5path = dest_dir / f"B{budget:02d}_P{Npop:02d}.h5"
+
+    run_key = f"budget{budget:02d}_pop{Npop:02d}"
+
 
     with h5py.File(h5path, "a") as f:
-        grp = f.require_group(f"{run_id}_{stamp}")
+        grp = f.require_group(run_key)
 
         # ─── Méta-données générales ──────────────────────────────────────
         grp.attrs.update(
             date=datetime.now().isoformat(),
-            run_id=run_id,
             config_name=config_name,    
             budget=budget,
             Npop=Npop,
