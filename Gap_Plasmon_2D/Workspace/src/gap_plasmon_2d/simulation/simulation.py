@@ -107,7 +107,7 @@ class SimulationTab:
             value=400, description="Points:",
             layout=Layout(width='200px'), style={'description_width': 'initial'})
         self.sim_n_mod = widgets.IntText(
-            value=5, description="Modes:",
+            value=5, description="RCWA Fourier modes:",
             layout=Layout(width='200px'), style={'description_width': 'initial'})
 
         for w in (self.sim_lambda_min,
@@ -168,7 +168,7 @@ class SimulationTab:
             options=[('Fixe', 'fixed'),
                      ('Personnalisé', 'custom'),
                      ('Automatique', 'auto')],
-            value='fixed', description='Modes:',
+            value='fixed', description='RCWA Fourier modes:',
             style={'description_width': 'initial'})
         self.custom_modes_box = VBox()
 

@@ -33,7 +33,7 @@ import numpy as np
 import pandas as pd
 import h5py
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Optional
 
 # ------------------------------------------------------------------ #
 #                       extraction utilitaires                       #
@@ -522,56 +522,110 @@ def get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params):
 # --------------------------------------------------------------------------- #
 #             Lecture d’un fichier HDF5 produit par save_optimization_hdf5   #
 # --------------------------------------------------------------------------- #
-def read_optimization_hdf5(h5path: str) -> dict:
+
+
+def read_optimization_hdf5(
+    h5path: str,
+    run_key: Optional[str] = None
+) -> Dict[str, Any]:
     """
-    Charge un fichier *.h5* d’optimisation et renvoie toutes les
+    Charge un run d’optimisation dans un fichier *.h5* et renvoie toutes les
     données pertinentes dans un dictionnaire Python.
+
+    Parameters
+    ----------
+    h5path
+        Chemin vers le fichier HDF5.
+    run_key
+        Nom du groupe à extraire (ex. "budget10_pop05_20250627T153012").
+        Si None, on prend le premier groupe disponible.
+
+    Returns
+    -------
+    out : dict
+        {
+          'run_key': str,         # clé du groupe lu
+          'config_name': str,
+          'budget': int,
+          'Npop': int,
+          'mode': str,
+          'best_cost': float,
+          'keys': List[str],
+          'lowers': np.ndarray,
+          'uppers': np.ndarray,
+          'conv_best': np.ndarray,
+          'conv_evals': np.ndarray,
+          'cf_final': np.ndarray,
+          'best': np.ndarray,
+          'best_final': np.ndarray,
+          'best_after_eval': Optional[np.ndarray],
+          'spectra': {
+               'wavelength': np.ndarray,
+               'Rup': np.ndarray,
+               'Rdown': Optional[np.ndarray]
+          }   # seulement si présent
+        }
     """
     with h5py.File(h5path, "r") as f:
-        grp_key = next(iter(f.keys()))     # ex. "budget1000_pop30_20250627_123456"
-        grp = f[grp_key]
+        # 1) sélection du groupe
+        available = list(f.keys())
+        if not available:
+            raise RuntimeError(f"{h5path!r} ne contient aucun groupe de run")
+        if run_key is None:
+            run_key = available[0]
+        elif run_key not in available:
+            raise KeyError(f"run_key {run_key!r} non trouvé dans {h5path!r}")
+        grp = f[run_key]
 
-        # ─── Lecture sécurisée des attributs ───────────────────────────
+        # 2) helper pour décoder bytes → str
         def _decode(v):
-            return v.decode() if isinstance(v, (bytes, np.bytes_)) else v
+            if isinstance(v, (bytes, np.bytes_)):
+                return v.decode()
+            return v
 
-        out = dict(
-            config_name    = _decode(grp.attrs.get("config_name", "")),  # <- NEW
-            budget         = int(grp.attrs["budget"]),
-            Npop           = int(grp.attrs["Npop"]),
-            mode           = _decode(grp.attrs["mode"]),
-            best_cost      = float(grp.attrs["best_cost"]),
-        )
+        # 3) lecture des attributs
+        out: Dict[str, Any] = {
+            "run_key": run_key,
+            "config_name": _decode(grp.attrs.get("config_name", "")),
+            "budget": int(grp.attrs["budget"]),
+            "Npop": int(grp.attrs["Npop"]),
+            "mode": _decode(grp.attrs["mode"]),
+            "best_cost": float(grp.attrs["best_cost"]),
+        }
 
-        # ─── Espace de recherche ───────────────────────────────────────
+        # 4) paramètres de l’espace de recherche
         params_grp = grp["parameters"]
-        out.update(
-            keys   = [_decode(k) for k in params_grp["keys"][:]],
-            lowers = params_grp["lowers"][:],
-            uppers = params_grp["uppers"][:],
-        )
+        out.update({
+            "keys": [_decode(k) for k in params_grp["keys"][:]],
+            "lowers": params_grp["lowers"][:],
+            "uppers": params_grp["uppers"][:],
+        })
 
-        # ─── Convergence et population finale ──────────────────────────
-        out["conv_best"]  = grp["conv_best"][:]
+        # 5) convergence & population finale
+        out["conv_best"] = grp["conv_best"][:]
         out["conv_evals"] = grp["conv_evals"][:]
-        out["cf_final"]   = grp["cf_final"][:]
+        out["cf_final"] = grp["cf_final"][:]
 
-        # ─── Meilleurs individus ───────────────────────────────────────
-        out["best"]       = grp["best"][:]
+        # 6) meilleurs individus
+        out["best"] = grp["best"][:]
         out["best_final"] = grp["best_final"][:]
         if "best_after_eval" in grp:
             out["best_after_eval"] = grp["best_after_eval"][:]
         else:
             out["best_after_eval"] = None
 
-        # ─── Spectres (optionnels) ─────────────────────────────────────
+        # 7) spectra (optionnels)
         if "spectra" in grp:
             spec = grp["spectra"]
-            out["spectra"] = dict(
-                wavelength = spec["wavelength"][:],
-                Rup        = spec["Rup"][:],
-                Rdown      = spec["Rdown"][:] if "Rdown" in spec else None,
-            )
+            spectra: Dict[str, Any] = {
+                "wavelength": spec["wavelength"][:],
+                "Rup": spec["Rup"][:]
+            }
+            if "Rdown" in spec:
+                spectra["Rdown"] = spec["Rdown"][:]
+            else:
+                spectra["Rdown"] = None
+            out["spectra"] = spectra
 
     return out
 
@@ -593,3 +647,14 @@ def list_optimization_files(summary_opt_dir: str) -> List[str]:
     )
     return [str(f) for f in files]
 
+
+
+def list_runs_in_h5(h5path: str) -> List[str]:
+    """
+    Renvoie la liste des groupes (run_keys) présents dans le fichier HDF5.
+    """
+    try:
+        with h5py.File(h5path, "r") as f:
+            return list(f.keys())
+    except Exception:
+        return []

@@ -16,6 +16,7 @@ import sys
 import multiprocessing as mp
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from datetime import time
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,6 +32,7 @@ from gap_plasmon_2d.utils.saving__functions import save_optimization_hdf5
 from gap_plasmon_2d.utils.data_readers import (
     read_optimization_hdf5,
     list_optimization_files,
+    list_runs_in_h5
 )
 from gap_plasmon_2d.utils.file_watchers import start_watcher
 
@@ -142,66 +144,71 @@ class OptimizationFileArboWidget:
         self.cost_mode_dd = widgets.Dropdown(description="Cost mode:")
         # Niveau 3 : liste plate des fichiers .h5 disponibles
         self.file_dd = widgets.Dropdown(description="File:")
-        # Conteneur horizontal
-        self.container = widgets.HBox([self.family_dd, self.cost_mode_dd, self.file_dd],
-                                     layout=widgets.Layout(gap="10px"))
+        self.run_dd       = widgets.Dropdown(description="Run:")
         
-        # 1) Enregistre d’abord les observers
-        self.family_dd.observe(self._on_family_changed, names="value")
-        self.cost_mode_dd.observe(self._on_cost_mode_changed, names="value")
+        # UI container
+        self.widget = widgets.HBox(
+            [self.family_dd, self.cost_mode_dd, self.file_dd, self.run_dd],
+            layout=widgets.Layout(gap="10px")
+        )
+
+        # 1) quand on change famille ou cost_mode, on met à jour les fichiers
+        for dd in (self.family_dd, self.cost_mode_dd):
+            dd.observe(lambda _: self._refresh_file_list(), names="value")
+
+        # 2) quand on change de fichier, on liste **seulement** les runs
+        self.file_dd.observe(lambda _: self._refresh_run_list(), names="value")
+
+        # premier peuplement
+        self._refresh_file_list()
+        self._refresh_run_list()
         
-        # 2) Puis remplis les familles (le set value() déclenchera automatiquement _on_family_changed)
-        self._populate_families()
+    def _list_subdirs(self, path: Path) -> list[str]:
+        return sorted(p.name for p in path.iterdir() if p.is_dir())
 
+    def _list_h5_files(self, path: Path) -> list[tuple[str,str]]:
+        files = sorted(path.rglob("*.h5"), key=lambda f: f.as_posix())
+        return [(f.relative_to(self.base_dir).as_posix(), str(f)) for f in files]
 
-    def _populate_families(self):
-        # lister tous les sous-dossiers de base_dir
-        fams = sorted([d.name for d in self.base_dir.iterdir() if d.is_dir()])
-        self.family_dd.options = [(f, f) for f in fams]
-        # par défaut, on déclenche le premier
-        if fams:
-            self.family_dd.value = fams[0]
+    def _refresh_file_list(self) -> None:
+        # 1) Familles
+        fams = self._list_subdirs(self.base_dir)
+        self.family_dd.options = fams
 
-    def _on_family_changed(self, change):
-        fam = change["new"]
-        if not fam:
+        # 2) Cost modes (sous-dossier famille)
+        if self.family_dd.value:
+            self.cost_mode_dd.options = self._list_subdirs(
+                self.base_dir / self.family_dd.value
+            )
+        else:
             self.cost_mode_dd.options = []
-            self.file_dd.options = []
-            return
-        cost_dir = self.base_dir / fam
-        modes = sorted([d.name for d in cost_dir.iterdir() if d.is_dir()])
-        self.cost_mode_dd.options = [(m, m) for m in modes]
-        # reset des fichiers
-        self.file_dd.options = []
-        if modes:
-            self.cost_mode_dd.value = modes[0]
 
-    def _on_cost_mode_changed(self, change):
-        fam = self.family_dd.value
-        mode = change["new"]
-        if not (fam and mode):
-            self.file_dd.options = []
-            return
-        # récupère tous les .h5 dans le sous-arbre fam/mode
-        search_dir = self.base_dir / fam / mode
-        files = sorted(search_dir.rglob("*.h5"), key=lambda f: f.as_posix())
-        opts = [ (f.relative_to(self.base_dir).as_posix(), str(f)) for f in files ]
+        # 3) Fichiers (sous-dossier cost_mode)
+        if self.family_dd.value and self.cost_mode_dd.value:
+            opts = self._list_h5_files(
+                self.base_dir / self.family_dd.value / self.cost_mode_dd.value
+            )
+        else:
+            opts = []
         self.file_dd.options = opts
-        if opts:
-            # sélectionne automatiquement le premier fichier
-            self.file_dd.value = opts[0][1]
+
+
+
+    def _refresh_run_list(self):
+        h5path = self.file_dd.value
+        if h5path:
+            runs = list_runs_in_h5(h5path)
+            self.run_dd.options = runs
+            if self.run_dd.value not in runs:
+                self.run_dd.value = runs[0] if runs else None
+        else:
+            self.run_dd.options = []
+            self.run_dd.value = None
+
+
 
     def get_selected_file(self) -> str | None:
-        """Renvoie le chemin complet du fichier HDF5 sélectionné."""
         return self.file_dd.value
-
-
-    def refresh(self):
-        """Force la remise à jour de la liste des fichiers."""
-        mode = self.cost_mode_dd.value
-        if mode is not None:
-            self._on_cost_mode_changed({"new": mode})
-
 # -----------------------------------------------------------------------------#
 #  Main widget class                                                           #
 # -----------------------------------------------------------------------------#
@@ -216,6 +223,7 @@ class OptimizationTab:
     def __init__(self, sim_obj: SimulationTab) -> None:
         self.sim = sim_obj
         self.json_combined_path = str(json_combined_path)
+
 
         # Conteneur pour les widgets bornes
         self.bounds_box = widgets.VBox(
@@ -272,8 +280,8 @@ class OptimizationTab:
 
 
 
-        self._toggle_refl_widgets({"new": self.cost_mode.value})      # état initial
-        self.cost_mode.observe(self._toggle_refl_widgets, names="value")
+        self._toggle_CF_mode_widgets({"new": self.cost_mode.value})      # état initial
+        self.cost_mode.observe(self._toggle_CF_mode_widgets, names="value")
 
 
 
@@ -287,10 +295,16 @@ class OptimizationTab:
         # Watcher pour maj auto de la liste
         self._observer = start_watcher(
             path=str(self.summary_opt_dir),
-            callback=self._refresh_file_list,
+            callback=lambda *_: (
+                self.opt_file_arbo._refresh_file_list(),
+                self.opt_file_arbo._refresh_run_list()
+            ),
             extensions=[".h5"],
             recursive=True,
         )
+
+        # appel initial pour peupler
+        self.opt_file_arbo._refresh_file_list()
 
         # Contrôles DE
         self.budget_w = widgets.IntText(value=100, description="Budget")
@@ -303,43 +317,86 @@ class OptimizationTab:
 
         # Bouton de tracé des résultats
         self.plot_btn = widgets.Button(
-            description="Tracer résultats", button_style="info"
+            description="Plot results", button_style="info"
         )
         self.plot_btn.on_click(self.plot_optimization_results)
 
-        # Assemblage des contrôles supérieurs
-        controls = widgets.HBox(
-            [self.family_dd, self.budget_w, self.pop_w, self.run_btn,
-            self.opt_file_arbo.container, self.plot_btn ],
-            layout=widgets.Layout(margin='10px', flex_wrap='wrap',
-                                align_items='center')
-        )
+        # 1) Colonne de gauche (Simulation)
+        left_col = widgets.VBox([
+            widgets.HTML(value="<b>Configurations & Δn</b>"),
+            self.sim.config_selector,  # toggle + refresh + cases Config/Δn
 
-        self.ui = widgets.VBox(
-            [ self.bounds_box,
+            widgets.HTML(value="<b>Spectrum (nm)</b>"),
+            widgets.HBox(
+                [self.sim.sim_lambda_min, self.sim.sim_lambda_max, self.sim.sim_n_points],
+                layout=widgets.Layout(gap='10px')
+            ),
+
+            
+            self.sim.mode_selection,
+            self.sim.sim_n_mod,
+            self.sim.custom_modes_box,
+
+            widgets.HTML(value="<b>Δn & Layers</b>"),
+            widgets.HBox(
+                [self.sim.delta_n_widget, self.sim.layer_selector],
+                layout=widgets.Layout(gap='10px')
+            ),
+        ], layout=widgets.Layout(width='48%', padding='10px'))
+
+        # 2) Colonne de droite (Optimisation)
+        right_col = widgets.VBox([
+            widgets.HTML(value="<b>Bounds</b>"),
+            self.bounds_box,
+
+            widgets.HTML(value="<b>Type of Cost Function</b>"),
             self.cost_mode,
-            widgets.HBox([self.lambda0_w, self.band_box]),
-            controls,
-            self.out ],
-            layout=widgets.Layout(padding='10px')
-        )
+            widgets.HBox([self.lambda0_w, self.band_box],
+                        layout=widgets.Layout(gap='10px')),
+
+            widgets.HTML(value="<b>DE parameters</b>"),
+            widgets.HBox([self.budget_w, self.pop_w, self.run_btn],
+                        layout=widgets.Layout(gap='10px')),
+        ], layout=widgets.Layout(width='48%', padding='10px'))
+
+        # 3) Ligne du bas (full width)
+        bottom_controls = widgets.HBox([
+            self.opt_file_arbo.widget,
+            self.plot_btn,
+        ], layout=widgets.Layout(justify_content='space-around', margin='10px'))
+
+        # 4) Zone de sortie pour le plot (plein width)
+        plot_area = self.out
+
+        # 5) Assemblage final
+        self.ui = widgets.VBox([
+            widgets.HBox([left_col, right_col],
+                        layout=widgets.Layout(justify_content='space-between')),
+            bottom_controls,
+            plot_area
+        ], layout=widgets.Layout(padding='10px'))
 
 
-        # Observe la sélection de configuration
-        for cb in self.sim.config_checkboxes.values():
-            cb.observe(self.update_optimization, names="value")
 
+        # branchements initiaux
+        self._attach_config_observers()
+
+        # hook sur le bouton Refresh de SimulationTab
+        self.sim.config_refresh_btn.on_click(self._on_configs_refreshed)
 
         # s'assurer que l'attribut existe, même si update_optimization retourne tôt
         self.param_widgets: Dict[str, Dict[str, widgets.Widget]] = {}
         # Met à jour la liste de paramètres
         self.update_optimization()
 
-        if self.param_widgets:          # au moins une config cochée
+
+
+
+
+        if self.param_widgets:          # au moins une config cochée pour run DE
             self._update_run_button_state()
         else:
             self.run_btn.disabled = True
-    
 
         # Callbacks
         self.run_btn.on_click(self._on_run)
@@ -352,20 +409,36 @@ class OptimizationTab:
         _attach_observers()
 
 
-
     # ------------------------------------------------------------------#
     #  UI helpers                                                       #
     # ------------------------------------------------------------------#
-    def _refresh_file_list(self):
-        self.opt_file_arbo.refresh()
+    def _on_configs_refreshed(self, _):
+        """
+        Quand SimulationTab recharge ses config_checkboxes,
+        on rebranche nos observers et on vide le bounds_box
+        pour que l’utilisateur puisse recliquer et repeupler.
+        """
+        # 1) (re)branche la callback sur TOUTES les cases
+        self._attach_config_observers()
+        # 2) on vide la zone des bounds (update_optimization la repopulera)
+        self.bounds_box.children = []
+        self.param_widgets = {}
 
 
 
-    def _toggle_refl_widgets(self, change: Dict[str, Any]) -> None:
+    def _attach_config_observers(self):
+        """(Re)branche update_optimization sur chaque checkbox."""
+        for cb in self.sim.config_checkboxes.values():
+            cb.observe(self.update_optimization, names="value")
+
+
+    def _toggle_CF_mode_widgets(self, change: Dict[str, Any]) -> None:
         """Affiche/masque les widgets selon le mode calcul choisi."""
         m = change["new"]
         self.lambda0_w.layout.display = "" if m == "fixed_lambda" else "none"
         self.band_box.layout.display = "" if m == "range_lambda" else "none"
+
+
 
     def close(self) -> None:
         """Explicitly release resources held by the observer."""
@@ -377,8 +450,11 @@ class OptimizationTab:
                 pass
             self._observer = None
 
+
+
     def __del__(self) -> None:
         self.close()
+
 
     def _update_run_button_state(self, *_):
         """
@@ -438,7 +514,7 @@ class OptimizationTab:
         )
 
         # --- mise à jour de la liste des fichiers & résumé -------------------
-        self._refresh_file_list()
+        self.opt_file_arbo._refresh_file_list()
         with self.out:
             print("✅ Optimization ended.")
             print(f"Best cost   : {best_cost:.6g}")
@@ -721,23 +797,62 @@ class OptimizationTab:
         """
         Trace : convergence, consistency, bar des paramètres, spectre final.
         """
-        self._refresh_file_list()
+        self.opt_file_arbo._refresh_file_list()
+
         h5file = self.opt_file_arbo.get_selected_file()
+        run_key = self.opt_file_arbo.run_dd.value
+
         if h5file is None:
             raise RuntimeError("Aucun fichier HDF5 sélectionné.")
 
-        data = read_optimization_hdf5(str(h5file))
+        # 2) Lecture du run
+        data = read_optimization_hdf5(h5file, run_key=run_key)
 
-        # Spectres
-        lam, Rup, Rdown = None, None, None
-        if "spectra" in data:
-            lam = data["spectra"]["wavelength"]
-            Rup = data["spectra"]["Rup"]
-            Rdown = data["spectra"]["Rdown"]
+        ref_keys    = tuple(data['keys'])
+        ref_lowers  = np.asarray(data['lowers'])
+        ref_uppers  = np.asarray(data['uppers'])
+        ref_cfg     = data['config_name']
+        ref_budget  = data['budget']
+        ref_Npop    = data['Npop']
+        ref_mode    = data['mode']
+
+        # On récupère aussi family & cost_mode depuis le chemin
+        rel = Path(h5file).relative_to(self.summary_opt_dir)
+        ref_family, ref_cost_mode = rel.parts[0], rel.parts[1]
+
+        # 3) Balayage de tous les fichiers + tous les runs
+        all_best = []
+        for fpath in list_optimization_files(str(self.summary_opt_dir)):
+            # n’applique que si même family/cost_mode
+            rel = Path(fpath).relative_to(self.summary_opt_dir)
+            fam, cost = rel.parts[0], rel.parts[1]
+            if fam != ref_family or cost != ref_cost_mode:
+                continue
+
+            for rk in list_runs_in_h5(fpath):
+                dat = read_optimization_hdf5(fpath, run_key=rk)
+
+                # Compare les métadonnées inchangées
+                if (
+                    dat['budget']    == ref_budget and
+                    dat['Npop']      == ref_Npop   and
+                    dat['mode']      == ref_mode   and
+                    dat['config_name']== ref_cfg   and
+                    tuple(dat['keys']) == ref_keys and
+                    np.allclose(dat['lowers'], ref_lowers) and
+                    np.allclose(dat['uppers'], ref_uppers)
+                ):
+                    all_best.append(float(dat['best_cost']))
+
+        all_best = np.sort(all_best)
+
 
         keys = data["keys"]
         best_vec = data["best_final"]     # Meilleur structure après réévaluation final
         conv_best = data.get("conv_best", data.get("best_after_eval"))    # Meilleur coût à chaque génération
+
+
+
         # --------------------------- FIGURE ---------------------------- #
         fig, axs = plt.subplots(2, 2, figsize=(12, 8))
         ax0, ax1, ax2, ax3 = axs.flat
@@ -750,46 +865,13 @@ class OptimizationTab:
         ax0.grid(True)
 
 
-        # ------------------------------------------------------------
-        # 1) Lire les méta-données du run actuellement affiché
-        # ------------------------------------------------------------
-        ref_keys   = tuple(data['keys'])          # ordre et contenu
-        ref_lowers = np.asarray(data['lowers'])
-        ref_uppers = np.asarray(data['uppers'])
-        ref_cfg    = data['config_name']  # par ex. nom de la structure
-
-        # ------------------------------------------------------------
-        # 2) Balayer tous les .h5 du dossier et filtrer
-        # ------------------------------------------------------------
-        all_best = []
-        for f in list_optimization_files(str(self.summary_opt_dir)):
-            dat = read_optimization_hdf5(f)
-
-            # — mêmes clés ? —
-            if tuple(dat['keys']) != ref_keys:
-                continue
-            # — mêmes bornes ? —
-            if not (np.allclose(dat['lowers'], ref_lowers)
-                    and np.allclose(dat['uppers'], ref_uppers)):
-                continue
-            # — même configuration (structure) ? —
-            if dat['config_name'] != ref_cfg:
-                continue
-
-            # Si tous les critères sont OK, on ajoute le best_cost
-            all_best.append(float(dat['best_cost']))
-
-        # Tri pour la courbe de confiance
-        all_best = np.sort(all_best)
-
-        # ------------------------------------------------------------
-        # 3) Affichage de la courbe « confidence »
-        # ------------------------------------------------------------
+        # Tracé consistency (tous les best_cost compatibles)
         if len(all_best) >= 2:
             ax1.plot(all_best, marker='o')
-            ax1.set_title("Confidence curve (compatible runs)")
+            ax1.set_title("Consistency curve (all compatible runs)")
         else:
-            ax1.text(0.5, 0.5, "Need ≥ 2 compatible runs",
+            ax1.text(0.5, 0.5,
+                    "Il faut ≥ 2 runs compatibles pour la consistency",
                     ha='center', va='center', transform=ax1.transAxes)
 
         # ------------------------------------------------------------
@@ -804,6 +886,12 @@ class OptimizationTab:
 
 
         # Spectre
+        lam, Rup, Rdown = None, None, None
+        if "spectra" in data:
+            lam = data["spectra"]["wavelength"]
+            Rup = data["spectra"]["Rup"]
+            Rdown = data["spectra"]["Rdown"]
+
         if lam is not None:
             ax3.plot(lam, Rup, label="Rup")
             if Rdown is not None:

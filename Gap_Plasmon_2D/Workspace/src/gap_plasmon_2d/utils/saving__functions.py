@@ -256,8 +256,9 @@ def save_optimization_hdf5(
 
     # 3) Nom du fichier .h5 (BXX_PYY.h5)
     h5path = dest_dir / f"B{budget:02d}_P{Npop:02d}.h5"
+    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
 
-    run_key = f"budget{budget:02d}_pop{Npop:02d}"
+    run_key = f"budget{budget:02d}_pop{Npop:02d}_{timestamp}"
 
 
     with h5py.File(h5path, "a") as f:

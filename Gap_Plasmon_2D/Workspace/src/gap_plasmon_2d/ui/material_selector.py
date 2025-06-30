@@ -823,23 +823,23 @@ class MaterialSelectorTabbedNotebook:
         self.preconfigs = {
             "Preconfig Structure 1": {
                 "perm_env": {"type": "None"},
-                "perm_gap": {"type": "Custom", "expression": "1.45**2"},
-                "perm_diel": {"type": "Custom", "expression": "1.45**2"},
-                "perm_func": {"type": "None"},
-                "perm_mol": {"type": "None"},
-                "perm_sub": {"type": "Standard", "material": "ITO"},
                 "perm_reso": {"type": "Standard", "material": "Silver"},
+                "perm_mol": {"type": "None"},
+                "perm_func": {"type": "None"},
+                "perm_diel": {"type": "Custom", "expression": "1.45**2"},
+                "perm_gap": {"type": "Custom", "expression": "1.45**2"},
                 "perm_metalliclayer": {"type": "Standard", "material": "Gold"},
                 "perm_XIAOYI": {"type": "Standard", "material": "Si"},
-                "perm_accroche": {"type": "None"}
+                "perm_accroche": {"type": "None"},
+                "perm_sub": {"type": "Standard", "material": "ITO"}
             },
             "Preconfig Structure 2": {
                 "perm_env": {"type": "None"},
-                "perm_gap": {"type": "Custom", "expression": "1.45**2"},
-                "perm_diel": {"type": "Custom", "expression": "1.45**2"},
-                "perm_func": {"type": "None"},
-                "perm_mol": {"type": "None"},
                 "perm_reso": {"type": "Standard", "material": "Silver"},
+                "perm_mol": {"type": "None"},
+                "perm_func": {"type": "None"},
+                "perm_diel": {"type": "Custom", "expression": "1.45**2"},
+                "perm_gap": {"type": "Custom", "expression": "1.45**2"},
                 "perm_metalliclayer": {"type": "Standard", "material": "Gold"},
                 "perm_XIAOYI": {"type": "Standard", "material": "Si"},
                 "perm_accroche": {"type": "Standard", "material": "Aluminium"},
@@ -1169,8 +1169,8 @@ class MaterialSelectorTabbedNotebook:
 # Rôles par défaut et lancement du Material Selector
 # ============================================================================
 DEFAULT_ROLES = [
-    "perm_env", "perm_gap", "perm_diel", "perm_func", "perm_mol",
-    "perm_reso", "perm_metalliclayer", "perm_XIAOYI", "perm_accroche", "perm_sub"
+    "perm_env", "perm_reso", "perm_mol", "perm_func", "perm_diel", "perm_gap",
+    "perm_metalliclayer", "perm_XIAOYI", "perm_accroche", "perm_sub"
 ]
 
 selector = MaterialSelectorTabbedNotebook(DEFAULT_ROLES)
