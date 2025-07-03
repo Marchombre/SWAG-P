@@ -110,8 +110,11 @@ def create_advanced_app():
             plot_obj.update_spectra()
         elif idx == 2 and hasattr(diff_obj, 'update_diff_options'):
             diff_obj.update_diff_options()
-        elif idx == 3 and hasattr(opt_obj, 'update_optimization'):
-            opt_obj.update_optimization()
+        # elif idx == 3:                       # onglet Optimisation
+        #     # ne rafraîchit que si l’optimisation n’est
+        #     # ni en cours, ni déjà correctement initialisée
+        #     if (not opt_obj._is_running) and (not opt_obj.param_widgets):
+        #         opt_obj.update_optimization()
 
     tabs.observe(on_tab_change, names='selected_index')
     return widgets.VBox([tabs])

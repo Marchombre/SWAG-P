@@ -259,30 +259,34 @@ class OptimizationTab:
     #  Construction / UI                                                 #
     # ------------------------------------------------------------------#
     def __init__(self, sim_obj: SimulationTab) -> None:
-        self.sim = sim_obj
+        # ─────────────────────────  saved references  ──────────────────────────
+        self.sim                = sim_obj
         self.json_combined_path = str(json_combined_path)
 
-        self._cancelled = False
-        self._pool      = None
+        # runtime-state flags/handles
+        self._is_running   = False         
+        self._cancelled    = False
+        self._pool         = None
+        self._worker_thread = None
 
-        # Process dédié à DE_general + queue pour récupérer les résultats
-        ctx = mp.get_context("fork" if sys.platform != "win32" else "spawn")
-        self._de_process: mp.Process | None = None
-        self._result_queue: mp.Queue = ctx.Queue()
+        # background process / queue (may still be used by DE_general)
+        ctx                 = mp.get_context("fork" if sys.platform != "win32" else "spawn")
+        self._de_process    = None          # type: mp.Process | None
+        self._result_queue  = ctx.Queue()
 
+        # ------------------------------------------------------------------ #
+        #   STATIC UI — all widgets created **once** and kept forever
+        # ------------------------------------------------------------------ #
 
-        # Conteneur pour les widgets bornes
+        # Bounds table container (left column later)
         self.bounds_box = widgets.VBox(
-            layout=widgets.Layout(
-                border="1px solid #ccc", padding="8px", gap="5px"
-            )
+            layout=widgets.Layout(border="1px solid #ccc", padding="8px", gap="5px")
         )
 
-        # Choix de la famille (racine de la branche)
-        self.family_dd = widgets.Dropdown(
+        # Families / cost modes selector (small widgets; unchanged code omitted)
+        self.family_dd  = widgets.Dropdown(
             options=['multi_layer', 'gap_plasmon_resonator'],
-            value='multi_layer',
-            description='Family:',
+            value='multi_layer', description='Family:',
             style={'description_width': 'initial'},
             layout=widgets.Layout(width='220px')
         )
@@ -377,6 +381,20 @@ class OptimizationTab:
         )
         self.plot_btn.on_click(self.plot_optimization_results)
 
+
+        # -------------  PERMANENT runtime widgets (status + progress) -------------
+        self._status_html  = widgets.HTML("")          # line that will show the text
+        self._progress_bar = widgets.FloatProgress(
+            value=0, min=0, max=1, description="0 %",
+            bar_style="info",
+            layout=widgets.Layout(width="100%", display="none")  # hidden at start
+        )
+        self.runtime_box   = widgets.VBox(
+            [self._status_html, self._progress_bar],
+            layout=widgets.Layout(gap="4px")
+        )
+
+
         # 1) Colonne de gauche (Simulation)
         left_col = widgets.VBox([
             widgets.HTML(value="<b>Configurations & Δn</b>"),
@@ -412,7 +430,7 @@ class OptimizationTab:
 
             widgets.HTML(value="<b>DE parameters</b>"),
             widgets.HBox([self.budget_w, self.pop_w, self.run_btn, self.cancel_btn],
-                        layout=widgets.Layout(gap='10px')),
+                        layout=widgets.Layout(gap='10px')), self.runtime_box
         ], layout=widgets.Layout(width='48%', padding='10px'))
 
         # 3) Ligne du bas (full width)
@@ -527,20 +545,30 @@ class OptimizationTab:
     #  Callback : lancement DE                                          #
     # ------------------------------------------------------------------#
     def _on_run(self, _):
-        """Démarrage de l’optimisation : thread + Pool processeurs."""
+        """
+        Called when the user clicks ‘Run DE’.
+        Shows the message first; the progress-bar will be inserted later
+        by _check_process when the first result arrives.
+        """
 
-        # ── jauge ───────────────────────────────────────────
-        self._progress_bar = widgets.FloatProgress(
-            value=0.0, min=0.0, max=1.0,
-            bar_style="info", description="0 %",
-            layout=widgets.Layout(width="100%")
+
+        if self._is_running:        # guard against double-click
+            return
+        self._is_running = True
+        self._cancelled  = False
+        self.cancel_btn.disabled = False
+
+        # ----------  reset runtime widgets ----------
+        self._status_html.value            = (
+            "🚀 Optimization is running… (you can Cancel)<br>"
+            "The progress-bar will appear after the first evaluation."
         )
-        with self.out:
-            self.out.clear_output()
-            print("🚀 Optimization is running…  (you can Cancel)")
-            display(self._progress_bar)
+        self._progress_bar.value           = 0
+        self._progress_bar.description     = "0 %"
+        self._progress_bar.bar_style       = "info"
+        self._progress_bar.layout.display  = "none"   # stay hidden for now
 
-        # ── collecte des paramètres UI ─────────────────────
+        # ----------  collect UI parameters (unchanged) ----------
         extra_kwargs = {}
         mode = self.cost_mode.value
         if mode == "fixed_lambda":
@@ -549,12 +577,16 @@ class OptimizationTab:
             extra_kwargs["range_lambda"] = (self.band_min_w.value,
                                             self.band_max_w.value)
 
-        keys   = [k for k,w in self.param_widgets.items() if w["opt"].value]
+        keys   = [k for k, w in self.param_widgets.items() if w["opt"].value]
+        if not keys:
+            self._status_html.value = "⚠️ No parameter selected for optimisation."
+            self._is_running = False
+            self.cancel_btn.disabled = True
+            return
+
         lowers = np.array([self.param_widgets[k]["low"].value for k in keys])
         uppers = np.array([self.param_widgets[k]["up"].value  for k in keys])
-        if not keys:
-            with self.out: print("⚠️ Parameters to optimise : none.")
-            return
+
 
         # ── queue de progression & thread lanceur ──────────
         self._result_queue = q.Queue()
@@ -594,58 +626,60 @@ class OptimizationTab:
 
 
     def _check_process(self):
-        """Lit tous les messages dispo, met à jour la jauge, re-planifie."""
+        """Poll the queue, update widgets, and reschedule itself."""
+        try:
+            tag, *payload = self._result_queue.get_nowait()
+        except q.Empty:
+            tag = None
 
-        while True:
-            try:
-                tag, *payload = self._result_queue.get_nowait()
-            except q.Empty:
-                break
+        # ── first PROG message → reveal bar, hide text ─────────────────────
+        if tag == "PROG" and self._progress_bar.layout.display == "none":
+            self._status_html.value       = ""            # hide message
+            self._progress_bar.layout.display = ""        # show bar
 
-            if tag == "PROG":                       # progression continue
-                frac, best = payload
-                self._progress_bar.value        = frac
-                self._progress_bar.description  = f"{int(frac*100):d} %"
+        if tag == "PROG":
+            frac, best = payload
+            self._progress_bar.value       = frac
+            self._progress_bar.description = f"{int(frac*100)} %"
 
-            elif tag == "DONE":                    # fin normale
-                conv_best, _, best_final, best_cost = payload
-                self._affiche_resultats(conv_best, best_final, best_cost)
-                return
+        elif tag == "DONE":
+            conv_best, _, best_final, best_cost = payload
+            self._affiche_resultats(conv_best, best_final, best_cost)
+            self._is_running = False
+            return
 
-            elif tag == "ERROR":                   # exception dans le thread
-                trace = payload[0]
-                with self.out:
-                    self.out.clear_output()
-                    print("❌  Optimization aborted:\n", trace)
-                self._progress_bar.bar_style = "danger"
-                self.cancel_btn.disabled    = True
-                return
+        elif tag == "ERROR":
+            trace = payload[0]
+            self._status_html.value   = f"❌ Optimization aborted:<br><pre>{trace}</pre>"
+            self._progress_bar.bar_style = "danger"
+            self.cancel_btn.disabled  = True
+            self._is_running = False
+            return
 
-        # thread toujours vivant ? → on continue à poller
-        if self._worker_thread.is_alive():
+        # --- keep polling while the thread lives ---
+        if self._worker_thread and self._worker_thread.is_alive():
             loop = get_ipython().kernel.io_loop
             loop.add_timeout(loop.time() + 0.1, self._check_process)
-        else:
-            # thread mort sans message DONE/ERROR (Cancel ou crash silencieux)
-            with self.out:
-                self.out.clear_output()
-                print("❌  Optimization stopped.")
-            self._progress_bar.bar_style = "danger"
-            self.cancel_btn.disabled    = True
 
 
 
 
     def _affiche_resultats(self, conv_best, best_final, best_cost):
-        """Affiche la synthèse finale et remet l’UI d’aplomb."""
+        """Show final results, leave bar green."""
         self.opt_file_arbo._refresh_file_list()
-        with self.out:
-            self.out.clear_output()
-            print("✅ Optimization ended.")
-            print(f"Best cost   : {best_cost:.6g}")
-            print("Best vector :", best_final)
+
+        vector_txt = np.array2string(best_final, precision=2, separator=', ')
+        self._status_html.value = (
+            "✅ Optimization ended.<br>"
+            f"<b>Best cost&nbsp;:</b> {best_cost:.4g}<br>"
+            f"<b>Best vector :</b> {vector_txt}"
+        )
+        self._progress_bar.value     = 1.0
         self._progress_bar.bar_style = "success"
-        self.cancel_btn.disabled = True
+        self.cancel_btn.disabled     = True
+
+
+
 
 
 
@@ -656,25 +690,21 @@ class OptimizationTab:
         – termine immédiatement le Pool worker s’il existe
         – affiche le message d’annulation
         """
-        self._cancelled = True
+        if not self._is_running:
+            return
+        self._cancelled  = True
+        self._is_running = False
+        self.cancel_btn.disabled = True
 
-        # si un Pool est en cours, on le termine tout de suite
-        if hasattr(self, "_pool") and self._pool is not None:
+        # terminate pool if alive
+        if self._pool is not None:
             self._pool.terminate()
             self._pool.join()
             self._pool = None
 
-        if self._de_process is not None and self._de_process.is_alive():
-            self._de_process.terminate()
-            self._de_process = None
-
-        # feedback utilisateur
-        with self.out:
-            self.out.clear_output()
-            print("❌ Optimization cancelled by user.")
-
-        # désactive à nouveau Cancel
-        self.cancel_btn.disabled = True
+        # terminate worker thread (let it die via the flag)
+        self._status_html.value   = "❌ Optimization cancelled by user."
+        self._progress_bar.bar_style = "danger"
 
 
 
@@ -727,6 +757,12 @@ class OptimizationTab:
                     layout=widgets.Layout(align_items="center", gap="10px"),
                 )
             )
+
+
+            # clear the log Output **only when nothing is running**
+            if not self._is_running:
+                self.out.clear_output()
+                
 
         self.bounds_box.children = rows
         # branche les observateurs et met à jour -------------
