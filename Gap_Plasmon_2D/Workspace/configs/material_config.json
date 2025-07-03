@@ -1339,7 +1339,7 @@
           "key": "perm_env",
           "material": {
             "type": "Custom",
-            "expression": "1",
+            "expression": "1.9**2",
             "override": [
               300.0,
               1000.0
@@ -1423,7 +1423,7 @@
           "key": "perm_sub",
           "material": {
             "type": "Custom",
-            "expression": "4",
+            "expression": "1.9**2",
             "override": [
               300.0,
               1000.0

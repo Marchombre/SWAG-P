@@ -7,6 +7,7 @@ scipy                # fonctions scientifiques (interpol., opti, fft…) utilis�
 pandas               # manipulations tabulaires (résumés CSV, .h5, etc.)
 matplotlib           # génération de toutes les figures / sauvegarde PNG
 Pillow               # backend PNG requis par Matplotlib pour fig.savefig(..., format="png")
+jupyter
 
 # === I/O, sérialisation, données =============================================
 PyYAML               # lecture/écriture des .yml (catalog_nk.yml, catalog_n2.yml…)
@@ -20,6 +21,7 @@ ipykernel            # exécution du kernel Python sous Jupyter / VS Code
 IPython              # helpers display, Javascript injection, etc.
 ipywidgets           # contrôles interactifs (SimulationTab, MaterialSelector…)
 ipyevents            # détection d’événements souris/clavier sur widgets
+ipympl
 voila                # déploiement du front-end interactif en dashboard Voila
 
 # === Interface bureau (optionnel) ============================================
