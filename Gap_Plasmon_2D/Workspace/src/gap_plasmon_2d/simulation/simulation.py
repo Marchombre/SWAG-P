@@ -107,7 +107,7 @@ class SimulationTab:
             value=400, description="Points:",
             layout=Layout(width='200px'), style={'description_width': 'initial'})
         self.sim_n_mod = widgets.IntText(
-            value=5, description="RCWA Fourier modes:",
+            value=5,
             layout=Layout(width='200px'), style={'description_width': 'initial'})
 
         for w in (self.sim_lambda_min,
@@ -163,12 +163,12 @@ class SimulationTab:
         self.sim_run_button = widgets.Button(
             description="Run simulation", button_style="success",
             tooltip="Start simulation",)
-
+        
         self.mode_selection = widgets.RadioButtons(
             options=[('Fixe', 'fixed'),
                      ('Personnalisé', 'custom'),
                      ('Automatique', 'auto')],
-            value='fixed', description='RCWA Fourier modes:',
+            value='fixed',
             style={'description_width': 'initial'})
         self.custom_modes_box = VBox()
 
@@ -406,6 +406,7 @@ class SimulationTab:
                 HBox([ self.sim_n_points,
                        self.sim_n_mod ]),
                 self.config_selector,
+                widgets.HTML(value="<b>RCWA Fourier modes</b>"),
                 HBox([ self.mode_selection,
                        self.layer_selector ]),
                 self.custom_modes_box,

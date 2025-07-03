@@ -1222,14 +1222,29 @@
           }
         },
         {
-          "key": "perm_gap",
+          "key": "perm_reso",
           "material": {
-            "type": "Custom",
-            "expression": "1.45**2",
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
-              300.0,
-              1000.0
+              247.97,
+              1936.97
             ]
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
           }
         },
         {
@@ -1244,28 +1259,13 @@
           }
         },
         {
-          "key": "perm_func",
+          "key": "perm_gap",
           "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "RefractiveIndex",
-            "shelf": "main",
-            "book": "Ag",
-            "page": "Rakic-BB",
-            "data": "main/Ag/nk/Rakic-BB.yml",
+            "type": "Custom",
+            "expression": "1.45**2",
             "override": [
-              247.97,
-              1936.97
+              300.0,
+              1000.0
             ]
           }
         },
@@ -1298,7 +1298,12 @@
         {
           "key": "perm_sub",
           "material": {
-            "type": "None"
+            "type": "Standard",
+            "material": "ITO",
+            "override": [
+              193.05,
+              1681.72
+            ]
           }
         }
       ],

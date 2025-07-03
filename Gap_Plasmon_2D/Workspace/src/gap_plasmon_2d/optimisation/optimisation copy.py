@@ -12,14 +12,8 @@ Optimisation.py
 from __future__ import annotations
 
 import multiprocessing as mp
-import multiprocessing.pool
-
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
-import sys
-
-import threading
-from functools import partial     # (pour l’init du Pool)
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -27,7 +21,6 @@ from IPython.display import display
 from IPython import get_ipython
 import ipywidgets as widgets
 from tqdm.notebook import trange
-import traceback, queue as q
 
 from gap_plasmon_2d import paths
 from gap_plasmon_2d.ui.geometry_settings import geometry_limits
@@ -266,7 +259,7 @@ class OptimizationTab:
         self._pool      = None
 
         # Process dédié à DE_general + queue pour récupérer les résultats
-        ctx = mp.get_context("fork" if sys.platform != "win32" else "spawn")
+        ctx = mp.get_context("fork")
         self._de_process: mp.Process | None = None
         self._result_queue: mp.Queue = ctx.Queue()
 
@@ -527,127 +520,69 @@ class OptimizationTab:
     #  Callback : lancement DE                                          #
     # ------------------------------------------------------------------#
     def _on_run(self, _):
-        """Démarrage de l’optimisation : thread + Pool processeurs."""
+        """Point d’entrée du bouton ‹ Run DE ›."""
+        # 1) initialise/bloque le bouton Cancel
+        self.cancel_btn.disabled = False
+        self._cancelled = False
 
-        # ── jauge ───────────────────────────────────────────
-        self._progress_bar = widgets.FloatProgress(
-            value=0.0, min=0.0, max=1.0,
-            bar_style="info", description="0 %",
-            layout=widgets.Layout(width="100%")
-        )
+        # 2) vide la sortie et affiche le message de démarrage
         with self.out:
             self.out.clear_output()
-            print("🚀 Optimization is running…  (you can Cancel)")
-            display(self._progress_bar)
+            print("🚀 Optimization is running, please wait…")
 
-        # ── collecte des paramètres UI ─────────────────────
-        extra_kwargs = {}
+        # 3) collecte des args
+        extra_kwargs: Dict[str, Any] = {}
         mode = self.cost_mode.value
         if mode == "fixed_lambda":
             extra_kwargs["fixed_lambda"] = self.lambda0_w.value
         elif mode == "range_lambda":
             extra_kwargs["range_lambda"] = (self.band_min_w.value,
-                                            self.band_max_w.value)
+                                           self.band_max_w.value)
 
-        keys   = [k for k,w in self.param_widgets.items() if w["opt"].value]
-        lowers = np.array([self.param_widgets[k]["low"].value for k in keys])
-        uppers = np.array([self.param_widgets[k]["up"].value  for k in keys])
+        keys = [k for k, w in self.param_widgets.items() if w["opt"].value]
         if not keys:
-            with self.out: print("⚠️ Parameters to optimise : none.")
+            with self.out:
+                print("⚠️ Parameters to optimize: none.")
+            self.cancel_btn.disabled = True
             return
 
-        # ── queue de progression & thread lanceur ──────────
-        self._result_queue = q.Queue()
-        args = dict(budget=self.budget_w.value,
-                    Npop   =self.pop_w.value,
-                    lowers =lowers, uppers=uppers,
-                    keys   =keys, mode=mode,
-                    progress_queue=self._result_queue,
-                    **extra_kwargs)
+        lowers = np.array([self.param_widgets[k]["low"].value for k in keys])
+        uppers = np.array([self.param_widgets[k]["up"].value for k in keys])
 
-        self._worker_thread = threading.Thread(
-            target=self.DE_general, kwargs=args, daemon=True)
-        self._worker_thread.start()
+        
+        # 3) Nettoyage éventuel de l’ancienne queue
+        while not self._result_queue.empty():
+            self._result_queue.get_nowait()
 
-        self.cancel_btn.disabled = False
-        self._cancelled = False
+        # 4) On lance tout DE_general dans un Process séparé
+        ctx = mp.get_context("fork")
+        self._de_process = ctx.Process(
+            target=self._run_de_process,
+            args=({
+                "budget": self.budget_w.value,
+                "Npop"  : self.pop_w.value,
+                "lowers": lowers,
+                "uppers": uppers,
+                "keys"  : keys,
+                "mode"  : mode,
+                **extra_kwargs
+            }, self._result_queue),
+            daemon=True
+        )
+        self._de_process.start()
 
-        # ── boucle de polling sur la queue ─────────────────
+        # 5) On démarre la boucle de polling non-bloquante
         loop = get_ipython().kernel.io_loop
         loop.add_timeout(loop.time() + 0.1, self._check_process)
 
-
-    @staticmethod
-    def _run_de_process(opt_tab: "OptimizationTab",
-                        args: dict,
-                        queue: mp.Queue) -> None:
-        """
-        Process fils : exécute DE_general *sans aucun widget/tqdm*,
-        en publiant la progression sur `queue`.
-        """
+    def _run_de_process(self, args: dict, queue: mp.Queue) -> None:
         try:
-            opt_tab.DE_general(progress_queue=queue, **args)
-            # (DE_general se charge d’envoyer un message "DONE")
-        except Exception:
-            queue.put(("ERROR", traceback.format_exc()))
-
-
-
-    def _check_process(self):
-        """Lit tous les messages dispo, met à jour la jauge, re-planifie."""
-
-        while True:
-            try:
-                tag, *payload = self._result_queue.get_nowait()
-            except q.Empty:
-                break
-
-            if tag == "PROG":                       # progression continue
-                frac, best = payload
-                self._progress_bar.value        = frac
-                self._progress_bar.description  = f"{int(frac*100):d} %"
-
-            elif tag == "DONE":                    # fin normale
-                conv_best, _, best_final, best_cost = payload
-                self._affiche_resultats(conv_best, best_final, best_cost)
-                return
-
-            elif tag == "ERROR":                   # exception dans le thread
-                trace = payload[0]
-                with self.out:
-                    self.out.clear_output()
-                    print("❌  Optimization aborted:\n", trace)
-                self._progress_bar.bar_style = "danger"
-                self.cancel_btn.disabled    = True
-                return
-
-        # thread toujours vivant ? → on continue à poller
-        if self._worker_thread.is_alive():
-            loop = get_ipython().kernel.io_loop
-            loop.add_timeout(loop.time() + 0.1, self._check_process)
-        else:
-            # thread mort sans message DONE/ERROR (Cancel ou crash silencieux)
-            with self.out:
-                self.out.clear_output()
-                print("❌  Optimization stopped.")
-            self._progress_bar.bar_style = "danger"
-            self.cancel_btn.disabled    = True
-
-
-
-
-    def _affiche_resultats(self, conv_best, best_final, best_cost):
-        """Affiche la synthèse finale et remet l’UI d’aplomb."""
-        self.opt_file_arbo._refresh_file_list()
-        with self.out:
-            self.out.clear_output()
-            print("✅ Optimization ended.")
-            print(f"Best cost   : {best_cost:.6g}")
-            print("Best vector :", best_final)
-        self._progress_bar.bar_style = "success"
-        self.cancel_btn.disabled = True
-
-
+            res = self.DE_general(**args)
+            queue.put(( res))
+        except OptimizationCancelled:
+            queue.put(("CANCEL", None))
+        except Exception as e:
+            queue.put(("ERROR", str(e)))
 
     def _on_cancel(self, _):
         """
@@ -664,10 +599,6 @@ class OptimizationTab:
             self._pool.join()
             self._pool = None
 
-        if self._de_process is not None and self._de_process.is_alive():
-            self._de_process.terminate()
-            self._de_process = None
-
         # feedback utilisateur
         with self.out:
             self.out.clear_output()
@@ -675,6 +606,28 @@ class OptimizationTab:
 
         # désactive à nouveau Cancel
         self.cancel_btn.disabled = True
+
+
+
+    def _wait_for_finish(self, keys):
+        """Attend la fin du processus d’optimisation puis met à jour l’UI."""
+        proc = self._de_process
+        if proc is None:
+            return
+        proc.join()   # on bloque ce process de surveillance, pas le kernel
+        # si on a annulé, on ne rafraîchit rien
+        if getattr(self, "_cancelled", False):
+            return
+        # sinon on suppose que DE_general a déjà sauvegardé le HDF5
+        # on se contente de rafraîchir l’arborescence
+        self.opt_file_arbo._refresh_file_list()
+        # et d’afficher le message de succès
+        with self.out:
+            print("✅ Optimization ended.")
+            # pour obtenir best_cost et best_final, vous pouvez
+            # les relire du HDF5 ou les renvoyer via un Queue
+        self.cancel_btn.disabled = True
+        self._de_process = None
 
 
 
@@ -750,7 +703,6 @@ class OptimizationTab:
         mode: str = "dip",
         n_jobs: int = -1,
         seed: int | None = None,    # Répétabilité
-        progress_queue: mp.Queue | None = None,
         **mode_kw: Any,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         """
@@ -776,13 +728,12 @@ class OptimizationTab:
         n_params = len(keys)
         pop = lowers + (uppers - lowers) * rng.random((Npop, n_params))
 
-        # 2) Pool de process (vrai parallélisme CPU)
+        # 2) Préparation du Pool en mode fork
         global _WORKER_SIM
-        _WORKER_SIM = self.sim                              # objet partagé en COW
-        ctx   = mp.get_context("fork" if sys.platform != "win32" else "spawn")
-        pool  = ctx.Pool()                                  # processes == nb CPU
-        self._pool = pool
-
+        _WORKER_SIM = self.sim
+        ctx = mp.get_context("fork")
+        self._pool = ctx.Pool()
+        pool = self._pool
 
         try:
             # Évaluation initiale (interruptible)
@@ -802,48 +753,43 @@ class OptimizationTab:
             F1, F2, cr = 0.9, 0.8, 0.8
 
             # 3) Boucle DE avec barre de progression et annulation
-
-            for g in range(Ngen):
-                if self._cancelled:
-                    pool.terminate()
-                    raise OptimizationCancelled()
-
-                # génération des enfants
-                z_list: List[Tuple[int,np.ndarray]] = []
-                for p in range(Npop):
-                    a,b,c = pop[rng.choice(Npop,3,replace=False)]
-                    best_ind = pop[np.argmin(cf)]
-                    y = c + F1*(a-b) + F2*(best_ind-c)
-                    mask = rng.random(n_params) < cr
-                    if not mask.any():
-                        mask[rng.integers(n_params)] = True
-                    z = np.where(mask, y, pop[p])
-                    z = np.clip(z, lowers, uppers)
-                    z_list.append((p, z))
-
-                # évaluation enfants
-                args_child = [(z, keys, mode, mode_kw) for (_, z) in z_list]
-                cfz_list: List[float] = []
-                for r in pool.imap_unordered(cost_worker, args_child, chunksize=1):
+            with self.out:
+                self.out.clear_output()
+                for g in trange(Ngen, desc="Differential Evolution"):
                     if self._cancelled:
                         pool.terminate()
                         raise OptimizationCancelled()
-                    cfz_list.append(r)
-                cfz = cfz_list
 
-                # sélection
-                for (i,z),cval in zip(z_list, cfz):
-                    if cval < cf[i]:
-                        pop[i], cf[i] = z, cval
+                    # génération des enfants
+                    z_list: List[Tuple[int,np.ndarray]] = []
+                    for p in range(Npop):
+                        a,b,c = pop[rng.choice(Npop,3,replace=False)]
+                        best_ind = pop[np.argmin(cf)]
+                        y = c + F1*(a-b) + F2*(best_ind-c)
+                        mask = rng.random(n_params) < cr
+                        if not mask.any():
+                            mask[rng.integers(n_params)] = True
+                        z = np.where(mask, y, pop[p])
+                        z = np.clip(z, lowers, uppers)
+                        z_list.append((p, z))
 
-                best_after_eval.append(cf.min())
-                conv_best[g] = cf.min()
+                    # évaluation enfants
+                    args_child = [(z, keys, mode, mode_kw) for (_, z) in z_list]
+                    cfz_list: List[float] = []
+                    for r in pool.imap_unordered(cost_worker, args_child, chunksize=1):
+                        if self._cancelled:
+                            pool.terminate()
+                            raise OptimizationCancelled()
+                        cfz_list.append(r)
+                    cfz = cfz_list
 
-                if progress_queue is not None:
-                            progress_queue.put(("PROG",
-                                                (g + 1) / Ngen,      # fraction 0-1
-                                                float(cf.min())))     # meilleur coût courant
-                            
+                    # sélection
+                    for (i,z),cval in zip(z_list, cfz):
+                        if cval < cf[i]:
+                            pop[i], cf[i] = z, cval
+
+                    best_after_eval.append(cf.min())
+                    conv_best[g] = cf.min()
 
             # 4) Ré-évaluation finale
             argsf       = [(pop[i], keys, mode, mode_kw) for i in range(Npop)]
@@ -916,9 +862,7 @@ class OptimizationTab:
 
 
 
-            if progress_queue is not None:
-                    progress_queue.put(("DONE",
-                                        conv_best, conv_evals, best_final, best_cost))
+
             return conv_best, conv_evals, best_final, best_cost
 
 

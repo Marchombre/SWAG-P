@@ -262,6 +262,20 @@ def simulate_delta_spectrum(
         cfg_name=cfg.get("config_name")
     )
 
+    # — Avant de quitter si pas de dip, on initialise toujours la λ de sensibilité —
+    if mode == 'dip':
+        lam_calc = lam_dip
+    else:
+        lam_calc = compute_half_point(lam, base_spectrum, lam_left, lam_right)
+    # calcul de R au point de mesure (base & Δn), métriques à zéro par défaut
+    R_base_calc = float(np.interp(lam_calc, lam, base_spectrum))
+    lam_calc_dn = lam_calc
+    R_dn_calc   = R_base_calc
+    S_lambda    = 0.0
+    S_R         = 0.0
+    dR_half     = 0.0
+
+
     # Aucun dip détecté
     if not dip_idx_list_dn:
         return Rup_dn, lam_calc, R_base_calc, lam_calc_dn, R_dn_calc, S_lambda, S_R, dR_half
