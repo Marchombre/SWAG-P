@@ -59,13 +59,6 @@ def _extract_widget(obj):
 
 # --------------------------------------------------------------------- #
 def create_advanced_app():
-    """
-    Construit l'application interactive à onglets :
-      0) Simulation,
-      1) Plot,
-      2) Validation (Difference),
-      3) Optimisation
-    """
     # 1) Instanciation de SimulationTab
     sig    = inspect.signature(SimulationTab.__init__)
     params = [p for p in sig.parameters if p != 'self']
@@ -85,36 +78,43 @@ def create_advanced_app():
     sim_tab = _extract_widget(sim_obj)
 
     # 2) Onglet Plot (class-based)
-    plot_obj = PlotTab()                 # plus de fonction create_plot_tab
+    plot_obj = PlotTab()
     plot_tab = _extract_widget(plot_obj)
 
-    # 3) Onglet Difference (reste fonctionnel via la fonction)
+    # 3) Onglet Difference
     diff_obj = create_difference_tab()
     diff_tab = _extract_widget(diff_obj)
 
-    # 4) Onglet Optimisation (class-based)
+    # 4) Onglet Optimisation
     opt_obj = OptimizationTab(sim_obj)
     opt_tab = _extract_widget(opt_obj)
 
-    # 5) Assemblage des onglets
-    tabs = widgets.Tab(children=[sim_tab, plot_tab, diff_tab, opt_tab])
-    tabs.set_title(0, "Simulation")
-    tabs.set_title(1, "Plot: Multi-spectra")
-    tabs.set_title(2, "Validation")
-    tabs.set_title(3, "Optimisation")
+    # 5) Onglet Convergence
+    from gap_plasmon_2d.analysis.convergence_analysis import create_multi_convergence_widget
+    conv_widget = create_multi_convergence_widget(json_combined_path, sim_obj.all_configs)
+    conv_tab = widgets.VBox([conv_widget])
 
-    # 6) Rafraîchissement à la sélection d'un onglet
+    # 6) Assemblage des onglets
+    tabs = widgets.Tab(children=[conv_tab, sim_tab, plot_tab, diff_tab, opt_tab])
+    tabs.set_title(0, "Convergence")
+    tabs.set_title(1, "Simulation")
+    tabs.set_title(2, "Plot: Multi-spectra")
+    tabs.set_title(3, "Validation")
+    tabs.set_title(4, "Optimisation")
+    
+
+    # 7) Rafraîchissement à la sélection d'un onglet
     def on_tab_change(change):
         idx = change.get('new')
         if idx == 1 and hasattr(plot_obj, 'update_spectra'):
             plot_obj.update_spectra()
         elif idx == 2 and hasattr(diff_obj, 'update_diff_options'):
             diff_obj.update_diff_options()
-        # elif idx == 3:                       # onglet Optimisation
-        #     # ne rafraîchit que si l’optimisation n’est
-        #     # ni en cours, ni déjà correctement initialisée
+        # elif idx == 3:
         #     if (not opt_obj._is_running) and (not opt_obj.param_widgets):
         #         opt_obj.update_optimization()
+        # elif idx == 4: # convergence, si besoin
 
     tabs.observe(on_tab_change, names='selected_index')
     return widgets.VBox([tabs])
+

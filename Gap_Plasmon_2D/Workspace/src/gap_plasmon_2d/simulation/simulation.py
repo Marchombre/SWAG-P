@@ -1,5 +1,3 @@
-import matplotlib as mpl
-from gap_plasmon_2d import paths
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -10,19 +8,28 @@ exactement la logique de create_simulation_tab() originale.
 # --------------------------------------------------------------------- #
 #                                imports                                #
 # --------------------------------------------------------------------- #
-import os, io, base64, json, textwrap
+from gap_plasmon_2d import paths
+
+
+import matplotlib as mpl
+mpl.use('module://ipympl.backend_nbagg')
+
+import os, io, base64, json, textwrap, sys
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-import matplotlib as mpl
-mpl.use("module://matplotlib_widget") 
 import matplotlib.pyplot as plt
 
 import ipywidgets as widgets
 import h5py
 
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_nbagg import FigureCanvasNbAgg
+
+
+from datetime import time
 
 import multiprocessing as mp
 import queue as q
@@ -31,7 +38,7 @@ from functools import partial   # si besoin d’init pool
 
 
 from ipywidgets import Layout, HBox, VBox, ToggleButton, HTML
-from IPython.display import HTML as DHTML, display, Javascript
+from IPython.display import HTML as DHTML, display, Javascript, clear_output, Image
 from scipy.interpolate import interp1d
 
 # pour surveiller les changements de fichiers
@@ -63,7 +70,7 @@ configurations_dir = os.path.join(str(paths.CONFIGS_DIR))
 data_dir           = os.path.join(str(paths.DATA_DIR))
 json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
-h5_path = paths.H5_RESULTS_DIR / str(paths.H5_RESULTS_DIR / "simulation_results.h5")
+h5_path = paths.H5_RESULTS_DIR / "simulation_results.h5"
 h5_path.parent.mkdir(parents=True, exist_ok=True)
 
 def _download_link(fig, fname="figure.png"):
@@ -165,13 +172,6 @@ def _simulate_worker(args):
 
 
 
-
-
-
-
-
-
-
 # --------------------------------------------------------------------- #
 #                             main class                                #
 # --------------------------------------------------------------------- #
@@ -185,26 +185,84 @@ class SimulationTab:
     #                            __init__                               #
     # ----------------------------------------------------------------- #
     def __init__(self):
-        # ---- runtime flags & handles (ajoutés pour le parallélisme) ---
-        self._is_running   = False
-        self._cancelled    = False
-        self._pool         = None          # mp.Pool      (processes)
-        self._worker_thread = None         # threading.Thread
-        self._result_queue  = None         # queue.Queue
+        #get_ipython().run_line_magic('matplotlib', 'widget')
+        # 1) runtime flags & handles pour le parallélisme
+        self._init_runtime_flags()
+        # 2) chargement des configs JSON
+        self._load_configs()
+        # 3) création des widgets (sans layout)
+        self._init_common_widgets()
+        # 
+        self._init_metrics_overlays()
+        # 4) construction des panneaux (panels)
+        # ── Initialise 1 seule figure + 2 axes ───────────────────────────
+        
+        # active %matplotlib widget et crée la figure
+        #get_ipython().run_line_magic('matplotlib', 'widget')
+        self.fig, (self.ax_plot, self.ax_table) = plt.subplots(
+            nrows=2, figsize=(13, 9),
+            gridspec_kw={'height_ratios': [1, 1]}
+        )
+        self.ax_table.axis('off')
 
-        # ---------------- charger les configurations JSON --------------
+        # widget de sortie
+        self.canvas_output = widgets.Output(layout=widgets.Layout(
+            border='1px solid lightgray',
+            min_height='400px',
+        ))
+        # affichage initial (vide)
+        with self.canvas_output:
+            clear_output()
+            display(self.fig.canvas)
+
+        self.canvas = self.fig.canvas
+
+
+        self._build_panels()
+        # 5) assemblage responsive en grille
+        self._assemble_layout()
+        # 6) liaison des signaux (on_click, observe)
+        self._connect_signals()
+        # 7) état initial des widgets Δn
+        self._toggle_delta_widgets()
+
+    # ----------------------------------------------------------------- #
+    #      1) initialisation runtime et chargement des configs         #
+    # ----------------------------------------------------------------- #
+    def _init_runtime_flags(self):
+        self._is_running    = False
+        self._cancelled     = False
+        self._pool          = None
+        self._worker_thread = None
+        self._result_queue  = None
+
+    def _load_configs(self):
         cfg_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
         if os.path.exists(cfg_file):
             with open(cfg_file, encoding="utf-8") as f:
                 self.all_configs = json.load(f)["ALL_COMBINED_CONFIGS"]
         else:
             self.all_configs = []
+        self.json_combined_path = json_combined_path
 
-        self.json_combined_path = json_combined_path    
+    # ----------------------------------------------------------------- #
+    #       2) toggle λ₀ (méthode de classe, pas locale)               #
+    # ----------------------------------------------------------------- #
+    def _toggle_lambda0(self, change):
+        self.lambda0_in.layout.display = (
+            '' if change['new'] == 'fixed_lambda' else 'none'
+        )
 
-        # ------------ widgets paramétriques généraux (inchangés) -------
+
+
+
+    def _init_common_widgets(self):
+        """
+        Initialise tous les widgets sans construire leur layout final.
+        """
+        # ─── contraintes positives / bornées ─────────────────────────────────
         def _positive(change):
-            owner = change['owner']; val = change['new']
+            owner, val = change['owner'], change['new']
             if val < 0:
                 owner.value = 0
             if owner is self.sim_lambda_min and val > self.sim_lambda_max.value:
@@ -212,273 +270,302 @@ class SimulationTab:
             if owner is self.sim_lambda_max and val < self.sim_lambda_min.value:
                 owner.value = self.sim_lambda_min.value
 
+        # ─── Spectre & points────────────────────────────────────────────────
         self.sim_lambda_min = widgets.FloatText(
             value=300.0, description="λ min (nm):",
-            layout=Layout(width='150px'), style={'description_width': 'initial'})
+            layout=widgets.Layout(width='150px'),
+            style={'description_width':'initial'}
+        )
         self.sim_lambda_max = widgets.FloatText(
             value=900.0, description="λ max (nm):",
-            layout=Layout(width='150px'), style={'description_width': 'initial'})
+            layout=widgets.Layout(width='150px'),
+            style={'description_width':'initial'}
+        )
         self.sim_n_points = widgets.IntText(
             value=400, description="Points:",
-            layout=Layout(width='200px'), style={'description_width': 'initial'})
+            layout=widgets.Layout(width='200px'),
+            style={'description_width':'initial'}
+        )
         self.sim_n_mod = widgets.IntText(
-            value=5, layout=Layout(width='200px'),
-            style={'description_width': 'initial'})
-
-        for w in (self.sim_lambda_min,
-                  self.sim_lambda_max,
-                  self.sim_n_points,
-                  self.sim_n_mod):
+            value=5,
+            layout=widgets.Layout(width='200px'),
+            style={'description_width':'initial'}
+        )
+        for w in (self.sim_lambda_min, self.sim_lambda_max, self.sim_n_points):
             w.observe(_positive, names='value')
 
-        # ---------------- widgets pour la métrique λ0 / range ----------
-        self.band_min_in  = widgets.FloatText(
+        # ─── Métrique λ₀ / range ─────────────────────────────────────────────
+        self.band_min_in = widgets.FloatText(
             value=650.0, description="λmin:",
-            layout=Layout(width='120px'),
-            style={'description_width': 'initial'})
-        self.band_max_in  = widgets.FloatText(
+            layout=widgets.Layout(width='120px'),
+            style={'description_width':'initial'}
+        )
+        self.band_max_in = widgets.FloatText(
             value=750.0, description="λmax:",
-            layout=Layout(width='120px'),
-            style={'description_width': 'initial'})
-        self.band_box_in  = HBox([self.band_min_in, self.band_max_in],
-                                 layout=Layout(gap='5px'))
-
+            layout=widgets.Layout(width='120px'),
+            style={'description_width':'initial'}
+        )
+        self.band_box_in = widgets.HBox(
+            [self.band_min_in, self.band_max_in],
+            layout=widgets.Layout(gap='5px')
+        )
         self.mode_calc_radio = widgets.RadioButtons(
-            options=[('Dip (ΔR/Δn)',    'dip'),
-                     ('FWHM (half)',    'half'),
-                     ('Custum fixed λ₀', 'fixed_lambda')],
+            options=[
+                ('Dip (ΔR/Δn)',    'dip'),
+                ('FWHM (half)',    'half'),
+                ('Custom fixed λ₀','fixed_lambda')
+            ],
             value='dip',
-            description='Compute R(λ) at fixe λ:',
-            style={'description_width': 'initial'},
-            layout=Layout(width='220px'))
-
+            description='Compute R(λ):',
+            style={'description_width':'initial'},
+            layout=widgets.Layout(width='220px')
+        )
         self.lambda0_in = widgets.FloatText(
             value=700.0, description="λ₀ (nm):",
-            layout=Layout(width='130px'),
-            style={'description_width': 'initial'})
+            layout=widgets.Layout(width='130px'),
+            style={'description_width':'initial'}
+        )
+        # toggle λ₀ via méthode de classe
+        self.mode_calc_radio.observe(self._toggle_lambda0, names='value')
+        self._toggle_lambda0({'new': self.mode_calc_radio.value})
 
-        def _toggle_lambda0(change):
-            self.lambda0_in.layout.display = '' if change['new'] == 'fixed_lambda' else 'none'
-
-        _toggle_lambda0({'new': self.mode_calc_radio.value})
-        self.mode_calc_radio.observe(_toggle_lambda0, names='value')
-
-        # ---------------- bouton RUN + NOUVEAU bouton CANCEL -----------
-        self.sim_run_button = widgets.Button(
+        # ─── Run / Cancel + status ───────────────────────────────────────────
+        self.sim_run_button    = widgets.Button(
             description="Run simulation", button_style="success",
-            tooltip="Start simulation")
-
+            tooltip="Start simulation"
+        )
         self.sim_cancel_button = widgets.Button(
             description="Cancel", button_style="warning",
-            tooltip="Cancel running simulation", disabled=True)
-
-        self.sim_cancel_button.on_click(self._on_cancel)
-
-        # ------------- barre de progression + status HTML --------------
-        self._status_html  = widgets.HTML("")
-        self._progress_bar = widgets.FloatProgress(
+            tooltip="Cancel running simulation", disabled=True
+        )
+        self._status_html      = widgets.HTML("")
+        self._progress_bar     = widgets.FloatProgress(
             value=0, min=0, max=1, description="0 %",
             bar_style="info",
-            layout=widgets.Layout(width='100%', display='none'))
+            layout=widgets.Layout(width='100%', display='none')
+        )
+        self.runtime_box       = widgets.VBox(
+            [self._status_html, self._progress_bar],
+            layout=widgets.Layout(gap='4px')
+        )
 
-        self.runtime_box = VBox([self._status_html, self._progress_bar],
-                                layout=Layout(gap='4px'))
-
-        # ------------------------- RCWA modes --------------------------
-        self.mode_selection   = widgets.RadioButtons(
-            options=[('Fixe', 'fixed'),
-                     ('Personnalisé', 'custom'),
-                     ('Automatique', 'auto')],
-            value='fixed', style={'description_width': 'initial'})
-        self.custom_modes_box = VBox()
-
+        # ─── RCWA modes fixe/custom/auto ─────────────────────────────────────
+        self.mode_selection      = widgets.RadioButtons(
+            options=[('Fixe','fixed'),('Personnalisé','custom'),('Auto','auto')],
+            value='fixed',
+            style={'description_width':'initial'}
+        )
+        self.custom_modes_box    = widgets.VBox()
         self.custom_n_mod_inputs = {}
 
-        # ----------------- gestion des fichiers de résumé -------------
-        self.sim_files_dropdown = widgets.Dropdown(
+        # ─── Fichiers résumé & download ─────────────────────────────────────
+        self.sim_files_dropdown  = widgets.Dropdown(
             options=list_sim_summary_files(summary_dir),
-            description="Simulation files:",
-            layout=Layout(width='500px'),
-            style={'description_width': 'initial'})
-
+            description="Sim files:",
+            layout=widgets.Layout(width='500px'),
+            style={'description_width':'initial'}
+        )
         self.sim_download_button = widgets.Button(
-            description="Download", button_style="danger")
+            description="Download", button_style="danger"
+        )
 
-        self.sim_download_button.on_click(self._download_file)
+        # ─── Nom de simulation ───────────────────────────────────────────────
+        self.sim_name_widget     = widgets.Text(
+            placeholder="Nom sim (auto si vide)",
+            description="Sim Name:",
+            layout=widgets.Layout(width='500px'),
+            style={'description_width':'initial'}
+        )
 
-        # ---------------------- nom de simulation ----------------------
-        self.sim_name_widget = widgets.Text(
-            value="", placeholder="Nom de simulation (auto si vide)",
-            description="Sim Name:", layout=Layout(width='500px'),
-            style={'description_width': 'initial'})
-
-        # -------------- sélecteur Config / Δn (inchangé) --------------
-        self.config_checkboxes = {}
-        self.dn_checkboxes     = {}
-        config_rows = []
-
-
+        # ─── Configs & Δn ────────────────────────────────────────────────────
+        self.config_checkboxes, self.dn_checkboxes = {}, {}
+        rows = []
         for cfg in self.all_configs:
             name = cfg["config_name"]
-            chk  = widgets.Checkbox(value=False, description=name, indent=False)
-            dn   = widgets.Checkbox(value=False, description='Δn', indent=False,
-                                    layout=Layout(width='46px'))
+            chk = widgets.Checkbox(value=False, description=name, indent=False)
+            dn  = widgets.Checkbox(value=False, description='Δn', indent=False,
+                    layout=widgets.Layout(width='46px'))
             self.config_checkboxes[name] = chk
             self.dn_checkboxes[name]     = dn
-            config_rows.append(HBox([chk, dn], layout=Layout(grid_gap='5px')))
-
-        for chk in self.dn_checkboxes.values():
-            chk.observe(self._toggle_delta_widgets, names='value')
-
-
-
-
-        visible = min(len(config_rows), 10)
+            rows.append(widgets.HBox([chk, dn],
+                    layout=widgets.Layout(gap='5px')))
         self.select_all_cfg_btn = widgets.Button(
-            description="Tout sélectionner Configs", button_style="info",
-            layout=Layout(width='auto', margin='0 5px 5px 0'))
-        self.select_all_dn_btn  = widgets.Button(
-            description="Tout sélectionner Δn", button_style="info",
-            layout=Layout(width='auto', margin='0 0 5px 0'))
-        self.select_all_cfg_btn.on_click(self._toggle_all_cfg)
-        self.select_all_dn_btn.on_click(self._toggle_all_dn)
-
-        self.config_list = VBox(
-            children=[HTML("<b>Configurations et Δn</b>"),
-                      HBox([self.select_all_cfg_btn,
-                            self.select_all_dn_btn],
-                           layout=Layout(grid_gap='10px')),
-                      *config_rows],
-            layout=Layout(width='500px',
-                          height=f'{30+visible*30}px',
-                          overflow_y='auto',
-                          border='1px solid lightgray',
-                          padding='5px',
-                          display='none'))
-
-        self.toggle_btn = ToggleButton(
-            value=False, description="Select your configuration and Δn",
-            icon='caret-down', layout=Layout(width='520px'),
-            button_style='warning')
-        self.toggle_btn.observe(self._toggle_config_list, names='value')
-
+            description="Tout sélectionner Configs",
+            button_style="info",
+            layout=widgets.Layout(margin='0 5px 5px 0')
+        )
+        self.select_all_dn_btn = widgets.Button(
+            description="Tout sélectionner Δn",
+            button_style="info",
+            layout=widgets.Layout(margin='0 0 5px 0')
+        )
+        visible = min(len(rows), 10)
+        self.config_list = widgets.VBox(
+            [widgets.HTML("<b>Configs & Δn</b>"),
+            widgets.HBox([self.select_all_cfg_btn, self.select_all_dn_btn],
+                        layout=widgets.Layout(gap='10px')),
+            *rows],
+            layout=widgets.Layout(
+                width='500px',
+                height=f'{30 + visible*30}px',
+                overflow_y='auto',
+                border='1px solid lightgray',
+                padding='5px',
+                display='none'
+            )
+        )
+        self.toggle_btn         = widgets.ToggleButton(
+            description="Select Configs & Δn",
+            icon='caret-down',
+            layout=widgets.Layout(width='520px'),
+            button_style='warning'
+        )
         self.config_refresh_btn = widgets.Button(
-            description="Refresh Configs", button_style="info",
-            layout=Layout(width='auto', margin='0 5px 5px 0'))
-        self.config_refresh_btn.on_click(self._refresh_configs)
+            description="Refresh Configs",
+            button_style="info",
+            layout=widgets.Layout(margin='0 5px 5px 0')
+        )
+        self.config_selector    = widgets.VBox(
+            [self.toggle_btn, self.config_list],
+            layout=widgets.Layout(padding='5px')
+        )
 
-        self.config_selector = VBox(
-            [HBox([self.toggle_btn, self.config_refresh_btn]),
-             self.config_list],
-            layout=Layout(padding='5px'))
-
-        # ---------------- couche(s) Δn + delta_n widget ----------------
-        layer_keys = [m['key']
-                      for m in self.all_configs[0]['material']['MATERIALS_CONFIG']]
-        self.layer_selector = widgets.SelectMultiple(
-            options=layer_keys, description="Couche(s) Δn:",
-            layout=Layout(width='300px', height='100px'),
-            style={'description_width': 'initial'})
-
-        self.delta_n_widget = widgets.FloatText(
+        # ─── Couches Δn & delta_n ───────────────────────────────────────────
+        layer_keys = [m['key'] for m in self.all_configs[0]['material']['MATERIALS_CONFIG']]
+        self.layer_selector     = widgets.SelectMultiple(
+            options=layer_keys,
+            description="Couches Δn:",
+            layout=widgets.Layout(width='300px', height='100px'),
+            style={'description_width':'initial'}
+        )
+        self.delta_n_widget     = widgets.FloatText(
             value=1e-2, description="Δn:",
-            layout=Layout(width='150px'),
-            style={'description_width': 'initial'})
+            layout=widgets.Layout(width='150px'),
+            style={'description_width':'initial'}
+        )
         self.delta_n_widget.observe(_positive, names='value')
 
-        # ---------------------- debug & verbose ------------------------
-        self.verbose_toggle = widgets.Checkbox(
+        # ─── Debug & verbose ─────────────────────────────────────────────────
+        self.verbose_toggle     = widgets.Checkbox(
             value=False, description="Verbose", indent=False,
-            layout=Layout(width='100%'),
-            style={'description_width': 'initial'})
-        self.debug_out = widgets.Textarea(
-            value='', placeholder='Logs verbose…',
-            layout=Layout(width='100%', height='200px',
-                          overflow_y='scroll', border='1px solid darkred'))
-        self.verbose_toggle.observe(self._toggle_debug, names='value')
+            layout=widgets.Layout(width='100%'),
+            style={'description_width':'initial'}
+        )
+        self.debug_out          = widgets.Textarea(
+            placeholder='Logs verbose…',
+            layout=widgets.Layout(
+                width='100%', height='120px',
+                overflow_y='auto',
+                border='1px solid darkred'
+            )
+        )
 
-        # ---------------- métriques / overlays (inchangé) --------------
-        def _cb(v, d): return widgets.Checkbox(value=v, description=d)
 
-        self.show_fwhm_chk              = _cb(False, "FWHM")
-        self.show_lambda0_chk           = _cb(True,  r"λ0")
-        self.show_delta_lam_over_midLam = _cb(False, r"Δλ / λmin or λsym")
-        self.show_S_lambda_chk          = _cb(True,  "Sλ = Δλ / Δn (nm/RIU)")
-        self.show_S_dn_chk              = _cb(True,  r"ΔR/Δn (1/RIU)")
-        self.show_deltaR_half_chk       = _cb(True,  r"ΔR_half")
-        self.show_Q_chk                 = _cb(False, "Q-factor")
-        self.show_Rup_dn_chk            = _cb(True,  "Rup_dn dashed")
-        self.show_hlines_chk            = _cb(False, "half-level line")
-        self.show_dips_chk              = _cb(False, "dips (×)")
-        self.show_maxima_chk            = _cb(False, "maxima (×)")
-        self.show_symmetry_pts_chk      = _cb(False, "symmetric pts (×)")
-        self.show_selected_dip_chk      = _cb(True,  "selected dip (○)")
-        self.show_sensitivity_marker    = _cb(True,  "sensitivity marker (□)")
-
-        self.metrics_selector = VBox(
-            children=[
-                HTML("<b>Métriques à afficher :</b>"),
-                HBox([self.show_fwhm_chk, self.show_lambda0_chk,
-                      self.show_delta_lam_over_midLam, self.show_S_lambda_chk,
-                      self.show_S_dn_chk, self.show_deltaR_half_chk,
-                      self.show_Q_chk],
-                     layout=Layout(display='flex', flex_flow='row nowrap',
-                                   justify_content='space-around', gap='0px')),
-                HTML("<b>Overlays graphiques :</b>"),
-                HBox([self.show_Rup_dn_chk, self.show_hlines_chk,
-                      self.show_dips_chk, self.show_maxima_chk,
-                      self.show_symmetry_pts_chk, self.show_selected_dip_chk,
-                      self.show_sensitivity_marker],
-                     layout=Layout(display='flex', flex_flow='row nowrap',
-                                   justify_content='space-around', gap='0px'))
-            ],
-            layout=Layout(width='100%', border='1px solid lightgray',
-                          padding='5px', margin='10px 0'))
-
-        # ---------------- widget convergence (inchangé) ----------------
-        self.conv_widget = create_multi_convergence_widget(
-            json_combined_path, self.all_configs)
-
-        # ---------------- zone d’affichage figure/table ----------------
-        self.sim_output = widgets.Output(
-            layout=Layout(border='2px solid #ccc', padding='10px',
-                          min_height='400px', margin='40px 0 0 0'))
-
-        # ------------------------- conteneur gauche --------------------
-        self.sim_controls = VBox(
-            children=[
-                HTML("<h3>Simulation – Paramètres</h3>"),
+    def _build_panels(self):
+        """
+        Ne construit plus que le panneau de contrôle (à gauche).
+        Les metrics et debug seront placés par _assemble_layout.
+        """
+        self.panel_controls = widgets.VBox(
+            [
+                widgets.HTML("<h3>Simulation – Paramètres</h3>"),
                 self.sim_name_widget,
-                HBox([self.sim_files_dropdown]),
-                HBox([self.sim_download_button]),
-                HBox([self.sim_lambda_min, self.sim_lambda_max]),
-                HBox([self.sim_n_points, self.sim_n_mod]),
+                self.sim_files_dropdown,
+                self.sim_download_button,
+                widgets.HBox(
+                    [self.sim_lambda_min, self.sim_lambda_max, self.sim_n_points],
+                    layout=widgets.Layout(gap='10px')
+                ),
+                self.config_refresh_btn,
                 self.config_selector,
-                widgets.HTML(value="<b>RCWA Fourier modes</b>"),
-                HBox([self.mode_selection, self.layer_selector]),
+                widgets.HTML("<b>RCWA modes</b>"),
+                widgets.HBox(
+                    [self.mode_selection, self.sim_n_mod],
+                    layout=widgets.Layout(gap='10px')
+                ),
                 self.custom_modes_box,
-                HBox([self.delta_n_widget, self.mode_calc_radio,
-                      self.lambda0_in, self.sim_run_button,
-                      self.sim_cancel_button]),
-                self.runtime_box,  # ← barre de progression + status
+                widgets.HBox(
+                    [self.layer_selector, self.delta_n_widget],
+                    layout=widgets.Layout(gap='10px')
+                ),
+                widgets.HBox(
+                    [self.mode_calc_radio, self.lambda0_in],
+                    layout=widgets.Layout(gap='10px')
+                ),
+                widgets.HBox(
+                    [self.sim_run_button, self.sim_cancel_button],
+                    layout=widgets.Layout(gap='10px')
+                ),
+                self.runtime_box,
                 self.verbose_toggle
             ],
-            layout=Layout(padding='10px', border='1px solid lightgray'))
-
-        # --------------------- assemblage final UI ---------------------
-        self.tab = VBox(
-            [HBox([self.sim_controls, self.conv_widget],
-                  layout=Layout(align_items='flex-start')),
-             self.metrics_selector,
-             self.debug_out,
-             self.sim_output])
-
-        # ---------------------- callbacks boutons ----------------------
-        self.sim_run_button.on_click(self._on_run)   # NEW _on_run parallèle
+            layout=widgets.Layout(
+                padding='10px',
+                border='1px solid lightgray',
+                min_width='320px'
+            )
+        )
 
 
-        # appel initial
-        self._toggle_delta_widgets()
+
+
+
+    def _init_metrics_overlays(self):
+        """Crée un panneau moderne pour choisir métriques et overlays."""
+        # Libellés & valeurs par défaut
+        metric_labels = [
+            "FWHM", "λ₀", "Δλ/λₘᵢₙ", "Sλ (nm/RIU)",
+            "ΔR/Δn", "ΔR_half", "Q-factor"
+        ]
+        overlay_labels = [
+            "Rup+Δn", "Half-level", "Dips",
+            "Maxima", "Symmetry", "Selected",
+            "Sensitivity"
+        ]
+        defaults = {lbl: False for lbl in metric_labels}
+        defaults["λ₀"] = True
+
+        # Création des Checkbox
+        self.metric_checks = {
+            lbl: widgets.Checkbox(value=defaults[lbl], description=lbl, indent=False)
+            for lbl in metric_labels
+        }
+        self.overlay_checks = {
+            lbl: widgets.Checkbox(value=False, description=lbl, indent=False)
+            for lbl in overlay_labels
+        }
+
+        # Grilles responsives
+        metrics_grid = widgets.GridBox(
+            children=list(self.metric_checks.values()),
+            layout=widgets.Layout(
+                grid_template_columns="repeat(auto-fit, minmax(100px, 1fr))",
+                gap="8px"
+            )
+        )
+        overlays_grid = widgets.GridBox(
+            children=list(self.overlay_checks.values()),
+            layout=widgets.Layout(
+                grid_template_columns="repeat(auto-fit, minmax(100px, 1fr))",
+                gap="8px"
+            )
+        )
+
+        # Accordéon pour basculer
+        self.metrics_panel = widgets.Accordion(
+            children=[metrics_grid, overlays_grid],
+            layout=widgets.Layout(
+                width="100%",
+                padding="8px",
+                border="1px solid lightgray",
+                border_radius="6px"
+            )
+        )
+        self.metrics_panel.set_title(0, "Métriques à afficher")
+        self.metrics_panel.set_title(1, "Overlays graphiques")
+
+
+
 
     # ----------------------------------------------------------------- #
     #                    méthodes utilitaires                           #
@@ -531,21 +618,24 @@ class SimulationTab:
         mode_calc   = self.mode_calc_radio.value       # 'dip' | 'half' | 'fixed_lambda'
         lambda0     = self.lambda0_in.value
         flags = {
-            "show_fwhm"                : self.show_fwhm_chk.value,
-            "show_lambda0"             : self.show_lambda0_chk.value,
-            "show_delta_lam_over_midLam": self.show_delta_lam_over_midLam.value,
-            "show_S_lambda"            : self.show_S_lambda_chk.value,
-            "show_S_dn"                : self.show_S_dn_chk.value,
-            "show_deltaR_half"         : self.show_deltaR_half_chk.value,
-            "show_Q"                   : self.show_Q_chk.value,
-            "show_Rup_dn"              : self.show_Rup_dn_chk.value,
-            "show_hlines"              : self.show_hlines_chk.value,
-            "show_dips"                : self.show_dips_chk.value,
-            "show_maxima"              : self.show_maxima_chk.value,
-            "show_symmetry_pts"        : self.show_symmetry_pts_chk.value,
-            "show_selected_dip"        : self.show_selected_dip_chk.value,
-            "show_sensitivity_marker"  : self.show_sensitivity_marker.value,
+            # Métriques
+            "show_fwhm"                 : self.metric_checks["FWHM"].value,
+            "show_lambda0"              : self.metric_checks["λ₀"].value,
+            "show_delta_lam_over_midLam": self.metric_checks["Δλ/λₘᵢₙ"].value,
+            "show_S_lambda"             : self.metric_checks["Sλ (nm/RIU)"].value,
+            "show_S_dn"                 : self.metric_checks["ΔR/Δn"].value,
+            "show_deltaR_half"          : self.metric_checks["ΔR_half"].value,
+            "show_Q"                    : self.metric_checks["Q-factor"].value,
+            # Overlays
+            "show_Rup_dn"               : self.overlay_checks["Rup+Δn"].value,
+            "show_hlines"               : self.overlay_checks["Half-level"].value,
+            "show_dips"                 : self.overlay_checks["Dips"].value,
+            "show_maxima"               : self.overlay_checks["Maxima"].value,
+            "show_symmetry_pts"         : self.overlay_checks["Symmetry"].value,
+            "show_selected_dip"         : self.overlay_checks["Selected"].value,
+            "show_sensitivity_marker"   : self.overlay_checks["Sensitivity"].value,
         }
+
         verbose     = self.verbose_toggle.value
 
         # Sélection des configurations
@@ -710,19 +800,17 @@ class SimulationTab:
         # 2) Fin normale
         # ----------------------------------------------------------------
         elif tag == "DONE":
-            results = payload[0]                       # liste de dicts
             self._is_running = False
             self.sim_cancel_button.disabled = True
-
-            # barre verte
             self._progress_bar.value = 1.0
             self._progress_bar.description = "100 %"
             self._progress_bar.bar_style = "success"
 
-            # Construction des figures / tableaux (longue méthode)
-            self._build_outputs(results)
+            # Reconstruit et affiche dans canvas_output
+            self._build_outputs(payload[0])
+            return
 
-            return   # stop polling
+
 
         # ----------------------------------------------------------------
         # 3) Erreur dans le thread / worker
@@ -800,12 +888,24 @@ class SimulationTab:
 
         Affiche le tout dans self.sim_output et écrit le HDF5.
         """
+
+        with open("/home/yann/debug_sim.txt", "a") as f:
+            print(">>> _build_outputs CALLED", file=f)
+            sys.stdout.flush()
+
         # ─── variables mises en cache au lancement ───────────────────────
         lam_range  = self._lam_range
         flags      = self._flags
         sel_layers = self._sel_layers
         delta_n    = self._delta_n
         verbose    = self._verbose
+
+        # 1) Efface les anciens tracés
+        self.ax_plot.clear()
+        self.ax_table.clear()
+        self.ax_table.axis('off')
+        self.ax_plot.set_xlabel("λ (nm)")
+        self.ax_plot.set_ylabel("Reflectance R")
 
         # ─── raccourcis utiles ───────────────────────────────────────────
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -823,20 +923,14 @@ class SimulationTab:
         # ------------------------------------------------------------------
         # Préparation de la zone d’affichage et désactivation interactive
         # ------------------------------------------------------------------
-        with self.sim_output:
-            self.sim_output.clear_output(wait=True)
 
-            was_interactive = mpl.is_interactive()          
-            mpl.interactive(False)                          
+        try:
+                       
+            # Ferme l’ancienne figure (celle en mémoire !)
+            if hasattr(self, "_last_fig") and self._last_fig is not None:
+                plt.close(self._last_fig)
+                self._last_fig = None
 
-
-            # ─── création de la figure AVANT la boucle ───────────────────────────
-            fig = plt.figure(figsize=(13, 9))
-            ax_plot  = fig.add_axes([0.10, 0.50, 0.80, 0.35])
-            ax_plot.set_xlabel("λ (nm)")
-            ax_plot.set_ylabel("Reflectance R")
-            ax_table = fig.add_axes([0.10, 0.05, 0.80, 0.35])
-            ax_table.axis('off')
 
 
             # ─── boucle sur les configurations simulées ----------------------
@@ -848,7 +942,7 @@ class SimulationTab:
                 color    = colors[idx % len(colors)]
                 n_modes  = self._get_n_modes_for(name)
 
-                ax_plot.plot(lam_range, Rup_base, color=color,
+                self.ax_plot.plot(lam_range, Rup_base, color=color,
                             linewidth=1.5, zorder=1, label=name)
 
                 # ------------------------------------------------------------------
@@ -955,7 +1049,7 @@ class SimulationTab:
                         mode=('half' if use_half else 'dip')
                     )
                     if Rup_dn is not None and flags['show_Rup_dn']:
-                        ax_plot.plot(lam_range, Rup_dn, '--', color=color,
+                        self.ax_plot.plot(lam_range, Rup_dn, '--', color=color,
                                     linewidth=2, alpha=0.7, zorder=100,
                                     label=f"{name} (R + Δn)")
 
@@ -963,22 +1057,22 @@ class SimulationTab:
                 # Overlays graphiques divers
                 # ------------------------------------------------------------------
                 if flags['show_hlines']:
-                    ax_plot.hlines(ylev, lam_left, lam_right,
+                    self.ax_plot.hlines(ylev, lam_left, lam_right,
                                 color=color)
                 if flags['show_dips']:
-                    ax_plot.scatter(lam_range[dips_idx_list],
+                    self.ax_plot.scatter(lam_range[dips_idx_list],
                                     Rup_base[dips_idx_list],
                                     marker='x', color=color)
                 if flags['show_maxima']:
-                    ax_plot.scatter(lam_max_l_list, R_max_l_list, marker='x',
+                    self.ax_plot.scatter(lam_max_l_list, R_max_l_list, marker='x',
                                     color=color)
-                    ax_plot.scatter(lam_max_r_list, R_max_r_list, marker='x',
+                    self.ax_plot.scatter(lam_max_r_list, R_max_r_list, marker='x',
                                     color=color)
                 if flags['show_symmetry_pts']:
-                    ax_plot.scatter(lam_sym_list, R_sym_list, marker='x',
+                    self.ax_plot.scatter(lam_sym_list, R_sym_list, marker='x',
                                     color=color)
                 if flags['show_selected_dip']:
-                    ax_plot.scatter([lam_dip], [R_dip], marker='o',
+                    self.ax_plot.scatter([lam_dip], [R_dip], marker='o',
                                     facecolor='none', edgecolor=color, s=70)
 
                 # ------------------------------------------------------------------
@@ -1059,6 +1153,12 @@ class SimulationTab:
                     best_S_R=[S_R_sum[-1]]
                 )
 
+
+            # 4) Met à jour le lien de téléchargement
+            self._last_download_link = _download_link(self.fig, f"simulation_{datetime.now():%Y%m%d_%H%M%S}.png")
+            with self.canvas_output:
+                clear_output(wait=True)
+                display(self.canvas, self._last_download_link)
             # ----------------------------------------------------------------------
             # Meilleur ΔR/Δn global
             # ----------------------------------------------------------------------
@@ -1080,10 +1180,10 @@ class SimulationTab:
             # Construction du tableau final 
             # ----------------------------------------------------------------------
             if not cfg_labels:                        # aucun dip retenu
-                ax_plot.set_title("Spectres simulés – aucun dip valide")
-                handles, labels = ax_plot.get_legend_handles_labels()
+                self.ax_plot.set_title("Spectres simulés – aucun dip valide")
+                handles, labels = self.ax_plot.get_legend_handles_labels()
                 if labels:
-                    ax_plot.legend(handles, labels, loc='best',
+                    self.ax_plot.legend(handles, labels, loc='best',
                                 fontsize=9, frameon=False) 
 
 
@@ -1131,7 +1231,7 @@ class SimulationTab:
                 cellText.append(Q_fac);        rowLabels.append("Q-factor")
 
             fs = 8 if len(cfg_labels) <= 5 else max(8 - (len(cfg_labels) - 5), 3)
-            table = ax_table.table(cellText=cellText, colLabels=col_labels,
+            table = self.ax_table.table(cellText=cellText, colLabels=col_labels,
                                 rowLabels=rowLabels, loc="center", cellLoc="left")
             table.auto_set_font_size(False)
             table.set_fontsize(fs)
@@ -1159,27 +1259,24 @@ class SimulationTab:
                     cell.set_height(0.04 * row_heights[r])
 
             # légende (spectres)
-            handles, labels = ax_plot.get_legend_handles_labels()
+            handles, labels = self.ax_plot.get_legend_handles_labels()
             handles = [h for h, lab in zip(handles, labels) if lab and not lab.startswith('_')]
             labels  = [lab for lab in labels if lab and not lab.startswith('_')]
             if labels:
-                ax_plot.legend(handles, labels, loc='best', fontsize=9, frameon=False)
+                self.ax_plot.legend(handles, labels, loc='best', fontsize=9, frameon=False)
 
 
-            # ----------------------------------------------------------------------
-            # Affichage dans le widget Output
-            # ----------------------------------------------------------------------
 
-            fig.tight_layout()             
-            display(fig)
-            display(_download_link(fig,
-                        f"simulation_{datetime.now():%Y%m%d_%H%M%S}.png"))
+            with self.canvas_output:
+                clear_output(wait=True)
+                display(self.fig.canvas, self._last_download_link)
 
-        # ------------------------------------------------------------------
-        # 4) Rétablir l’interactivité et fermer proprement
-        # ------------------------------------------------------------------
-        mpl.interactive(was_interactive)           
-        plt.close(fig)  
+
+
+        except Exception as e:
+                import traceback
+                display(HTML(f"<pre>{traceback.format_exc()}</pre>"))
+
                          
 
 
@@ -1294,6 +1391,9 @@ class SimulationTab:
                 self.dn_checkboxes[name] = dn
                 config_rows.append(HBox([chk, dn], layout=Layout(grid_gap='5px')))
 
+                #  observer la case config 
+                chk.observe(self._refresh_custom_modes, names='value')
+
             # 3) Met à jour le conteneur avec le header et les boutons
             header = HTML("<b>Configurations et Δn</b>")
             buttons = HBox([self.select_all_cfg_btn, self.select_all_dn_btn],
@@ -1303,6 +1403,7 @@ class SimulationTab:
             # 4) Conserve l’état ouvert/fermé et rafraîchit les modes custom
             self._toggle_config_list({'new': self.toggle_btn.value})
             self._refresh_custom_modes()
+
 
 
 
@@ -1324,6 +1425,8 @@ class SimulationTab:
             self.custom_n_mod_inputs[name] = it
             inputs.append(it)
         self.custom_modes_box.children = inputs
+
+
 
     def _toggle_debug(self, change):
         self.debug_out.layout.display = 'block' if change['new'] else 'none'
@@ -1426,6 +1529,37 @@ class SimulationTab:
 
         
     
+    def _assemble_layout(self):
+        # 4 lignes, 2 colonnes
+        grid = widgets.GridspecLayout(4, 2, grid_gap='16px', width='100%')
+
+        # ligne 0 : contrôles à gauche, metrics à droite
+        grid[0, 0] = self.panel_controls
+        grid[0, 1] = self.metrics_panel
+
+        # ligne 1 : la figure qui occupe TOUTE la largeur
+        grid[1, :] = self.canvas_output
+
+        # ligne 2 : debug (vous pouvez aussi le faire en n’occuper qu’une colonne)
+        grid[2, :] = self.debug_out
+
+        # (la ligne 3 reste libre ou vous pouvez y mettre autre chose)
+        self.tab = widgets.VBox([grid], layout=widgets.Layout(width='100%'))
+
+
+    def _connect_signals(self):
+        self.sim_run_button.on_click(self._on_run)
+        self.sim_cancel_button.on_click(self._on_cancel)
+        self.sim_download_button.on_click(self._download_file)
+        self.config_refresh_btn.on_click(self._refresh_configs)
+        self.select_all_cfg_btn.on_click(self._toggle_all_cfg)
+        self.select_all_dn_btn.on_click(self._toggle_all_dn)
+        self.toggle_btn.observe(self._toggle_config_list, names='value')
+        for chk in self.dn_checkboxes.values():
+            chk.observe(self._toggle_delta_widgets, names='value')
+        self.mode_selection.observe(self._refresh_custom_modes, names='value')
+        self.mode_calc_radio.observe(self._toggle_lambda0, names='value')
+        self.verbose_toggle.observe(self._toggle_debug, names='value')
 
 
 # instanciation globale
