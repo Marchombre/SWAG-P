@@ -185,7 +185,7 @@ class SimulationTab:
     #                            __init__                               #
     # ----------------------------------------------------------------- #
     def __init__(self):
-        #get_ipython().run_line_magic('matplotlib', 'widget')
+
         # 1) runtime flags & handles pour le parallélisme
         self._init_runtime_flags()
         # 2) chargement des configs JSON
@@ -194,28 +194,40 @@ class SimulationTab:
         self._init_common_widgets()
         # 
         self._init_metrics_overlays()
+
+
         # 4) construction des panneaux (panels)
         # ── Initialise 1 seule figure + 2 axes ───────────────────────────
-        
-        # active %matplotlib widget et crée la figure
-        #get_ipython().run_line_magic('matplotlib', 'widget')
+        # 1) Active le backend 'widget' pour ipympl (une seule fois)
+        get_ipython().run_line_magic('matplotlib', 'widget')
+        # 2) Désactive l’auto-affichage des figures, sinon plt.subplots() 
+        #    injecte une figure dans la cellule
+        plt.ioff()
+
+        # 3) Création de la figure & des axes (plus tard vous displayez
+        #    uniquement via self.canvas_output)
         self.fig, (self.ax_plot, self.ax_table) = plt.subplots(
-            nrows=2, figsize=(13, 9),
+            nrows=2, figsize=(8, 7),
             gridspec_kw={'height_ratios': [1, 1]}
+        )
+        # … vos ajustements de layout …
+        self.fig.subplots_adjust(
+            left=0.10, right=0.8,
+            top=0.98,  bottom=0.05,
+            hspace=0.2
         )
         self.ax_table.axis('off')
 
-        # widget de sortie
+        # 4) Réactive le mode interactif *sans* auto-affichage
+        plt.ion()
+
+        # 5) Prépare l’Output et n’affiche QUE ce canvas
         self.canvas_output = widgets.Output(layout=widgets.Layout(
-            border='1px solid lightgray',
-            min_height='400px',
+            border='1px solid lightgray', min_height='250px'
         ))
-        # affichage initial (vide)
         with self.canvas_output:
             clear_output()
             display(self.fig.canvas)
-
-        self.canvas = self.fig.canvas
 
 
         self._build_panels()
@@ -225,6 +237,9 @@ class SimulationTab:
         self._connect_signals()
         # 7) état initial des widgets Δn
         self._toggle_delta_widgets()
+
+
+
 
     # ----------------------------------------------------------------- #
     #      1) initialisation runtime et chargement des configs         #
@@ -244,6 +259,8 @@ class SimulationTab:
         else:
             self.all_configs = []
         self.json_combined_path = json_combined_path
+
+
 
     # ----------------------------------------------------------------- #
     #       2) toggle λ₀ (méthode de classe, pas locale)               #
@@ -414,12 +431,15 @@ class SimulationTab:
                 display='none'
             )
         )
-        self.toggle_btn         = widgets.ToggleButton(
+        self.toggle_btn = widgets.ToggleButton(
             description="Select Configs & Δn",
-            icon='caret-down',
+            value=True,                     # ← ouvert par défaut
+            icon='caret-up',                # ← icône cohérente
             layout=widgets.Layout(width='520px'),
             button_style='warning'
         )
+        self._toggle_config_list({'new': True})
+
         self.config_refresh_btn = widgets.Button(
             description="Refresh Configs",
             button_style="info",
@@ -456,6 +476,7 @@ class SimulationTab:
             layout=widgets.Layout(
                 width='100%', height='120px',
                 overflow_y='auto',
+                margin = '2px 0 0 0',
                 border='1px solid darkred'
             )
         )
@@ -1156,9 +1177,14 @@ class SimulationTab:
 
             # 4) Met à jour le lien de téléchargement
             self._last_download_link = _download_link(self.fig, f"simulation_{datetime.now():%Y%m%d_%H%M%S}.png")
+            
             with self.canvas_output:
                 clear_output(wait=True)
-                display(self.canvas, self._last_download_link)
+                self.fig.canvas.draw()
+                display(self.fig.canvas, self._last_download_link)
+            
+            
+            
             # ----------------------------------------------------------------------
             # Meilleur ΔR/Δn global
             # ----------------------------------------------------------------------
@@ -1267,9 +1293,10 @@ class SimulationTab:
 
 
 
-            with self.canvas_output:
-                clear_output(wait=True)
-                display(self.fig.canvas, self._last_download_link)
+            # with self.canvas_output:
+            #     clear_output(wait=True)
+            #     self.canvas.draw()
+            #     display(self.fig.canvas, self._last_download_link)
 
 
 
@@ -1530,21 +1557,30 @@ class SimulationTab:
         
     
     def _assemble_layout(self):
-        # 4 lignes, 2 colonnes
-        grid = widgets.GridspecLayout(4, 2, grid_gap='16px', width='100%')
+        # Fixer 50% de largeur à chaque « colonne »
+        self.panel_controls.layout = widgets.Layout(
+            width='50%',
+            padding='0 10px 0 0'
+        )
+        right_column = widgets.VBox(
+            [self.metrics_panel, self.canvas_output, self.debug_out],
+            layout=widgets.Layout(
+                width='50%',
+                padding='0 0 0 5px',
+                gap='5px',
+                align_items='stretch'
+            )
+        )
 
-        # ligne 0 : contrôles à gauche, metrics à droite
-        grid[0, 0] = self.panel_controls
-        grid[0, 1] = self.metrics_panel
+        # On met le tout sur une seule ligne
+        self.tab = widgets.HBox(
+            [self.panel_controls, right_column],
+            layout=widgets.Layout(
+                width='100%',
+                align_items='flex-start'
+            )
+        )
 
-        # ligne 1 : la figure qui occupe TOUTE la largeur
-        grid[1, :] = self.canvas_output
-
-        # ligne 2 : debug (vous pouvez aussi le faire en n’occuper qu’une colonne)
-        grid[2, :] = self.debug_out
-
-        # (la ligne 3 reste libre ou vous pouvez y mettre autre chose)
-        self.tab = widgets.VBox([grid], layout=widgets.Layout(width='100%'))
 
 
     def _connect_signals(self):
