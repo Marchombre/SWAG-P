@@ -14,7 +14,9 @@ Après avoir cliqué sur "Tracer convergence", le module calcule Rup pour chaque
 la courbe. Un label affiche également le n_mode optimal, défini comme le premier n_mode pour lequel 
 la variation absolue de Rup devient inférieure à la tolérance (ce qui signifie la stabilisation des résultats).
 """
-
+# --------------------------------------------------------------------- #
+#                                imports                                #
+# --------------------------------------------------------------------- #
 import math
 import re
 import os
@@ -25,12 +27,30 @@ import matplotlib.pyplot as plt
 import time
 from datetime import datetime
 import zipfile
+
 from pathlib import Path
+
 import ipywidgets as widgets
 from IPython.display import FileLink, display
 
 from gap_plasmon_2d.simulation.simulate_reflectance import simulate_reflectance_single
 from gap_plasmon_2d.utils.file_watchers import start_watcher
+
+
+# --------------------------------------------------------------------- #
+#                                chemins                                #
+# --------------------------------------------------------------------- #
+# Dossier racine des résultats (…/results)
+results_dir = Path(paths.RESULTS_DIR)
+
+# Sous-dossier pour la convergence
+convergence_dir = results_dir / "summary_convergence"
+convergence_dir.mkdir(parents=True, exist_ok=True)
+
+# Chemin vers le fichier JSON de convergence
+convergence_file = convergence_dir / "convergence_results.json"
+
+
 
 def compute_convergence(lambda_fixed, n_mode_max, geometry, wave, df_config, json_combined_path, ri_overrides, tolerance, n_step, stable_required, progress_bar=None):
     """
@@ -119,11 +139,8 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
 
     # --- Watchdog : recharge automatiquement la liste des configs JSON ---
     # Chemin vers le JSON des combinaisons
-    combos_file = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        str(paths.CONFIGS_DIR),
-        "geom_mat_combinations.json"
-    )
+    combos_file = Path(paths.CONFIGS_DIR) / "geom_mat_combinations.json"
+
     # Handler qui recharge conv_config_selector.options
     def _on_config_change(event):
         if event.src_path.endswith(".json"):
@@ -330,18 +347,11 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
             )
 
 
-        # 3) Sauvegarde des json 
-        module_dir = Path(__file__).resolve().parent       # …/Gap_Plasmon_2D/Workspace/modules
-        project_root = module_dir.parent                    # …/Gap_Plasmon_2D/Workspace
-        convergence_dir = project_root / "Convergence"
-        convergence_dir.mkdir(exist_ok=True)
-
         # 3a) Master JSON metadata
-        master_path = convergence_dir / "convergence_results.json"
-        if master_path.exists():
-            master = json.loads(master_path.read_text(encoding="utf-8"))
+        if convergence_file.exists():
+            convergence_data = json.loads(convergence_file.read_text(encoding="utf-8"))
         else:
-            master = {"configs": {}}
+            convergence_data = {"configs": {}}
 
         # --- Pour chaque configuration du run courant, on ajoute sa méta-donnée ---
         for cfg_name, optimal_n in zip(cfg_names, optimal_list):
@@ -355,14 +365,14 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
                 "optimal_n_mode":  optimal_n
             }
             # Si c'est la première fois qu'on voit cfg_name, on crée la liste
-            if cfg_name not in master["configs"]:
-                master["configs"][cfg_name] = []
+            if cfg_name not in convergence_data["configs"]:
+                convergence_data["configs"][cfg_name] = []
             # On ajoute la méta-donnée
-            master["configs"][cfg_name].append(entry)
+            convergence_data["configs"][cfg_name].append(entry)
 
-        # --- Écriture du master JSON ---
-        master_path.write_text(
-            json.dumps(master, ensure_ascii=False, indent=2),
+        # --- Écriture du convergence_data JSON ---
+        convergence_file.write_text(
+            json.dumps(convergence_data, ensure_ascii=False, indent=2),
             encoding="utf-8"
         )
 
@@ -379,8 +389,8 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
                 encoding="utf-8"
             )
 
-        # --- Mise à jour du lien de téléchargement pour le master JSON ---
-        rel = os.path.relpath(str(master_path), start=os.getcwd())
+        # --- Mise à jour du lien de téléchargement pour le convergence_data JSON ---
+        rel = os.path.relpath(str(convergence_file), start=os.getcwd())
         # Préfixe Jupyter
         href = "/files/" + rel.replace(os.sep, "/")
         download_link.value = (
@@ -395,14 +405,72 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     
     plot_button.on_click(Conv_computation)
     
-    conv_controls = widgets.VBox([numeric_controls, button_container])
-    widget = widgets.VBox([
+    # 1) Sidebar (30%) pour tous les contrôles
+    sidebar = widgets.VBox([
+        widgets.HTML("<h2 style='margin-bottom:10px;'>Convergence Settings</h2>"),
         conv_config_selector_box,
-        conv_controls,
-        conv_output,
-        results_table_output,
+        widgets.HTML("<b>Parameters</b>"),
+        numeric_controls,
+        button_container,
+        widgets.HTML("<br><b>Download</b>"),
         download_link
-    ], layout=widgets.Layout(width='53%'))
+    ], layout=widgets.Layout(
+        width='50%',
+        border='1px solid lightgray',
+        padding='10px',
+        margin='0 10px 0 0',
+        overflow_y='auto'
+    ))
 
-    
-    return widget
+    # 2) Dans “Results”, ajouter un toggle pour afficher le JSON
+    json_toggle = widgets.ToggleButton(
+        description="Show JSON",
+        value=False,
+        layout=widgets.Layout(margin='10px 0')
+    )
+    json_output = widgets.Output(layout=widgets.Layout(
+        border="1px solid lightgray",
+        width='100%',
+        max_height='300px',
+        overflow='auto'
+    ))
+
+    def _on_json_toggle(change):
+        json_output.clear_output()
+        if change['new']:
+            with json_output:
+                path = convergence_file
+                if path.exists():
+                    data = json.loads(path.read_text(encoding='utf-8'))
+                    print(json.dumps(data, indent=2))
+                else:
+                    print("No convergence_results.json found.")
+    json_toggle.observe(_on_json_toggle, names='value')
+
+    # 3) Zone de sortie (70%) en onglets Plot / Results
+    results_area = widgets.VBox([
+        json_toggle,
+        results_table_output,
+        json_output
+    ])
+    output_tabs = widgets.Tab(children=[conv_output, results_area])
+    output_tabs.set_title(0, '📈 Plot')
+    output_tabs.set_title(1, '📊 Results')
+
+    main_area = widgets.VBox([output_tabs], layout=widgets.Layout(
+        width='50%',
+        border='1px solid lightgray',
+        padding='10px'
+    ))
+
+    # 4) Assemblage final
+    container = widgets.HBox(
+        [sidebar, main_area],
+        layout=widgets.Layout(
+            width='100%',
+            height='100%',
+            align_items='flex-start'
+        )
+    )
+
+    return container

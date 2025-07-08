@@ -323,6 +323,132 @@
         "thick_sub": 200.0,
         "period": 100.2153
       }
+    },
+    {
+      "config_name": "test 2",
+      "compartment": "Bragg",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 10.0,
+        "width_reso": 100.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 0.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 2.0,
+        "homo_new2": 1.0,
+        "thick_accroche": 2.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Test_homo_acc",
+      "compartment": "D\u00e9faut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 1.0,
+        "thick_metalliclayer": 10.0,
+        "thick_homo_acc": 3.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Test_acc",
+      "compartment": "D\u00e9faut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 1.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 3.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Bragg_20",
+      "compartment": "Optimization",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 2.0,
+        "width_reso": 100.0,
+        "thick_gap": 2.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 0.0,
+        "thick_metalliclayer": 1.0,
+        "thick_homo_new_1": 2.0,
+        "thick_homo_new_2": 1.0,
+        "thick_homo_new_3": 1.0,
+        "thick_homo_new_4": 1.0,
+        "thick_homo_new_5": 1.0,
+        "thick_homo_new_6": 1.0,
+        "thick_homo_new_7": 1.0,
+        "thick_homo_new_8": 1.0,
+        "thick_homo_new_9": 1.0,
+        "thick_homo_new_10": 1.0,
+        "thick_homo_new_11": 1.0,
+        "thick_homo_new_12": 1.0,
+        "thick_homo_new_13": 1.0,
+        "thick_XIAOYI": 1.0,
+        "thick_accroche": 1.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "Bragg_20_thick_new",
+      "compartment": "Optimization",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 0.0,
+        "width_reso": 0.0,
+        "thick_gap": 0.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 0.0,
+        "thick_metalliclayer": 0.0,
+        "thick_homo_new_1": 1.0,
+        "thick_homo_new_2": 1.0,
+        "thick_homo_new_3": 1.0,
+        "thick_homo_new_4": 1.0,
+        "thick_homo_new_5": 1.0,
+        "thick_homo_new_6": 1.0,
+        "thick_homo_new_7": 1.0,
+        "thick_homo_new_8": 1.0,
+        "thick_homo_new_9": 1.0,
+        "thick_homo_new_10": 1.0,
+        "thick_homo_new_11": 1.0,
+        "thick_homo_new_12": 1.0,
+        "thick_homo_new_13": 1.0,
+        "thick_homo_new_14": 1.0,
+        "thick_homo_new_15": 1.0,
+        "thick_homo_new_16": 1.0,
+        "thick_homo_new_17": 1.0,
+        "thick_homo_new_18": 1.0,
+        "thick_homo_new_19": 1.0,
+        "thick_homo_new_20": 1.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+
+      }
     }
   ]
 }

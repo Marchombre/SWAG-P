@@ -1046,7 +1046,7 @@ class OptimizationTab:
             ax1.set_title("Consistency curve (all compatible runs)")
         else:
             ax1.text(0.5, 0.5,
-                    "Il faut ≥ 2 runs compatibles pour la consistency",
+                    " ≥ 2 runs compatibles needed to plot consistency curve",
                     ha='center', va='center', transform=ax1.transAxes)
 
         # ------------------------------------------------------------

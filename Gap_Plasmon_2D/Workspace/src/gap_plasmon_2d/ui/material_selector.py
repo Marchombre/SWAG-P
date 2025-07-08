@@ -9,6 +9,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+
+from gap_plasmon_2d.ui.geometry_settings import geometry_widget, get_geometry_save_path
+
+
 # ============================================================================
 # Définition des chemins globaux
 # ============================================================================
@@ -19,9 +23,29 @@ CONFIGURATIONS_DIR = os.path.join(str(paths.CONFIGS_DIR))
 CATALOG_PATH = os.path.join(WORKSPACE_DIR, paths.CATALOG_NK)
 JSON_COMBINED_PATH = os.path.join(DATA_DIR, "combined_materials.json")
 
+
+# ============================================================================
+# Rôles par défaut et lancement du Material Selector
+# ============================================================================
+DEFAULT_ROLES = [
+    "perm_env", "perm_reso", "perm_mol", "perm_func", "perm_diel", "perm_gap",
+    "perm_metalliclayer", "perm_XIAOYI", "perm_accroche", "perm_sub"
+]
+
+
 # ============================================================================
 # Fonctions utilitaires
 # ============================================================================
+
+
+def _load_geometry_names():
+    path = get_geometry_save_path()
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return [cfg["config_name"] for cfg in data.get("ALL_GEOMETRY_CONFIGS", [])]
+
 
 def html_sub_to_unicode(text):
     """Convertit les balises HTML <sub>...</sub> en indices Unicode."""
@@ -806,6 +830,14 @@ class MaterialRoleWidget:
 
 class MaterialSelectorTabbedNotebook:
     def __init__(self, roles):
+        
+        self.geometry_dropdown = widgets.Dropdown(
+            options=[""] + _load_geometry_names(),
+            description="Geometry:",
+            layout=widgets.Layout(width="300px")
+        )
+        self.geometry_dropdown.observe(self._on_geometry_change, names="value")
+
         self.CONFIGURATIONS_dir = CONFIGURATIONS_DIR
         self.library = load_catalog_full(CATALOG_PATH)
         self.standard_list = get_standard_materials(JSON_COMBINED_PATH, DATA_DIR)
@@ -818,6 +850,8 @@ class MaterialSelectorTabbedNotebook:
             self.role_widgets[role] = widget_role
             children.append(widget_role.container)
         self.tab = widgets.Tab(children=children)
+        self.current_roles = DEFAULT_ROLES.copy()
+
         for i, role in enumerate(roles):
             self.tab.set_title(i, role)
         self.preconfigs = {
@@ -873,6 +907,7 @@ class MaterialSelectorTabbedNotebook:
         self.update_config_btn.on_click(self.on_update_config)
         self.delete_config_btn.on_click(self.on_delete_config)
         self.container = widgets.VBox([
+            self.geometry_dropdown,
             self.preconfig_control_box, self.tab, self.config_name_text,
             widgets.HBox([self.add_config_btn, self.save_quit_btn]),
             widgets.HBox([self.config_dropdown, self.load_config_btn, self.update_config_btn, self.delete_config_btn]),
@@ -881,6 +916,95 @@ class MaterialSelectorTabbedNotebook:
         self.all_configs = []
         self.load_saved_configs()
         
+
+
+
+
+    def _on_geometry_change(self, change):
+        name = change["new"]
+        # 1) Déterminer les rôles à afficher selon la géométrie sélectionnée
+        if not name:
+            # Pas de géométrie choisie → on affiche tous les rôles par défaut
+            display_roles = DEFAULT_ROLES.copy()
+        else:
+            # Charger toutes les géométries sauvegardées
+            path = get_geometry_save_path()
+            with open(path, "r", encoding="utf-8") as f:
+                all_cfgs = json.load(f)["ALL_GEOMETRY_CONFIGS"]
+            # Chercher l’entrée correspondant au nom
+            geom_entry = next((cfg for cfg in all_cfgs if cfg["config_name"] == name), None)
+            if geom_entry is None:
+                # Si introuvable, revenir aux rôles par défaut
+                with self.output:
+                    print(f"[WARN] Géométrie '{name}' introuvable, affichage par défaut.")
+                display_roles = DEFAULT_ROLES.copy()
+            else:
+                geom = geom_entry["geometry"]
+                display_roles = []
+                # --- avant ---
+                # Superstrate → perm_env
+                if geom.get("thick_super", 0) > 0:
+                    display_roles.append("perm_env")
+                # Résonateur, gap et couches latérales
+                before_map = [
+                    ("thick_reso",             "perm_reso"),
+                    ("thick_gap",              "perm_gap"),
+                    ("thick_mol",              "perm_mol"),
+                    ("thick_func",             "perm_func"),
+                    ("thick_diel",             "perm_diel"),
+                    ("thick_metalliclayer",    "perm_metalliclayer"),
+                ]
+                for key, role in before_map:
+                    if geom.get(key, 0) > 0:
+                        display_roles.append(role)
+                # --- couches homo dynamiques ---
+                for thick_key, val in geom.items():
+                    if thick_key.startswith("thick_homo_") and val > 0:
+                        suffix = thick_key[len("thick_"):]
+                        display_roles.append(f"perm_{suffix}")
+                # --- après ---
+                after_map = [
+                    ("thick_XIAOYI",   "perm_XIAOYI"),
+                    ("thick_accroche", "perm_accroche"),
+                    ("thick_sub",      "perm_sub"),
+                ]
+                for key, role in after_map:
+                    if geom.get(key, 0) > 0:
+                        display_roles.append(role)
+
+        # 2) Reconstruire les onglets pour ne garder que ces rôles
+        self._rebuild_tabs(display_roles)
+
+        # 3) Tout rôle non affiché repasse en mode None
+        for role, widget_role in self.role_widgets.items():
+            if role not in display_roles:
+                widget_role.mode_dropdown.value = "None"
+
+        # 4) Mémoriser la liste complète des rôles pour le futur
+        self.current_roles = list(self.role_widgets.keys())
+
+
+
+
+
+
+    def _rebuild_tabs(self, roles_list):
+        """
+        Reconstruit self.tab.children et titres en ne gardant
+        que les widgets pour les rôles passés.
+        """
+        children = []
+        for role in roles_list:
+            # créer à la volée s’il n’existe pas encore
+            if role not in self.role_widgets:
+                self.role_widgets[role] = MaterialRoleWidget(role, self.library, self.standard_list)
+            children.append(self.role_widgets[role].container)
+        self.tab.children = tuple(children)
+        for i, role in enumerate(roles_list):
+            self.tab.set_title(i, role)
+
+
+
     def _get_preconfig_options(self):
         options = [("None", "")]
         for key in self.preconfigs:
@@ -1013,122 +1137,205 @@ class MaterialSelectorTabbedNotebook:
         self.config_dropdown.options = options if options else [("None", None)]
     
     def on_add_config(self, b):
+        # 1) Définir l'ordre des rôles d'après la géométrie sélectionnée
+        geom_name = self.geometry_dropdown.value
+        if geom_name:
+            path = get_geometry_save_path()
+            with open(path, "r", encoding="utf-8") as f:
+                geoms = json.load(f)["ALL_GEOMETRY_CONFIGS"]
+            geom = next(cfg for cfg in geoms if cfg["config_name"] == geom_name)["geometry"]
+            # Parcours dans l'ordre exact des clés thick_… pour inclure aussi les homo
+            ordered_roles = []
+            for key in geom.keys():
+                if not key.startswith("thick_"):
+                    continue
+                suffix = key[len("thick_"):]
+                # On ignore period
+                if suffix == "period":
+                    continue
+                # Super → perm_env, sinon perm_<suffix>
+                perm_role = "perm_env" if suffix == "super" else f"perm_{suffix}"
+                ordered_roles.append(perm_role)
+        else:
+            # Pas de géométrie → on garde le dernier jeu de rôles utilisé
+            ordered_roles = self.current_roles.copy()
+
+        # 2) Construire MATERIALS_CONFIG et RI_OVERRIDES
         config_list = []
         ri_overrides = {}
-        for role, widget_role in self.role_widgets.items():
-            mat_info = widget_role.get_config()
-            config_list.append({"key": role, "material": mat_info})
-            if mat_info.get("type") == "RefractiveIndex":
-                ri_overrides[role] = mat_info
-        config_name = self.config_name_text.value.strip() or f"Config_{len(self.all_configs)+1}"
-        config_dict = {"config_name": config_name, "MATERIALS_CONFIG": config_list, "RI_OVERRIDES": ri_overrides}
-        self.all_configs.append(config_dict)
+        for role in ordered_roles:
+            widget = self.role_widgets.get(role)
+            if widget is not None:
+                mat_cfg = widget.get_config()
+            else:
+                mat_cfg = {"type": "None"}
+            # Forcer à {"type":"None"} si besoin
+            if not isinstance(mat_cfg, dict) or mat_cfg.get("type") == "None":
+                mat_cfg = {"type": "None"}
+            config_list.append({"key": role, "material": mat_cfg})
+            if mat_cfg.get("type") == "RefractiveIndex":
+                ri_overrides[role] = mat_cfg
+
+        # 3) Préparer le nom et éviter les doublons
+        name = self.config_name_text.value.strip() or f"Config_{len(self.all_configs)+1}"
+        # On retire l'ancien éventuel
+        self.all_configs = [cfg for cfg in self.all_configs if cfg["config_name"] != name]
+
+        # 4) Créer et enregistrer la nouvelle config
+        new_cfg = {
+            "config_name": name,
+            "MATERIALS_CONFIG": config_list,
+            "RI_OVERRIDES": ri_overrides
+        }
+        self.all_configs.append(new_cfg)
         self.update_config_dropdown()
         with self.output:
-            print(f"Configuration '{config_name}' added.")
+            clear_output()
+            print(f"Configuration '{name}' ajoutée.")
+
+        # 5) Persister tout de suite
+        self._persist_configs()
         self.config_name_text.value = ""
-        for widget_role in self.role_widgets.values():
-            widget_role.mode_dropdown.value = "None"
-            widget_role.custom_text.value = ""
+
+        # 6) Réinitialiser l’UI
+        for w in self.role_widgets.values():
+            w.mode_dropdown.value = "None"
+            w.custom_text.value = ""
+
     
     def on_save_quit(self, b):
         if not self.all_configs:
             with self.output:
                 print("No configuration has been added.")
             return
-        final_dict = {"ALL_CONFIGS": self.all_configs}
-        if not os.path.exists(CONFIGURATIONS_DIR):
-            os.makedirs(CONFIGURATIONS_DIR)
-        config_file = os.path.join(CONFIGURATIONS_DIR, "material_config.json")
-        with open(config_file, "w", encoding="utf-8") as f:
-            json.dump(final_dict, f, indent=2)
+        self._persist_configs()
         with self.output:
-            print(f"All configurations saved in:\n{config_file}")
-            
+            print(f"All configurations saved in:\n{os.path.join(CONFIGURATIONS_DIR, 'material_config.json')}")
+
             
     def on_load_config(self, b):
+        
+        # 0) Ne pas tenir compte de la géométrie précédente
+        self.geometry_dropdown.value = ""
+
         selected = self.config_dropdown.value
         if selected is None:
             with self.output:
+                clear_output()
                 print("No configuration selected for loading.")
             return
 
-        # (1) Pour chaque rôle, on positionne mode + valeur
-        for entry in selected["MATERIALS_CONFIG"]:
-            role = entry["key"]
-            mat_config = entry["material"]
-            widget_role = self.role_widgets.get(role)
-            if widget_role is None:
-                continue
+        # 1) Déterminer la liste des rôles à afficher d'après MATERIALS_CONFIG
+        roles_to_show = [entry["key"] for entry in selected["MATERIALS_CONFIG"]]
 
-            # a) mode (None, Custom, Standard, RefractiveIndex)
-            widget_role.mode_dropdown.value = mat_config.get("type", "None")
+        # 2) Reconstruire les onglets pour n'afficher que ces rôles
+        self._rebuild_tabs(roles_to_show)
+        self.current_roles = roles_to_show.copy()
 
-            # b) contenu
-            mtype = widget_role.mode_dropdown.value.lower()
-            if mtype == "custom":
-                widget_role.custom_text.value = mat_config.get("expression", "")
-            elif mtype == "standard":
-                widget_role.standard_dropdown.value = mat_config.get("material", "")
-            elif mtype == "refractiveindex":
-                sel = {
-                    "shelf": mat_config.get("shelf", ""),
-                    "book":  mat_config.get("book", ""),
-                    "page":  mat_config.get("page", ""),
-                    "data":  mat_config.get("data", "")
-                }
-                widget_role.ri_widget.set_selection(sel)
-                # on force le recalcul des sliders λ-min/λ-max
-                widget_role._update_override_refrac()
+        # 3) Initialiser chaque widget de rôle
+        #    On commence tous à None (sécurité)
+        for role in self.role_widgets:
+            if role in roles_to_show:
+                # trouver la config de ce rôle
+                mat_cfg = next(
+                    (e["material"] for e in selected["MATERIALS_CONFIG"] if e["key"] == role),
+                    None
+                )
+                w = self.role_widgets[role]
 
-        # (2) On rafraîchit l’affichage de chaque onglet
-        for widget_role in self.role_widgets.values():
-            widget_role._update_visibility()
+                if not isinstance(mat_cfg, dict) or mat_cfg.get("type") in (None, "None"):
+                    w.mode_dropdown.value = "None"
+                else:
+                    mode = mat_cfg["type"]
+                    w.mode_dropdown.value = mode
+                    if mode == "Custom":
+                        w.custom_text.value = mat_cfg.get("expression", "")
+                    elif mode == "Standard":
+                        w.standard_dropdown.value = mat_cfg.get("material", "")
+                    elif mode == "RefractiveIndex":
+                        sel = {
+                            "shelf": mat_cfg.get("shelf", ""),
+                            "book":  mat_cfg.get("book",  ""),
+                            "page":  mat_cfg.get("page",  ""),
+                            "data":  mat_cfg.get("data",  "")
+                        }
+                        w.ri_widget.set_selection(sel)
+                        w._update_override_refrac()
+            else:
+                # ne devrait pas arriver car on a rebuild_tabs, mais pour sécurité :
+                self.role_widgets[role].mode_dropdown.value = "None"
 
-        # (3) Mise à jour du nom et message
+        # 4) Forcer la mise à jour de la visibilité de chaque onglet
+        for w in self.role_widgets.values():
+            w._update_visibility()
+
+        # 5) Mettre à jour le nom de la config et informer l'utilisateur
         self.config_name_text.value = selected["config_name"]
         with self.output:
+            clear_output()
             print(f"Configuration '{selected['config_name']}' loaded.")
+
             
-            
+
+
     def on_update_config(self, b):
         selected = self.config_dropdown.value
         if selected is None:
             with self.output:
+                clear_output()
                 print("No configuration selected for update.")
             return
 
-        # -------- RÉCUPÉRATION FIABLE DE L'ANCIEN NOM AVANT MODIF ----------
-        old_label = None
-        for (label, obj) in self.config_dropdown.options:
-            if obj is selected:
-                old_label = label
-                break
-        if old_label:
-            old_name = old_label  # Ici tu utilises directement le label, car config_name seul
-            # Si tu as un format "Nom (autre info)", isole juste le nom:
-            # old_name = old_label.split(" (")[0]
-        else:
-            old_name = selected.get("config_name", "")
+        # Récupérer l'ancien nom via le label du dropdown
+        old_label = next((lbl for lbl, obj in self.config_dropdown.options if obj is selected), None)
+        old_name  = old_label or selected.get("config_name", "")
 
-        # -------- APPLICATION DE LA MISE À JOUR ----------
+        # 1) Même logique que pour on_add_config pour l'ordre des rôles
+        geom_name = self.geometry_dropdown.value
+        if geom_name:
+            path = get_geometry_save_path()
+            with open(path, "r", encoding="utf-8") as f:
+                geoms = json.load(f)["ALL_GEOMETRY_CONFIGS"]
+            geom = next((cfg for cfg in geoms if cfg["config_name"] == geom_name), {}).get("geometry", {})
+            ordered_roles = []
+            for key in geom.keys():
+                if not key.startswith("thick_"):
+                    continue
+                suffix = key[len("thick_"):]
+                if suffix == "period":
+                    continue
+                perm_role = "perm_env" if suffix == "super" else f"perm_{suffix}"
+                ordered_roles.append(perm_role)
+        else:
+            ordered_roles = self.current_roles.copy()
+
+        # 2) Recomposer MATERIALS_CONFIG et RI_OVERRIDES
         updated_config_list = []
         ri_overrides = {}
-        for role, widget_role in self.role_widgets.items():
-            mat_info = widget_role.get_config()
-            updated_config_list.append({"key": role, "material": mat_info})
-            if mat_info.get("type") == "RefractiveIndex":
-                ri_overrides[role] = mat_info
+        for role in ordered_roles:
+            widget = self.role_widgets.get(role)
+            if widget is not None:
+                mat_cfg = widget.get_config()
+            else:
+                mat_cfg = {"type": "None"}
+            if not isinstance(mat_cfg, dict) or mat_cfg.get("type") == "None":
+                mat_cfg = {"type": "None"}
+            updated_config_list.append({"key": role, "material": mat_cfg})
+            if mat_cfg.get("type") == "RefractiveIndex":
+                ri_overrides[role] = mat_cfg
 
+        # 3) Appliquer dans self.all_configs
         new_name = self.config_name_text.value.strip() or old_name
-        for cfg in self.all_configs:
-            if cfg["config_name"] == old_name:
-                cfg["MATERIALS_CONFIG"] = updated_config_list
-                cfg["RI_OVERRIDES"] = ri_overrides
-                cfg["config_name"] = new_name
+        cfg = None
+        for entry in self.all_configs:
+            if entry["config_name"] == old_name:
+                entry["MATERIALS_CONFIG"] = updated_config_list
+                entry["RI_OVERRIDES"]    = ri_overrides
+                entry["config_name"]     = new_name
+                cfg = entry
                 break
 
-        # -------- PATCH CONVERGENCE_RESULTS.JSON SI CHANGEMENT DE NOM ----------
+        # 4) Patch convergence_results.json si renommage
         convergence_json = os.path.join(WORKSPACE_DIR, "Convergence", "convergence_results.json")
         if new_name != old_name and os.path.exists(convergence_json):
             with open(convergence_json, "r", encoding="utf-8") as f:
@@ -1144,33 +1351,47 @@ class MaterialSelectorTabbedNotebook:
                 with self.output:
                     print(f"[INFO] Pas d'entrée à renommer dans convergence_results.json pour {old_name}.")
 
+        # 5) Rafraîchir l'UI et re-sélectionner
         self.update_config_dropdown()
-        self.config_dropdown.value = cfg  # sélectionne la config modifiée    
+        self.config_dropdown.value = cfg
         with self.output:
-            print(f"Configuration '{old_name}' updated (nouveau nom : '{new_name}').")
+            clear_output()
+            print(f"Configuration '{old_name}' mise à jour (nouveau nom : '{new_name}').")
 
+        # 6) Persister les changements
+        self._persist_configs()
 
-    
     def on_delete_config(self, b):
         selected = self.config_dropdown.value
         if selected is None:
             with self.output:
                 print("No configuration selected for deletion.")
             return
-        self.all_configs = [cfg for cfg in self.all_configs if cfg["config_name"] != selected["config_name"]]
+
+        name = selected["config_name"]
+        # 1) Retirer de la liste
+        self.all_configs = [
+            cfg for cfg in self.all_configs
+            if cfg["config_name"] != name
+        ]
+        # 2) Mettre à jour le dropdown
         self.update_config_dropdown()
         with self.output:
-            print(f"Configuration '{selected['config_name']}' deleted.")
-    
+            print(f"Configuration '{name}' supprimée.")
+
+        # 3) Persister immédiatement
+        self._persist_configs()
+
+
+    def _persist_configs(self):
+        """Écrit self.all_configs dans material_config.json"""
+        if not os.path.exists(CONFIGURATIONS_DIR):
+            os.makedirs(CONFIGURATIONS_DIR)
+        path = os.path.join(CONFIGURATIONS_DIR, "material_config.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"ALL_CONFIGS": self.all_configs}, f, indent=2)
+
+
     def display(self):
         display(self.container)
 
-# ============================================================================
-# Rôles par défaut et lancement du Material Selector
-# ============================================================================
-DEFAULT_ROLES = [
-    "perm_env", "perm_reso", "perm_mol", "perm_func", "perm_diel", "perm_gap",
-    "perm_metalliclayer", "perm_XIAOYI", "perm_accroche", "perm_sub"
-]
-
-selector = MaterialSelectorTabbedNotebook(DEFAULT_ROLES)

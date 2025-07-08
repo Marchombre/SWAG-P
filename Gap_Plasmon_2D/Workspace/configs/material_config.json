@@ -523,72 +523,6 @@
       }
     },
     {
-      "config_name": "none",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_XIAOYI",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "None"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
       "config_name": "Mat_S1_RI",
       "MATERIALS_CONFIG": [
         {
@@ -760,14 +694,29 @@
           }
         },
         {
-          "key": "perm_gap",
+          "key": "perm_reso",
           "material": {
-            "type": "Custom",
-            "expression": "1.45**2",
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
-              300.0,
-              1000.0
+              247.97,
+              1936.97
             ]
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
           }
         },
         {
@@ -782,28 +731,13 @@
           }
         },
         {
-          "key": "perm_func",
+          "key": "perm_gap",
           "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "RefractiveIndex",
-            "shelf": "main",
-            "book": "Ag",
-            "page": "Rakic-BB",
-            "data": "main/Ag/nk/Rakic-BB.yml",
+            "type": "Custom",
+            "expression": "1.45**2",
             "override": [
-              247.97,
-              12398.0
+              300.0,
+              1000.0
             ]
           }
         },
@@ -817,18 +751,12 @@
             "data": "main/Au/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              6199.2
+              1936.97
             ]
           }
         },
         {
           "key": "perm_XIAOYI",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_accroche",
           "material": {
             "type": "RefractiveIndex",
             "shelf": "main",
@@ -837,8 +765,14 @@
             "data": "main/Al/nk/Rakic-BB.yml",
             "override": [
               61.992,
-              247970.0
+              199999.99199999997
             ]
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
           }
         },
         {
@@ -847,8 +781,8 @@
             "type": "Custom",
             "expression": "1.5**2",
             "override": [
-              193.05,
-              1681.72
+              300.0,
+              1000.0
             ]
           }
         }
@@ -862,7 +796,7 @@
           "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            12398.0
+            1936.97
           ]
         },
         "perm_metalliclayer": {
@@ -873,10 +807,10 @@
           "data": "main/Au/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            6199.2
+            1936.97
           ]
         },
-        "perm_accroche": {
+        "perm_XIAOYI": {
           "type": "RefractiveIndex",
           "shelf": "main",
           "book": "Al",
@@ -884,7 +818,7 @@
           "data": "main/Al/nk/Rakic-BB.yml",
           "override": [
             61.992,
-            247970.0
+            199999.99199999997
           ]
         }
       }
@@ -1005,144 +939,7 @@
       }
     },
     {
-      "config_name": "test",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_XIAOYI",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "Standard",
-            "material": "ITO",
-            "override": [
-              193.05,
-              1681.72
-            ]
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
       "config_name": "Config_10",
-      "MATERIALS_CONFIG": [
-        {
-          "key": "perm_env",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_gap",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_diel",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_func",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_mol",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_reso",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_metalliclayer",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_XIAOYI",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_accroche",
-          "material": {
-            "type": "None"
-          }
-        },
-        {
-          "key": "perm_sub",
-          "material": {
-            "type": "None"
-          }
-        }
-      ],
-      "RI_OVERRIDES": {}
-    },
-    {
-      "config_name": "test",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
@@ -1339,7 +1136,7 @@
           "key": "perm_env",
           "material": {
             "type": "Custom",
-            "expression": "1.9**2",
+            "expression": "1",
             "override": [
               300.0,
               1000.0
@@ -1350,7 +1147,7 @@
           "key": "perm_reso",
           "material": {
             "type": "Custom",
-            "expression": "1.2**2",
+            "expression": "1.8**2",
             "override": [
               300.0,
               1000.0
@@ -1379,7 +1176,7 @@
           "key": "perm_gap",
           "material": {
             "type": "Custom",
-            "expression": "1.9**2",
+            "expression": "1.4**2",
             "override": [
               300.0,
               1000.0
@@ -1390,7 +1187,7 @@
           "key": "perm_metalliclayer",
           "material": {
             "type": "Custom",
-            "expression": "1.2**2",
+            "expression": "1.8**2",
             "override": [
               300.0,
               1000.0
@@ -1401,7 +1198,7 @@
           "key": "perm_XIAOYI",
           "material": {
             "type": "Custom",
-            "expression": "1.9**2",
+            "expression": "1.4**2",
             "override": [
               300.0,
               1000.0
@@ -1412,7 +1209,7 @@
           "key": "perm_accroche",
           "material": {
             "type": "Custom",
-            "expression": "1.2**2",
+            "expression": "1.8**2",
             "override": [
               300.0,
               1000.0
@@ -1423,7 +1220,848 @@
           "key": "perm_sub",
           "material": {
             "type": "Custom",
-            "expression": "1.9**2",
+            "expression": "3.24**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        }
+      ],
+      "RI_OVERRIDES": {}
+    },
+    {
+      "config_name": "Test_acc",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              12398.0
+            ]
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              6199.2
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_acc",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Al",
+            "page": "Rakic-BB",
+            "data": "main/Al/nk/Rakic-BB.yml",
+            "override": [
+              61.992,
+              247970.0
+            ]
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Custom",
+            "expression": "1.5**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        }
+      ],
+      "RI_OVERRIDES": {
+        "perm_reso": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Ag",
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            12398.0
+          ]
+        },
+        "perm_metalliclayer": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Au",
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            6199.2
+          ]
+        },
+        "perm_accroche": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Al",
+          "page": "Rakic-BB",
+          "data": "main/Al/nk/Rakic-BB.yml",
+          "override": [
+            61.992,
+            247970.0
+          ]
+        }
+      }
+    },
+    {
+      "config_name": "Test_homo_acc",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              12398.0
+            ]
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "Custom",
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              6199.2
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_acc",
+          "material": {
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Al",
+            "page": "Rakic-BB",
+            "data": "main/Al/nk/Rakic-BB.yml",
+            "override": [
+              61.992,
+              247970.0
+            ]
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Custom",
+            "expression": "1.5**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        }
+      ],
+      "RI_OVERRIDES": {
+        "perm_reso": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Ag",
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            12398.0
+          ]
+        },
+        "perm_metalliclayer": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Au",
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            6199.2
+          ]
+        },
+        "perm_homo_acc": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Al",
+          "page": "Rakic-BB",
+          "data": "main/Al/nk/Rakic-BB.yml",
+          "override": [
+            61.992,
+            247970.0
+          ]
+        }
+      }
+    },
+    {
+      "config_name": "Bragg_20",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "Custom",
+            "expression": "1",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_1",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_2",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_3",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_4",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_5",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_6",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_7",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_8",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_9",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_10",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_11",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_12",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_13",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Custom",
+            "expression": "3.24**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_1_1",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        }
+      ],
+      "RI_OVERRIDES": {}
+    },
+    {
+      "config_name": "Bragg_20_thick_new",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "Custom",
+            "expression": "1",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_homo_new_1",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_2",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_3",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_4",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_5",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_6",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_7",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_8",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_9",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_10",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_11",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_12",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_13",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_14",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_15",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_16",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_17",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_18",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_19",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_20",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Custom",
+            "expression": "3.24**2",
             "override": [
               300.0,
               1000.0

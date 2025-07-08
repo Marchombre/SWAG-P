@@ -105,15 +105,17 @@ def create_advanced_app():
 
     # 7) Rafraîchissement à la sélection d'un onglet
     def on_tab_change(change):
-        idx = change.get('new')
-        if idx == 1 and hasattr(plot_obj, 'update_spectra'):
+        idx = change["new"]
+        # 1 = Simulation → si tu veux rafraîchir la liste de simulations
+        # if idx == 1 and hasattr(sim_obj, "update_simulation_list"):
+        #     sim_obj.update_simulation_list()
+        # 2 = Plot → on rafraîchit les spectres
+        if idx == 2 and hasattr(plot_obj, "update_spectra"):
             plot_obj.update_spectra()
-        elif idx == 2 and hasattr(diff_obj, 'update_diff_options'):
+        # 3 = Validation → on rafraîchit les options de différence
+        elif idx == 3 and hasattr(diff_obj, "update_diff_options"):
             diff_obj.update_diff_options()
-        # elif idx == 3:
-        #     if (not opt_obj._is_running) and (not opt_obj.param_widgets):
-        #         opt_obj.update_optimization()
-        # elif idx == 4: # convergence, si besoin
+        # (et 4 = Optimisation, 0 = Convergence si besoin)
 
     tabs.observe(on_tab_change, names='selected_index')
     return widgets.VBox([tabs])

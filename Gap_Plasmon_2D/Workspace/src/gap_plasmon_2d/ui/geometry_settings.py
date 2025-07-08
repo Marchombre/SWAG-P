@@ -145,341 +145,519 @@ def create_geometry_widget():
         geometry_sliders[key] = slider
         slider_widgets.append(widgets.HBox([slider, float_text]))
     
-    # Widgets de configuration
+    # 3) === AJOUT DYNAMIQUE : couches homogènes “homo_XXX” ===
+    extra_layer_keys = []  # stocke les clés "homo_nom"
+    layers_box = widgets.VBox(
+        [], layout=widgets.Layout(
+            border='1px dashed lightgray',
+            padding='5px', margin='10px 0', width='100%'
+        )
+    )
+    button_add_layer = widgets.Button(
+        description="Add layer", button_style='info',
+        layout=widgets.Layout(width='150px', margin='10px 0 0 0')
+    )
+
+
+    color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    extra_layer_colors = {}      # mapping layer_key -> couleur
+    next_color_idx = 0           # index dans color_cycle
+
+
+    # compteur pour générer un nom par défaut unique
+    layer_counter = {'count': 0}
+
+
+    def on_add_layer(_):
+        nonlocal next_color_idx
+        # incrémente et construit un nom par défaut
+        layer_counter['count'] += 1
+        default_name = f"layer{layer_counter['count']}"
+
+
+        # Création du Text pour le nom de layer et du slider pour l'épaisseur
+        name_w = widgets.Text(
+            value='new', placeholder='Layer name',
+            layout=widgets.Layout(width='120px')
+        )
+        sl = widgets.FloatSlider(
+            value=1.0, min=0, max=50, step=0.1,
+            description="thick (nm):", continuous_update=False,
+            layout=widgets.Layout(width='250px'),
+            style={'description_width':'100px'}
+        )
+        ft = widgets.FloatText(value=1.0, layout=widgets.Layout(width='80px'))
+        widgets.jslink((sl, 'value'), (ft, 'value'))
+
+        # Bouton de suppression
+        btn_del = widgets.Button(description="✕", layout=widgets.Layout(width='30px'))
+        container = widgets.HBox([name_w, sl, ft, btn_del])
+
+
+        # 1) Gestion du renommage du Text en clé thick_homo_<name>
+        def _rename(change):
+            nonlocal next_color_idx
+            old_key = getattr(container, 'layer_key', None)
+            base_key = f"thick_homo_{change['new']}"
+            # générer un key unique (comme dans votre code)
+            candidate = base_key
+            i = 1
+            while candidate in geometry_sliders and candidate != old_key:
+                candidate = f"{base_key}_{i}"
+                i += 1
+
+            # on enlève l’ancienne si besoin
+            if old_key in geometry_sliders:
+                geometry_sliders.pop(old_key); extra_layer_keys.remove(old_key)
+                extra_layer_colors.pop(old_key, None)
+
+            # on attribue la couleur si c’est un nouveau layer
+            if candidate not in extra_layer_colors:
+                extra_layer_colors[candidate] = color_cycle[next_color_idx % len(color_cycle)]
+                next_color_idx += 1
+
+            # on enregistre la clé
+            geometry_sliders[candidate] = sl
+            extra_layer_keys.append(candidate)
+            container.layer_key = candidate
+
+            draw_structure()
+
+        name_w.observe(_rename, names='value')
+        name_w.value = name_w.value  # déclenche _rename une première fois
+
+
+
+
+        # 2) Gestion de la suppression
+        def _del(_):
+            layers_box.children = tuple(c for c in layers_box.children if c is not container)
+            key = getattr(container, 'layer_key', None)
+            if key in geometry_sliders:
+                geometry_sliders.pop(key)
+                extra_layer_keys.remove(key)
+            draw_structure()
+
+        btn_del.on_click(_del)
+        sl.observe(lambda *_: draw_structure(), names='value')
+
+        layers_box.children = tuple(list(layers_box.children) + [container])
+
+    button_add_layer.on_click(on_add_layer)
+
+    slider_widgets.append(widgets.HTML("<b>Homogène Layers</b>"))
+    slider_widgets.append(button_add_layer)
+    slider_widgets.append(layers_box)
+
+
+
+
+    # 4) Widgets de configuration existants (Add/Save/Load/Update/Delete) …
     config_name_text = widgets.Text(
-        value='',
-        placeholder='Configuration Name',
-        description='Config Name :',
-        layout=widgets.Layout(width='350px'),
-        style={'description_width': '180px'}
+        value='', placeholder='Configuration Name', description='Config Name :',
+        layout=widgets.Layout(width='350px'), style={'description_width':'180px'}
     )
-    # Widget pour saisir le nom du compartiment
     compartment_text = widgets.Text(
-        value='',
-        placeholder='Nom du compartiment',
-        description='Compartiment :',
-        layout=widgets.Layout(width='350px'),
-        style={'description_width': '180px'}
+        value='', placeholder='Nom du compartiment', description='Compartiment :',
+        layout=widgets.Layout(width='350px'), style={'description_width':'180px'}
     )
-    
-    button_add = widgets.Button(description="Add Config", layout=widgets.Layout(width='150px'))
-    button_save = widgets.Button(description="Save & Quit", button_style='success', layout=widgets.Layout(width='200px'))
-    config_dropdown = widgets.Dropdown(
-        options=[],
-        description="Saved Configs :",
-        layout=widgets.Layout(width='350px'),
-        style={'description_width': '180px'}
-    )
-    button_load = widgets.Button(description="Load", layout=widgets.Layout(width='100px'))
-    button_update = widgets.Button(description="Update", layout=widgets.Layout(width='120px'))
-    button_delete = widgets.Button(description="Delete", button_style='danger', layout=widgets.Layout(width='120px'))
-    
-    # Widget de filtrage par compartiment
+    button_add    = widgets.Button(description="Add Config",    layout=widgets.Layout(width='150px'))
+    button_save   = widgets.Button(description="Save & Quit", button_style='success',
+                                  layout=widgets.Layout(width='200px'))
+    config_dropdown = widgets.Dropdown(options=[], description="Saved Configs :",
+                                       layout=widgets.Layout(width='350px'),
+                                       style={'description_width':'180px'})
+    button_load   = widgets.Button(description="Load",    layout=widgets.Layout(width='100px'))
+    button_update = widgets.Button(description="Update",  layout=widgets.Layout(width='120px'))
+    button_delete = widgets.Button(description="Delete",  button_style='danger',
+                                  layout=widgets.Layout(width='120px'))
+
     compartment_filter = widgets.Dropdown(
-        options=["Tous"],
-        value="Tous",
-        description="Filtrer Compart.:",
+        options=["Tous"], value="Tous", description="Filtrer Compart.:",
         layout=widgets.Layout(width='350px'),
-        style={'description_width': '180px'}
+        style={'description_width':'180px'}
     )
-    
     output_area = widgets.Output(layout=widgets.Layout(padding='10px'))
+
     load_geometry_configs()
-    
+
     def update_dropdown_options(change=None):
-        # Sélection du filtre et reconstruction de la liste en fonction du compartiment sélectionné
         filtre = compartment_filter.value
         if filtre == "Tous":
-            filtered_configs = GEOMETRY_CONFIGS
+            filtered = GEOMETRY_CONFIGS
         else:
-            filtered_configs = [cfg for cfg in GEOMETRY_CONFIGS if cfg.get("compartment", "Défaut") == filtre]
-        new_options = [(f"{cfg['config_name']} ({cfg.get('compartment', 'Défaut')})", cfg) 
-                       for cfg in filtered_configs]
-        if not new_options:
-            new_options = [("None", None)]
-        # Affectation directe pour forcer l'actualisation
-        config_dropdown.options = new_options
+            filtered = [c for c in GEOMETRY_CONFIGS
+                        if c.get("compartment","Défaut")==filtre]
+        opts = [(f"{c['config_name']} ({c.get('compartment','Défaut')})", c)
+                for c in filtered] or [("None", None)]
+        config_dropdown.options = opts
+        comps = sorted({c.get("compartment","Défaut") for c in GEOMETRY_CONFIGS})
+        compartment_filter.options = ["Tous"] + comps
 
-        # Reconstruction et affectation de la liste des compartiments disponibles
-        compartments = sorted({cfg.get("compartment", "Défaut") for cfg in GEOMETRY_CONFIGS})
-        comp_options = ["Tous"] + compartments
-        compartment_filter.options = comp_options
+    update_dropdown_options()
+    compartment_filter.observe(update_dropdown_options, names='value')
+
 
     # Mise à jour initiale du dropdown
     update_dropdown_options()
+
     # Observer le changement de sélection du compartiment pour rafraîchir la liste
     compartment_filter.observe(update_dropdown_options, names='value')
     
     def add_geometry_config(_):
-        for key, slider in geometry_sliders.items():
-            geometry_config[key] = slider.value
-        config_name = config_name_text.value.strip() or f"Geometry_{len(GEOMETRY_CONFIGS)+1}"
-        compartment = compartment_text.value.strip() or "Défaut"
-        new_config = {"config_name": config_name, "compartment": compartment, "geometry": geometry_config.copy()}
-        GEOMETRY_CONFIGS.append(new_config)
+        # 1) On récupère tous les sliders
+        for k, s in geometry_sliders.items():
+            geometry_config[k] = s.value
+
+        # 2) On construit le nom de base
+        raw_name = config_name_text.value.strip() or f"Geometry_{len(GEOMETRY_CONFIGS)+1}"
+        existing = {c["config_name"] for c in GEOMETRY_CONFIGS}
+
+        # 3) Si le nom existe déjà, on lui ajoute "_1", "_2", …
+        name = raw_name
+        if name in existing:
+            i = 1
+            while f"{raw_name}_{i}" in existing:
+                i += 1
+            name = f"{raw_name}_{i}"
+
+        comp = compartment_text.value.strip() or "Défaut"
+
+        # définition manuelle de l’ordre des clés
+        before = [
+            "thick_super","thick_reso","width_reso",
+            "thick_gap","thick_mol","thick_func",
+            "thick_diel","thick_metalliclayer"
+        ]
+        after = ["thick_XIAOYI", "thick_accroche","thick_sub","period"]
+        # on reconstruit la géométrie dans l’ordre voulu :
+        ordered_geom = {}
+        for k in before:
+            ordered_geom[k] = geometry_config[k]
+        for k in extra_layer_keys:          # vos homo_XXX, dans l’ordre d’ajout
+            ordered_geom[k] = geometry_sliders[k].value
+        for k in after:
+            ordered_geom[k] = geometry_config[k]
+
+        new = {
+            "config_name": name,
+            "compartment": comp,
+            "geometry": ordered_geom
+        }
+
+        GEOMETRY_CONFIGS.append(new)
         update_dropdown_options()
         save_geometry_configs()
         with output_area:
-            clear_output()
-            print("Configuration ajoutée :")
-            print(new_config)
-        config_name_text.value = ''
-        compartment_text.value = ''
-    
+            clear_output(); print("Configuration ajoutée :", new)
+        config_name_text.value = ''; compartment_text.value = ''
+
+
+
+
     def save_geometry_configs_btn(_):
-        path = save_geometry_configs()
+        p = save_geometry_configs()
         with output_area:
-            clear_output()
-            print(f"Configurations saved in {path}")
-    
+            clear_output(); print(f"Configurations saved in {p}")
+
+
+
     def load_config(_):
-        """
-        Charge la configuration sélectionnée dans le widget et met à jour les sliders ainsi que
-        les champs de nom et de compartiment.
-        """
-        selected = config_dropdown.value
-        if selected is None:
+        sel = config_dropdown.value
+        if sel is None:
             with output_area:
-                clear_output()
-                print("Aucune configuration sélectionnée pour le chargement.")
+                clear_output(); print("Aucune config sélectionnée.")
             return
-        # Mise à jour des sliders avec les valeurs de la configuration chargée
-        for key, value in selected["geometry"].items():
+
+        # 0) Vider les anciennes couches homo_* et l'UI
+        for key in list(extra_layer_keys):
+            geometry_sliders.pop(key, None)
+        extra_layer_keys.clear()
+        layers_box.children = ()
+
+        # 1) Extraire **dans l’ordre** les clés thick_homo_* du JSON
+        homo_keys_in_json = [
+            k for k in sel["geometry"].keys()
+            if k.startswith("thick_homo_") and sel["geometry"][k] > 0
+        ]
+
+        # 2) Pour chaque clé, recréer le slider AU BON ENDROIT
+        for thick_key in homo_keys_in_json:
+            thickness = sel["geometry"][thick_key]
+
+            # 2.1) Ajouter un nouveau container (Text + slider)
+            on_add_layer(None)
+            container = layers_box.children[-1]
+
+            # 2.2) Donner au Text le nom de base pour déclencher _rename()
+            base_name = thick_key[len("thick_homo_"):]
+            container.children[0].value = base_name
+
+            # 2.3) Récupérer la clé **réelle** (qui peut avoir été uniquifiée)
+            actual_key = container.layer_key
+
+            # 2.4) Régler l'épaisseur
+            geometry_sliders[actual_key].value = thickness
+
+        # 3) Mettre à jour tous les sliders “classiques”
+        for key, value in sel["geometry"].items():
             if key in geometry_sliders:
                 geometry_sliders[key].value = value
-        # Mise à jour des champs de nom et du compartiment
-        config_name_text.value = selected["config_name"]
-        compartment_text.value = selected.get("compartment", "Défaut")
+
+        # 4) Remplir les champs de texte et afficher un message
+        config_name_text.value = sel["config_name"]
+        compartment_text.value = sel.get("compartment", "Défaut")
         with output_area:
-            clear_output()
-            print(f"Configuration '{selected['config_name']}' chargée.")
+            clear_output(); print(f"Configuration '{sel['config_name']}' chargée.")
+
+        # 5) Redessiner la structure dans le bon ordre
+        draw_structure()
+
+
             
-            
+
     def update_config(_):
-        selected = config_dropdown.value
-        if selected is None:
+        sel = config_dropdown.value
+        if sel is None:
             with output_area:
-                clear_output()
-                print("Aucune configuration sélectionnée pour la mise à jour.")
+                clear_output(); print("Aucune config sélectionnée.")
             return
 
-        # --- Ici tu vas chercher le label de l'option sélectionnée ---
-        # label = le premier élément du tuple (label, obj)
-        old_label = None
-        for (label, obj) in config_dropdown.options:
-            if obj is selected:
-                old_label = label
-                break
-        if old_label:
-            # Format "Nom (Compartment)", on isole le nom pur AVANT modification
-            old_name = old_label.split(' (')[0]
-        else:
-            old_name = selected.get("config_name", "")
+        # 1) Récupère toutes les valeurs depuis les sliders
+        for k, s in geometry_sliders.items():
+            geometry_config[k] = s.value
 
-        # Applique les modifications utilisateur
-        for key, slider in geometry_sliders.items():
-            selected["geometry"][key] = slider.value
+        # 2) Reconstruit le dict geometry dans l’ordre voulu
+        before = [
+            "thick_super","thick_reso","width_reso",
+            "thick_gap","thick_mol","thick_func",
+            "thick_diel","thick_metalliclayer"
+        ]
+        after = ["thick_XIAOYI", "thick_accroche","thick_sub","period"]
+
+        ordered_geom = {}
+        # insère d’abord les clés « before »
+        for k in before:
+            ordered_geom[k] = geometry_sliders[k].value
+
+        # puis tes couches dynamiques homo layers, dans l’ordre stocké
+        for k in extra_layer_keys:
+            ordered_geom[k] = geometry_sliders[k].value
+
+        # enfin les clés « after »
+        for k in after:
+            ordered_geom[k] = geometry_sliders[k].value
+
+        # 3) Remplace entièrement sel["geometry"]
+        sel["geometry"] = ordered_geom
+
+        # 4) Gère le renommage éventuel (comme toi)
+        old_label = next((lbl for lbl,obj in config_dropdown.options if obj is sel),
+                        sel["config_name"])
+        old_name = old_label.split(' (')[0]
         new_name = config_name_text.value.strip() or old_name
-        selected["config_name"] = new_name
-        selected["compartment"] = compartment_text.value.strip() or "Défaut"
+        sel["config_name"] = new_name
+        sel["compartment"] = compartment_text.value.strip() or "Défaut"
 
-        # Patch convergence_results.json si nom changé
+        # 5) Patch convergence_results.json si on change de nom
         WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        convergence_json = os.path.join(WORKSPACE_DIR, "Convergence", "convergence_results.json")
-        if new_name != old_name and os.path.exists(convergence_json):
-            with open(convergence_json, "r", encoding="utf-8") as f:
+        conv_json = os.path.join(WORKSPACE_DIR, "Convergence", "convergence_results.json")
+        if new_name != old_name and os.path.exists(conv_json):
+            with open(conv_json, "r", encoding="utf-8") as f:
                 master = json.load(f)
-            configs = master.get("configs", {})
-            if old_name in configs:
-                configs[new_name] = configs.pop(old_name)
-                with open(convergence_json, "w", encoding="utf-8") as f:
+            cfgs = master.get("configs", {})
+            if old_name in cfgs:
+                cfgs[new_name] = cfgs.pop(old_name)
+                with open(conv_json, "w", encoding="utf-8") as f:
                     json.dump(master, f, indent=2)
                 with output_area:
                     print(f"[PATCH] convergence_results.json : {old_name} → {new_name}")
-            else:
-                with output_area:
-                    print(f"[INFO] Pas d'entrée à renommer dans convergence_results.json pour {old_name}.")
 
-        update_dropdown_options()
+        # 6) Sauvegarde et remise à jour de l’UI
         save_geometry_configs()
+        update_dropdown_options()
         with output_area:
-            clear_output()
-            print(f"Configuration mise à jour : {selected}")
-
+            clear_output(); print(f"Configuration mise à jour : {sel}")
 
 
     def delete_config(_):
-        selected = config_dropdown.value
-        if selected is None:
+        sel = config_dropdown.value
+        if sel is None:
             with output_area:
-                clear_output()
-                print("Aucune configuration sélectionnée pour la suppression.")
+                clear_output(); print("Aucune config sélectionnée.")
             return
         global GEOMETRY_CONFIGS
-        GEOMETRY_CONFIGS = [cfg for cfg in GEOMETRY_CONFIGS if cfg["config_name"] != selected["config_name"]]
-        update_dropdown_options()
-        save_geometry_configs()
+        GEOMETRY_CONFIGS = [c for c in GEOMETRY_CONFIGS
+                            if c["config_name"]!=sel["config_name"]]
+        update_dropdown_options(); save_geometry_configs()
         with output_area:
-            clear_output()
-            print(f"Configuration '{selected['config_name']}' supprimée.")
-    
+            clear_output(); print(f"Configuration '{sel['config_name']}' supprimée.")
+
     button_add.on_click(add_geometry_config)
     button_save.on_click(save_geometry_configs_btn)
     button_load.on_click(load_config)
     button_update.on_click(update_config)
     button_delete.on_click(delete_config)
-    
-    # Widget pour afficher le cas (Case A ou Case B) en dehors du dessin
+
+    # 5) Prépare label & zone dessin
     case_label_widget = widgets.Label(value="")
-    
-    # Zone de dessin (zone de travail réduite)
     fig_output = widgets.Output(layout=widgets.Layout(flex='1', height='700px', padding='10px'))
-    
+
+    # 6) Fonction de dessin, appelée à chaque modif
     def draw_structure(_=None):
         with fig_output:
             clear_output(wait=True)
-            
-            # Récupération des paramètres via les sliders
-            p            = geometry_sliders["period"].value
-            t_super      = geometry_sliders["thick_super"].value
-            t_reso       = geometry_sliders["thick_reso"].value
-            w_reso       = geometry_sliders["width_reso"].value
-            t_gap        = geometry_sliders["thick_gap"].value
-            t_mol        = geometry_sliders["thick_mol"].value
-            t_func       = geometry_sliders["thick_func"].value
-            t_diel       = geometry_sliders["thick_diel"].value
-            t_metal      = geometry_sliders["thick_metalliclayer"].value
-            t_XIAOYI     = geometry_sliders["thick_XIAOYI"].value
-            t_acc        = geometry_sliders["thick_accroche"].value
-            t_sub        = geometry_sliders["thick_sub"].value
+            # lecture des épaisseurs
+            p        = geometry_sliders["period"].value
+            t_super  = geometry_sliders["thick_super"].value
+            t_reso   = geometry_sliders["thick_reso"].value
+            w_reso   = geometry_sliders["width_reso"].value
+            t_gap    = geometry_sliders["thick_gap"].value
+            t_mol    = geometry_sliders["thick_mol"].value
+            t_func   = geometry_sliders["thick_func"].value
+            t_diel   = geometry_sliders["thick_diel"].value
+            t_metal  = geometry_sliders["thick_metalliclayer"].value
+            t_XIAOYI = geometry_sliders["thick_XIAOYI"].value
+            t_acc    = geometry_sliders["thick_accroche"].value
+            t_sub    = geometry_sliders["thick_sub"].value
 
-            # Paramètres d'affichage pour les couches fixes
-            disp_sub   = displayed_thickness(t_sub)   # Affichage réduit du Substrate
-            disp_super = displayed_thickness(t_super)   # Affichage réduit du Superstrate
+            # dynamiques
+            t_extras = [geometry_sliders[k].value for k in extra_layer_keys]
 
-            # Hauteur totale du dessin (on utilise p comme dimension du carré)
+            # disp sub/super
+            disp_sub   = displayed_thickness(t_sub)
+            disp_super = displayed_thickness(t_super)
+
+            # factor vertical
             hauteur_totale = p
+            hauteur_dispo   = hauteur_totale - (disp_sub + disp_super)
+            somme_centrale  = t_acc + t_XIAOYI + sum(t_extras) + t_metal + t_gap + t_reso
+            facteur_centrale = hauteur_dispo / somme_centrale if somme_centrale>0 else 1
 
-            # Hauteur disponible pour les couches intermédiaires
-            hauteur_dispo = hauteur_totale - (disp_sub + disp_super)
-            
-            # --- Partie centrale (empilement vertical) ---
-            somme_centrale = t_acc + t_XIAOYI + t_metal + t_gap + t_reso
-            facteur_centrale = hauteur_dispo / somme_centrale if somme_centrale > 0 else 1
-            disp_acc    = t_acc     * facteur_centrale
-            disp_XIAOYI = t_XIAOYI  * facteur_centrale
-            disp_metal  = t_metal   * facteur_centrale
-            disp_gap    = t_gap     * facteur_centrale
-            disp_reso   = t_reso    * facteur_centrale
-            
-            y_sub_bottom = 0
-            y_sub_top    = y_sub_bottom + disp_sub
-            
-            y_acc_bottom = y_sub_top
-            y_acc_top    = y_acc_bottom + disp_acc
-            
+            # disp centrales
+            disp_acc    = t_acc    * facteur_centrale
+            disp_XIAOYI = t_XIAOYI * facteur_centrale
+            disp_extras = [t*facteur_centrale for t in t_extras]
+            disp_metal  = t_metal  * facteur_centrale
+            disp_gap    = t_gap    * facteur_centrale
+            disp_reso   = t_reso   * facteur_centrale
+
+            # disp latérales
+            disp_dielectric = t_diel * facteur_centrale
+            disp_func       = t_func * facteur_centrale
+            disp_mol        = t_mol  * facteur_centrale
+
+            # Case A/B
+            case_str = "Case A" if (t_diel+t_func+t_mol)<t_gap else "Case B"
+            case_label_widget.value = f"Case: {case_str}"
+
+            # création fig
+            fig, ax = plt.subplots(figsize=(6,6))
+            ax.set_title(f"Schematics – {case_label_widget.value}", fontsize=10, pad=5)
+
+            # positions verticales
+            y_sub_bottom    = 0
+            y_sub_top       = y_sub_bottom + disp_sub
+            y_acc_bottom    = y_sub_top
+            y_acc_top       = y_acc_bottom + disp_acc
             y_XIAOYI_bottom = y_acc_top
             y_XIAOYI_top    = y_XIAOYI_bottom + disp_XIAOYI
-            
-            y_metal_bottom = y_XIAOYI_top
+
+            # couches dynamiques
+            y_cursor = y_XIAOYI_top
+            for key, h in zip(extra_layer_keys, disp_extras):
+                lbl   = key.replace("thick_homo_","")
+                color = extra_layer_colors.get(key, "#888888")
+                draw_layer(ax, 0, y_cursor, p, h, color, lbl)
+                y_cursor += h
+
+
+            # métal → gap → cube → superstrate etc.
+            y_metal_bottom = y_cursor
             y_metal_top    = y_metal_bottom + disp_metal
-            
-            y_inter_bottom = y_metal_top  # Début de la zone centrale (Gap + Cube)
+            y_inter_bottom = y_metal_top
             y_gap_bottom   = y_inter_bottom
             y_gap_top      = y_gap_bottom + disp_gap
-            
             y_cube_bottom  = y_gap_top
             y_cube_top     = y_cube_bottom + disp_reso
-
             y_super_bottom = y_cube_top
-            y_super_top    = hauteur_totale
 
-            # --- Partie latérale (colonnes gauche et droite) ---
-            somme_laterale = t_diel + t_func + t_mol
-            facteur_lateral = facteur_centrale
-            disp_dielectric = t_diel * facteur_lateral
-            disp_func       = t_func   * facteur_lateral
-            disp_mol        = t_mol    * facteur_lateral
-            hauteur_laterale = disp_dielectric + disp_func + disp_mol
-            y_lat_start = y_inter_bottom
-            y_lat_end   = y_lat_start + hauteur_laterale
-            lateral_filler = max(0, y_super_bottom - y_lat_end)
-            
-            # Définition du cas (Case A ou Case B)
-            if (t_diel + t_func + t_mol) < t_gap:
-                case_str = "Case A"
-            else:
-                case_str = "Case B"
-            case_label_widget.value = f"Case: {case_str}"
-            
-            # Coordonnées latérales
-            central_x     = (p - w_reso) / 2
-            lateral_width = (p - w_reso) / 2
-            left_x  = 0
-            right_x = central_x + w_reso
-            
-            # Dessin
-            fig, ax = plt.subplots(figsize=(6,6))
-            ax.set_title("Schematics (visualisation uniquement) - " + case_label_widget.value, fontsize=10, pad=5)
-            
-            # Substrate (zone inférieure)
+            # dessin
+            bande = min(0.05*p, disp_sub, disp_super)
             draw_layer(ax, 0, y_sub_bottom, p, disp_sub, "brown", "Substrate")
-            bande_height = min(0.05 * p, disp_sub, disp_super)
-            draw_layer(ax, 0, y_sub_bottom, p, bande_height, "none", "", hatch='///')
-            
-            # Partie centrale
-            draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "orange", "Stick-on")
+            draw_layer(ax, 0, y_sub_bottom, p, bande, "none", "", hatch='///')
+            draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "orange", "Accroche")
             draw_layer(ax, 0, y_XIAOYI_bottom, p, disp_XIAOYI, "purple", "XIAOYI")
             draw_layer(ax, 0, y_metal_bottom, p, disp_metal, "gold", "Metallic layer")
-            draw_layer(ax, central_x, y_gap_bottom, w_reso, disp_gap, "lightgreen", "Gap (photopolymer)")
+            central_x = (p - w_reso)/2
+            draw_layer(ax, central_x, y_gap_bottom, w_reso, disp_gap, "lightgreen", "Gap")
             draw_layer(ax, central_x, y_cube_bottom, w_reso, disp_reso, "silver", "Nanocube")
-            
-            # Colonnes latérales
-            y_curr_left = y_lat_start
-            draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_dielectric, "green", "Photopolymer")
-            draw_layer(ax, right_x, y_curr_left, lateral_width, disp_dielectric, "green", "Photopolymer")
-            y_curr_left += disp_dielectric
-            draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_func, "pink", "Functionalisation")
-            draw_layer(ax, right_x, y_curr_left, lateral_width, disp_func, "pink", "Functionalisation")
-            y_curr_left += disp_func
-            draw_layer(ax, left_x,  y_curr_left, lateral_width, disp_mol, "violet", "Molecule")
-            draw_layer(ax, right_x, y_curr_left, lateral_width, disp_mol, "violet", "Molecule")
-            y_curr_left += disp_mol
+            lateral_width = (p - w_reso)/2
+            y_lat_start = y_inter_bottom
+            # Photopolymer
+            draw_layer(ax, 0,      y_lat_start, lateral_width, disp_dielectric, "green",  "Photopolymer")
+            draw_layer(ax, central_x+w_reso, y_lat_start, lateral_width, disp_dielectric, "green",  "Photopolymer")
+            # Functionalisation
+            y_lat = y_lat_start + disp_dielectric
+            draw_layer(ax, 0,      y_lat, lateral_width, disp_func, "pink",   "Functionalisation")
+            draw_layer(ax, central_x+w_reso, y_lat, lateral_width, disp_func, "pink",   "Functionalisation")
+            # Molecule
+            y_lat += disp_func
+            draw_layer(ax, 0,      y_lat, lateral_width, disp_mol, "violet", "Molecule")
+            draw_layer(ax, central_x+w_reso, y_lat, lateral_width, disp_mol, "violet", "Molecule")
+
+            #  "Environnement" lateral
+            y_lat_end     = y_lat_start + disp_dielectric + disp_func + disp_mol
+            lateral_filler = y_super_bottom - y_lat_end
             if lateral_filler > 0:
-                draw_layer(ax, left_x,  y_curr_left, lateral_width, lateral_filler, "lightblue", "Environnement")
-                draw_layer(ax, right_x, y_curr_left, lateral_width, lateral_filler, "lightblue", "Environnement")
+                # gauche
+                draw_layer(ax, 0, y_lat_end,
+                        lateral_width, lateral_filler,
+                        "lightblue", "Environnement")
+                # droite
+                draw_layer(ax, central_x + w_reso, y_lat_end,
+                        lateral_width, lateral_filler,
+                        "lightblue", "Environnement")
             
-            # Superstrate (zone supérieure)
-            draw_layer(ax, 0, y_super_bottom, p, hauteur_totale - y_super_bottom, "lightblue", "Superstrate\n(environnement)")
-            draw_layer(ax, 0, hauteur_totale - bande_height, p, bande_height, "none", "", hatch='///')
-            
-            ax.set_xlim(0, p)
-            ax.set_ylim(0, p)
-            ax.set_aspect('equal', adjustable='box')
-            ax.margins(0)
-            
+                        
+            # Superstrate
+            draw_layer(ax, 0, y_super_bottom, p, hauteur_totale - y_super_bottom,
+                       "lightblue", "Superstrate\n(environnement)")
+            draw_layer(ax, 0, hauteur_totale - bande, p, bande, "none", "", hatch='///')
+
+            ax.set_xlim(0, p); ax.set_ylim(0, p)
+            ax.set_aspect('equal', adjustable='box'); ax.margins(0)
             plt.show()
-    
-    # Lancer le dessin à chaque modification des sliders
-    for sld in geometry_sliders.values():
-        sld.observe(draw_structure, names='value')
-    
-    draw_structure()  # Premier dessin
-    
+
+    # 7) Observers & première trace
+    for s in geometry_sliders.values():
+        s.observe(draw_structure, names='value')
+    draw_structure()
+
+    # 8) Assemblage final
     config_controls = widgets.VBox([
-        config_name_text,
-        compartment_text,
+        config_name_text, compartment_text,
         widgets.HBox([button_add, button_save]),
         compartment_filter,
         widgets.HBox([config_dropdown, button_load, button_update, button_delete]),
         output_area
     ])
-    
-    left_panel = widgets.VBox(slider_widgets + [config_controls], layout=widgets.Layout(width='600px'))
-    right_panel = widgets.VBox([fig_output], layout=widgets.Layout(flex='1'))
-    main_ui = widgets.HBox([left_panel, right_panel], layout=widgets.Layout(width='100%'))
-    
+    left_panel  = widgets.VBox(slider_widgets + [config_controls],
+                              layout=widgets.Layout(width='600px'))
+    right_panel = widgets.VBox([fig_output],
+                              layout=widgets.Layout(flex='1'))
+    main_ui = widgets.HBox([left_panel, right_panel],
+                           layout=widgets.Layout(width='100%'))
+
+
+
+    # expose la liste des couches homogènes dynamiques
+    main_ui.extra_layer_keys = extra_layer_keys
+    # expose aussi vos sliders si jamais besoin
+    main_ui.geometry_sliders  = geometry_sliders
+
+
+
     return main_ui
 
 geometry_widget = create_geometry_widget()
-

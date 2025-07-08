@@ -9,7 +9,7 @@ exactement la logique de create_simulation_tab() originale.
 #                                imports                                #
 # --------------------------------------------------------------------- #
 from gap_plasmon_2d import paths
-
+from pathlib import Path
 
 import matplotlib as mpl
 mpl.use('module://ipympl.backend_nbagg')
@@ -17,7 +17,7 @@ mpl.use('module://ipympl.backend_nbagg')
 import os, io, base64, json, textwrap, sys
 from copy import deepcopy
 from datetime import datetime
-from pathlib import Path
+
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -61,18 +61,41 @@ from gap_plasmon_2d.analysis.characterization      import (
 # --------------------------------------------------------------------- #
 #                               chemins                                 #
 # --------------------------------------------------------------------- #
-module_dir         = os.path.dirname(os.path.abspath(__file__))
-workspace_dir      = os.path.dirname(module_dir)
-notebooks_dir      = os.path.join(str(paths.RESULTS_DIR))
-summary_dir        = os.path.join(notebooks_dir, "summary_simulation")
-exp_data_dir       = os.path.join(notebooks_dir, "Experimental_Data")
-configurations_dir = os.path.join(str(paths.CONFIGS_DIR))
-data_dir           = os.path.join(str(paths.DATA_DIR))
+
+
+# 1) Référentiels de base
+# module_dir       = Path(__file__).resolve().parent             # …/Workspace/src/…/simulation
+# workspace_dir    = module_dir.parent                            # …/Workspace/src/… 
+# project_root     = workspace_dir.parent                         # …/Workspace
+
+# 2) Dossiers « externes » fournis par gap_plasmon_2d
+data_dir         = Path(paths.DATA_DIR)                         # …/data
+configurations_dir = Path(paths.CONFIGS_DIR)                    # …/configs
+results_dir      = Path(paths.RESULTS_DIR)                      # …/results
+
+# 3) Sous-dossiers à l’intérieur de results_dir
+summary_sim_dir       = results_dir / "summary_simulation"      # pour les .json & .png de simulation
+summary_convergence   = results_dir / "summary_convergence"     # pour convergence_results.json
+experimental_data_dir = results_dir / "Experimental_Data"       # datas expérimentales
+
+# 4) Fichiers clés
 json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
-h5_path = paths.H5_RESULTS_DIR / "simulation_results.h5"
-h5_path.parent.mkdir(parents=True, exist_ok=True)
+geom_mat_combos_path  = configurations_dir / "geom_mat_combinations.json"
+h5_path               = Path(paths.H5_RESULTS_DIR) / "simulation_results.h5"
 
+# 5) Création automatique des dossiers si nécessaire
+for d in (
+    summary_sim_dir,
+    summary_convergence,
+    experimental_data_dir,
+    h5_path.parent
+):
+    d.mkdir(parents=True, exist_ok=True)
+
+
+
+    
 def _download_link(fig, fname="figure.png"):
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.05)
@@ -80,11 +103,6 @@ def _download_link(fig, fname="figure.png"):
     b64 = base64.b64encode(buf.read()).decode()
     return DHTML(f'<a download="{fname}" href="data:image/png;base64,{b64}" '
                  f'target="_blank">Télécharger l’image</a>')
-
-
-
-
-
 
 
 
@@ -377,7 +395,7 @@ class SimulationTab:
 
         # ─── Fichiers résumé & download ─────────────────────────────────────
         self.sim_files_dropdown  = widgets.Dropdown(
-            options=list_sim_summary_files(summary_dir),
+            options=list_sim_summary_files(summary_sim_dir),
             description="Sim files:",
             layout=widgets.Layout(width='500px'),
             style={'description_width':'initial'}
@@ -1165,7 +1183,7 @@ class SimulationTab:
 
                 # sauvegarde individuelle (au fil de l’eau)
                 save_simulation_summary(
-                    {name: details}, lam_range, wave, n_modes, summary_dir,
+                    {name: details}, lam_range, wave, n_modes, summary_sim_dir,
                     custom_name=name,
                     fwhm_summaries=[fwhm_sum[-1]],
                     lam_summaries=[lam_sum[-1]],
@@ -1345,7 +1363,7 @@ class SimulationTab:
 
         # auto
         # on reconstitue l'auto_modes exactement comme dans _run()
-        conv_json = Path(workspace_dir) / "results/summary_convergence/convergence_results.json"
+        conv_json = summary_convergence / "convergence_results.json"
         if conv_json.exists():
             with open(conv_json, encoding='utf-8') as f:
                 master = json.load(f)
