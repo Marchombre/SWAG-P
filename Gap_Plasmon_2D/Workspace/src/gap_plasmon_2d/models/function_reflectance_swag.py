@@ -81,6 +81,8 @@ def reflectance(geometry, wave, materials, n_mod):
         [np.eye(n, dtype=np.complex128),        np.zeros((n, n), dtype=np.complex128)]
     ])
 
+    # On part toujours de l’environnement comme P_current initial
+    P_current = Pup
 
     if thick_reso > 0 or thick_gap > 0:
 

@@ -26,17 +26,17 @@ geometry_config = {
 }
 
 geometry_limits = {
-    "thick_super": (0, 300),
-    "thick_reso": (0, 100),
-    "width_reso": (0, 100),
-    "thick_gap": (0, 30),
-    "thick_mol": (0, 5),
-    "thick_func": (0, 5),
-    "thick_diel": (0, 30),
-    "thick_metalliclayer": (0, 50),
-    "thick_XIAOYI": (0, 10),
-    "thick_accroche": (0, 20),
-    "thick_sub": (0, 300),
+    "thick_super": (0, 2000),
+    "thick_reso": (0, 2000),
+    "width_reso": (0, 2000),
+    "thick_gap": (0, 2000),
+    "thick_mol": (0, 2000),
+    "thick_func": (0, 2000),
+    "thick_diel": (0, 2000),
+    "thick_metalliclayer": (0, 2000),
+    "thick_XIAOYI": (0, 2000),
+    "thick_accroche": (0, 2000),
+    "thick_sub": (0, 2000),
     "period": (50, 300)
 }
 

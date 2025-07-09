@@ -310,9 +310,9 @@
       "config_name": "Geom_Bragg",
       "compartment": "Optimization",
       "geometry": {
-        "thick_super": 200.0,
+        "thick_super": 1000.0,
         "thick_reso": 2.0,
-        "width_reso": 100.0,
+        "width_reso": 100.2153,
         "thick_gap": 2.0,
         "thick_mol": 0.0,
         "thick_func": 0.0,
@@ -320,7 +320,7 @@
         "thick_metalliclayer": 1.0,
         "thick_XIAOYI": 1.0,
         "thick_accroche": 1.0,
-        "thick_sub": 200.0,
+        "thick_sub": 1000.0,
         "period": 100.2153
       }
     },
@@ -447,7 +447,6 @@
         "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
-
       }
     }
   ]

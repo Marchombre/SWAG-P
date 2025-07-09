@@ -134,29 +134,29 @@ _WORKER_SIM: SimulationTab = sim_tab
 #         _WORKER_SIM.custom_n_mod_inputs[name] = widgets.IntText(value=val)
 
 
-import warnings
-
 def cost_worker(args: Tuple[np.ndarray, List[str], str, Dict[str, Any]]) -> float:
     """
-    Wrapper minimaliste et picklable pour multiprocessing.Pool.map,
-    avec capture des LinAlgError et overflow en renvoyant un coût pénalisant.
+    Wrapper minimaliste et picklable pour multiprocessing.Pool.map.
+
+    Il prend en entrée un seul argument `args`, qui est un tuple :
+      - x       : vecteur numpy des valeurs de tous les paramètres à optimiser
+      - keys    : liste des noms de ces paramètres
+      - mode    : nom du mode de coût ('dip', 'fixed_lambda', 'range_lambda', 'half', etc.)
+      - mode_kw : dictionnaire d’arguments optionnels pour la méthode cost
     """
+    # 1) Dépacke les éléments du tuple
     x, keys, mode, mode_kw = args
-    try:
-        # on supprime les warnings d'overflow/invalid
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            val = _WORKER_SIM.cost(x, keys, mode=mode, **mode_kw)
 
-        # en cas de NaN ou inf, on pénalise très fort
-        if not np.isfinite(val):
-            return 1e6
-        return val
-
-    except np.linalg.LinAlgError:
-        return 1e6
-    except Exception:
-        return 1e6
+    # 2) Appelle la méthode cost de l’instance globale `_WORKER_SIM`,
+    #    en lui passant :
+    #      • x       : le vecteur de paramètres actuels
+    #      • keys    : la correspondance paramètre → valeur
+    #      • mode    : le type de métrique à calculer
+    #      • **mode_kw : d’éventuels arguments supplémentaires (λ fixée, intervalle, etc.)
+    #
+    #    La méthode `cost` renvoie un float (1 – sensibilité ou 1 – reflectance,
+    #    selon le mode), qui sera utilisé par l’algorithme d’optimisation.
+    return _WORKER_SIM.cost(x, keys, mode=mode, **mode_kw)
 
 
 
@@ -502,7 +502,7 @@ class OptimizationTab:
         self.param_tabs = widgets.Tab()
 
         # C) Onglet Queue pane
-        self.queue_box = widgets.VBox(layout={"border":"1px solid #ccc", "height":"200px"})        
+        self.queue_output   = widgets.Output(layout={"border":"1px solid #ccc", "height":"200px"})
         self.run_all_btn    = widgets.Button(description="Run all ▶",    button_style="primary")
         self.cancel_all_btn = widgets.Button(description="Cancel all ⏹", button_style="warning")
         # bind des callbacks
@@ -511,7 +511,7 @@ class OptimizationTab:
 
         queue_pane = widgets.VBox(
             [widgets.HTML("<b>Job Queue</b>"),
-             self.queue_box,
+             self.queue_output,
              widgets.HBox([self.run_all_btn, self.cancel_all_btn], layout=widgets.Layout(gap="10px"))],
             layout=widgets.Layout(padding="10px", border="1px solid #ccc")
         )
@@ -583,14 +583,13 @@ class OptimizationTab:
             widgets.HBox([left_col, right_col],
                         layout=widgets.Layout(justify_content='space-between')),
             bottom_controls,
-            self.runtime_box,
             plot_area
         ], layout=widgets.Layout(padding='10px'))
 
 
 
         # branchements initiaux
-        #self._attach_config_observers()
+        self._attach_config_observers()
 
         # hook sur le bouton Refresh de SimulationTab
         self.sim.config_refresh_btn.on_click(self._on_configs_refreshed)
@@ -720,14 +719,12 @@ class OptimizationTab:
             "🚀 Optimization is running… (you can Cancel)<br>"
             "The progress-bar will appear after the first evaluation."
         )
-        self._status_html.layout.display = ""
-
-        self._progress_bar.layout.display = "none"
         self._progress_bar.value           = 0
         self._progress_bar.description     = "0 %"
         self._progress_bar.bar_style       = "info"
+        self._progress_bar.layout.display  = "none"   # stay hidden for now
 
-        # ----------  collect UI parameters  ----------
+        # ----------  collect UI parameters (unchanged) ----------
         extra_kwargs = {}
         mode = self.cost_mode.value
         if mode == "fixed_lambda":
@@ -791,15 +788,13 @@ class OptimizationTab:
         except q.Empty:
             tag = None
 
-        # ── first PROG message → on passe en mode “barre visible, texte caché”
+        # ── first PROG message → reveal bar, hide text ─────────────────────
         if tag == "PROG" and self._progress_bar.layout.display == "none":
-            # masque complètement le HTML
-            self._status_html.layout.display = "none"
-            # révèle la barre
-            self._progress_bar.layout.display = ""
+            self._status_html.value       = ""            # hide message
+            self._progress_bar.layout.display = ""        # show bar
 
         if tag == "PROG":
-            frac, _ = payload
+            frac, best = payload
             self._progress_bar.value       = frac
             self._progress_bar.description = f"{int(frac*100)} %"
 
@@ -948,7 +943,6 @@ class OptimizationTab:
         n_jobs: int = -1,
         seed: int | None = None,    # Répétabilité
         progress_queue: mp.Queue | None = None,
-        cancel_flag: dict | None = None,
         **mode_kw: Any,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         """
@@ -964,8 +958,6 @@ class OptimizationTab:
             Vecteur optimal après ré-évaluation finale.
         best_cost : float
             Valeur du coût associée à *best_final*.
-        cancel_flag : dict | None
-            Référence au dict job pour annulation externe.
         """
 
         # 1) Initialisation RNG & population
@@ -982,13 +974,6 @@ class OptimizationTab:
         ctx   = mp.get_context("fork" if sys.platform != "win32" else "spawn")
         pool  = ctx.Pool()                                  # processes == nb CPU
         self._pool = pool
-
-        # --- gestion de l’annulation par job ---
-        job = cancel_flag
-        if job is not None:
-            job["pool"] = pool
-
-
 
 
         try:
@@ -1011,11 +996,6 @@ class OptimizationTab:
             # 3) Boucle DE avec barre de progression et annulation
 
             for g in range(Ngen):
-                # si on a demandé l’annulation sur ce job, on stoppe tout de suite
-                if job is not None and job["cancel_flag"]:
-                    pool.terminate()
-                    raise OptimizationCancelled()
-                
                 if self._cancelled:
                     pool.terminate()
                     raise OptimizationCancelled()
@@ -1037,11 +1017,6 @@ class OptimizationTab:
                 args_child = [(z, keys, mode, mode_kw) for (_, z) in z_list]
                 cfz_list: List[float] = []
                 for r in pool.imap_unordered(cost_worker, args_child, chunksize=1):
-                    # idem, vérification d’annulation
-                    if job is not None and job["cancel_flag"]:
-                        pool.terminate()
-                        raise OptimizationCancelled()
-                    
                     if self._cancelled:
                         pool.terminate()
                         raise OptimizationCancelled()
@@ -1326,19 +1301,18 @@ class OptimizationTab:
 
 
     def _add_copy_panel(self, cfg_name: str):
-        # 1) génère un nouveau panel complet (avec ses propres on_click)
-        new_panel = self._make_param_panel(cfg_name)
-
-        # 2) ajoute-le à la suite des enfants existants
-        existing = list(self.param_tabs.children or ())
-        existing.append(new_panel)
-
-        # 3) ré-affecte le tuple d’enfants au Tab
-        self.param_tabs.children = tuple(existing)
-
-        # 4) donne-lui un titre
-        self.param_tabs.set_title(len(existing) - 1, cfg_name)
-
+        """Ajoute un onglet supplémentaire pour la même config sans tout recréer."""
+        panel = self._make_param_panel(cfg_name)
+        # récupère les onglets et titres existants
+        children = list(self.param_tabs.children or [])
+        titles   = [self.param_tabs.get_title(i) for i in range(len(children))]
+        # y append le nouveau
+        children.append(panel)
+        titles.append(cfg_name)
+        # met à jour le Tab
+        self.param_tabs.children = children
+        for idx, title in enumerate(titles):
+            self.param_tabs.set_title(idx, title)
 
 
 
@@ -1393,23 +1367,15 @@ class OptimizationTab:
         dup      = widgets.Button(description="Add copy",       button_style="info")
         
         def _on_add(_):
-            keys = [k for (k, _), r in zip(cfg["geometry"]["geometry"].items(), rows)
-                    if r.children[0].value]
             job = {
                 "config": cfg_name,
-                "keys": keys,                           # ← ajouté
                 "bounds": [(r.children[1].value, r.children[2].value)
-                        for r in rows if r.children[0].value],
+                           for r in rows if r.children[0].value],
                 "cf_mode": cf_radio.value,
                 "lambda": (lambda0.value, lammin.value, lammax.value),
                 "budget": budget_w.value,
                 "pop":    pop_w.value,
-                "status": "idle",
-                "cancel_flag": False,
-                "progress": widgets.FloatProgress(
-                    value=0, min=0, max=1, description="",
-                    bar_style="info", layout=widgets.Layout(width="90%", height="10px", display="none")
-                )
+                "status": "idle"
             }
             self.job_queue.append(job)
             self._refresh_queue()
@@ -1425,147 +1391,46 @@ class OptimizationTab:
         ], layout=widgets.Layout(padding="10px", border="1px solid #bbb", margin="5px"))
         return panel
 
-
     def _refresh_queue(self):
-        """Met à jour la liste des jobs et leurs barres de progression."""
-        rows = []
-        for i, job in enumerate(self.job_queue, 1):
-            # 1) icône de statut
-            status_ico = {
-                "idle":    "⏲️",  # en attente
-                "running": "🔄",  # en cours
-                "done":    "✅",  # validé
-                "error":   "❌",  # erreur
-            }[job["status"]]
+        """Affiche la table des jobs & leurs Run/Cancel."""
+        with self.queue_output:
+            self.queue_output.clear_output()
+            # Crée un GridBox/listing avec widgets.Button pour chaque job
+            rows = []
+            for i, job in enumerate(self.job_queue, 1):
+                status_ico = {"idle":"", "running":"⏳", "done":"🟢", "error":"🔴"}[job["status"]]
+                run_b    = widgets.Button(description="Run ▶",    layout={"width":"80px"})
+                cancel_b = widgets.Button(description="Cancel ⏹", layout={"width":"80px"})
+                delete_b = widgets.Button(description="Delete ❌", layout={"width":"80px"})
+                run_b.on_click(lambda _, idx=i-1: self._run_job(idx))
+                cancel_b.on_click(lambda _, idx=i-1: self._cancel_job(idx))
+                delete_b.on_click(lambda _, idx=i-1: self._delete_job(idx))
+                rows.append(
+                    widgets.HBox([
+                        widgets.Label(str(i), layout={"width":"30px"}),
+                        widgets.Label(job["config"], layout={"width":"150px"}),
+                        widgets.Label(job["cf_mode"], layout={"width":"80px"}),
+                        widgets.Label(f"{job['budget']}/{job['pop']}", layout={"width":"80px"}),
+                        widgets.Label(status_ico, layout={"width":"30px"}),
+                        run_b, cancel_b, delete_b
+                    ], layout=widgets.Layout(gap="10px"))
+                )
 
-            # 2) boutons
-            run_b    = widgets.Button(
-                description="Run ▶",
-                layout=widgets.Layout(width="80px"),
-                disabled=(job["status"] == "running")
-            )
-            cancel_b = widgets.Button(
-                description="Cancel ⏹",
-                layout=widgets.Layout(width="80px"),
-                disabled=(job["status"] not in ("running",))
-            )
-            delete_b = widgets.Button(
-                description="Delete ❌",
-                layout=widgets.Layout(width="80px"),
-                disabled=(job["status"] == "running")
-            )
-            
-            run_b.on_click(lambda _, idx=i-1: self._run_job(idx))
-            cancel_b.on_click(lambda _, idx=i-1: self._cancel_job(idx))
-            delete_b.on_click(lambda _, idx=i-1: self._delete_job(idx))
-
-            # 3) ligne d’infos
-            info_row = widgets.HBox([
-                widgets.Label(str(i),                             layout=widgets.Layout(width="30px")),
-                widgets.Label(job["config"],                      layout=widgets.Layout(width="150px")),
-                widgets.Label(job["cf_mode"],                     layout=widgets.Layout(width="80px")),
-                widgets.Label(f"{job['budget']}/{job['pop']}",    layout=widgets.Layout(width="80px")),
-                widgets.Label(status_ico,                         layout=widgets.Layout(width="30px")),
-                run_b, cancel_b, delete_b
-            ], layout=widgets.Layout(gap="10px"))
-
-            # 4) barre de progression propre à ce job
-            prog = job["progress"]
-            prog.layout.display = "" if job["status"] == "running" else "none"
-
-            # 5) empile ligne + barre
-            rows.append(widgets.VBox([info_row, prog], layout=widgets.Layout(gap="2px")))
-
-        # 6) on met à jour le VBox principal
-        self.queue_box.children = rows
-
+            # Affiche
+            display(widgets.VBox(rows))
 
 
     def _run_job(self, idx: int):
         job = self.job_queue[idx]
         job["status"] = "running"
         self._refresh_queue()
-        # 1) création de la queue dédiée
-        job_queue = q.Queue()
-        job["progress_queue"] = job_queue
-
-        # 2) extraction des bornes & clés depuis job["bounds"]
-        #    job["bounds"] est une liste de tuples (low, up) et on suppose
-        #    que vous avez aussi stocké dans job["keys"] la liste des noms
-        lowers = np.array([b[0] for b in job["bounds"]])
-        uppers = np.array([b[1] for b in job["bounds"]])
-        keys   = job["keys"]
-
-        # 3) préparation des extra_kwargs pour fixed/range lambda
-        extra_kwargs = {}
-        if job["cf_mode"] == "fixed_lambda":
-            extra_kwargs["fixed_lambda"] = job["lambda"][0]
-        elif job["cf_mode"] == "range_lambda":
-            # on stocke (min, max) dans job["lambda"][1:]
-            extra_kwargs["range_lambda"] = tuple(job["lambda"][1:])
-
-        # 4) constitution du dict args
-        args = dict(
-            budget=job["budget"],
-            Npop=job["pop"],
-            lowers=lowers,
-            uppers=uppers,
-            keys=keys,
-            mode=job["cf_mode"],
-            progress_queue=job_queue,
-            cancel_flag=job,
-            **extra_kwargs
-        )
-
-        # 5) lancement du thread
-        t = threading.Thread(target=self.DE_general, kwargs=args, daemon=True)
-        job["thread"] = t
-        t.start()
-
-        # 6) fonction de polling pour alimenter la barre de progression
-        loop = get_ipython().kernel.io_loop
-        
-        def _poll():
-            try:
-                tag, *payload = job_queue.get_nowait()
-            except q.Empty:
-                tag = None
-
-            if tag == "PROG":
-                frac = payload[0]
-                job["progress"].value = frac   # juste MAJ de la barre, pas de _refresh_queue()
-
-            elif tag == "DONE":
-                job["status"] = "done"
-                job["progress"].value = 1.0
-                self._refresh_queue()         # là on rafraîchit pour passer à ✅
-
-            elif tag == "ERROR":
-                job["status"] = "error"
-                self._refresh_queue()         # là on rafraîchit pour passer à ❌
-
-            # si on a toujours un thread en cours, on re‐schedule
-            if t.is_alive():
-                loop = get_ipython().kernel.io_loop
-                loop.add_timeout(loop.time() + 0.1, _poll)
-
-        loop = get_ipython().kernel.io_loop
-        loop.add_timeout(loop.time() + 0.1, _poll)
-
+        # TODO : appeler ton DE_general ou _on_run en passant job
 
     def _cancel_job(self, idx: int):
         job = self.job_queue[idx]
-        job["cancel_flag"] = True            # ← signale l’annulation
-        # si le pool existe, on le tue immédiatement
-        if "pool" in job and job["pool"] is not None:
-            try:
-                job["pool"].terminate()
-                job["pool"].join()
-            except Exception:
-                pass
         job["status"] = "error"
         self._refresh_queue()
-
+        # TODO : appeler ton _on_cancel si nécessaire
 
     def _delete_job(self, idx: int):
         """
@@ -1593,3 +1458,5 @@ class OptimizationTab:
 def create_optimization_tab(sim_obj: SimulationTab) -> OptimizationTab:
     """Renvoie l’onglet d’optimisation (compatibilité)."""
     return OptimizationTab(sim_obj)
+
+
