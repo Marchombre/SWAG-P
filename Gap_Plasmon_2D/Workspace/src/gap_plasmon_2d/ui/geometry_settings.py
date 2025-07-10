@@ -177,7 +177,7 @@ def create_geometry_widget():
 
         # Création du Text pour le nom de layer et du slider pour l'épaisseur
         name_w = widgets.Text(
-            value='new', placeholder='Layer name',
+            value=default_name, placeholder='Layer name',
             layout=widgets.Layout(width='120px')
         )
         sl = widgets.FloatSlider(
@@ -224,7 +224,8 @@ def create_geometry_widget():
             draw_structure()
 
         name_w.observe(_rename, names='value')
-        name_w.value = name_w.value  # déclenche _rename une première fois
+        # déclencher _rename une première fois avec la valeur par défaut
+        _rename({'new': default_name})
 
 
 

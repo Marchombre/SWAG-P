@@ -502,7 +502,13 @@ class OptimizationTab:
         self.param_tabs = widgets.Tab()
 
         # C) Onglet Queue pane
-        self.queue_box = widgets.VBox(layout={"border":"1px solid #ccc", "height":"200px"})        
+        self.queue_box = widgets.VBox(
+            layout=widgets.Layout(
+                border="1px solid #ccc",
+                overflow_y="auto",   # scrolling vertical quand trop haut
+                height="100%"        # occupe tout l’espace parent
+            )
+        )
         self.run_all_btn    = widgets.Button(description="Run all ▶",    button_style="primary")
         self.cancel_all_btn = widgets.Button(description="Cancel all ⏹", button_style="warning")
         # bind des callbacks
@@ -510,11 +516,21 @@ class OptimizationTab:
         self.cancel_all_btn.on_click(self._cancel_all)
 
         queue_pane = widgets.VBox(
-            [widgets.HTML("<b>Job Queue</b>"),
-             self.queue_box,
-             widgets.HBox([self.run_all_btn, self.cancel_all_btn], layout=widgets.Layout(gap="10px"))],
-            layout=widgets.Layout(padding="10px", border="1px solid #ccc")
+            [
+                widgets.HTML("<b>Job Queue</b>"),
+                self.queue_box,
+                widgets.HBox(
+                    [self.run_all_btn, self.cancel_all_btn],
+                    layout=widgets.Layout(gap="10px")
+                ),
+            ],
+            layout=widgets.Layout(
+                padding="10px",
+                border="1px solid #ccc",
+                height="100%"
+            )
         )
+
 
         # D) Tab principal (Parametrization + Queue pane)
         self.main_tabs = widgets.Tab(children=[self.param_tabs, queue_pane])
@@ -1340,13 +1356,24 @@ class OptimizationTab:
         self.param_tabs.set_title(len(existing) - 1, cfg_name)
 
 
+    def _remove_param_panel(self, panel: widgets.VBox):
+        """Supprime un panel de parametrization existant."""
+        children = list(self.param_tabs.children)
+        if panel in children:
+            idx = children.index(panel)
+            del children[idx]
+            # mettre à jour les titres
+            self.param_tabs.children = tuple(children)
+            for i, child in enumerate(children):
+                self.param_tabs.set_title(i, self.param_tabs.get_title(i))
 
 
     
     def _make_param_panel(self, cfg_name: str) -> widgets.VBox:
         """Construit tous les widgets pour la config cfg_name."""
         cfg = next(c for c in self.sim.all_configs if c["config_name"] == cfg_name)
-        geom = cfg["geometry"]["geometry"]
+        geom_full = cfg["geometry"]["geometry"]
+        geom = {k: v for k, v in geom_full.items() if v != 0.0}
         # Common bounds
         common_low = widgets.FloatText(value=0.0, description="Low all:", layout={"width":"200px"})
         common_up  = widgets.FloatText(value=1.0, description="Up all:", layout={"width":"200px"})
@@ -1355,12 +1382,11 @@ class OptimizationTab:
         # Individual bounds
         rows = []
         for k, val in geom.items():
-            if val == 0.0: continue
             lo_val, hi_val = geometry_limits.get(k, (0.0, 0.0))
-            chk     = widgets.Checkbox(value=True, description=k, indent=False)
-            low_w   = widgets.FloatText(value=lo_val, description="min:", layout={"width":"200px"})
-            up_w    = widgets.FloatText(value=hi_val, description="max:", layout={"width":"200px"})
-            rows.append(widgets.HBox([chk, low_w, up_w], layout=widgets.Layout(gap="10px")))
+            chk   = widgets.Checkbox(value=True, description=k, indent=False)
+            low_w = widgets.FloatText(value=lo_val, description="min:", layout={"width":"200px"})
+            up_w  = widgets.FloatText(value=hi_val, description="max:", layout={"width":"200px"})
+            rows.append(widgets.HBox([chk, low_w, up_w], layout=widgets.Layout(gap="10px")))        
         bounds_box = widgets.VBox(rows, layout=widgets.Layout(border="1px solid #ddd", padding="5px"))
         
         
@@ -1375,9 +1401,9 @@ class OptimizationTab:
             value='dip', description="CF mode:",
             style={'description_width':'initial'}
         )
-        lambda0 = widgets.FloatText(value=600, description="λ₀:", layout={"width":"200px"})
-        lammin  = widgets.FloatText(value=650, description="λmin:", layout={"width":"200px"})
-        lammax  = widgets.FloatText(value=750, description="λmax:", layout={"width":"200px"})
+        lambda0 = widgets.FloatText(value=600, description="λ₀ :", layout={"width":"150px"})
+        lammin  = widgets.FloatText(value=650, description="λmin:", layout={"width":"150px"})
+        lammax  = widgets.FloatText(value=750, description="λmax:", layout={"width":"150px"})
         lambda_box = widgets.HBox([lambda0, lammin, lammax], layout=widgets.Layout(gap="10px"))
         
         
@@ -1389,9 +1415,15 @@ class OptimizationTab:
         # DE parameters + actions
         budget_w = widgets.IntText(value=100, description="Budget",     layout={"width":"200px"})
         pop_w    = widgets.IntText(value=30,  description="Population", layout={"width":"200px"})
-        add_q    = widgets.Button(description="Add to queue ▶", button_style="success")
-        dup      = widgets.Button(description="Add copy",       button_style="info")
-        
+        add_q    = widgets.Button(description="Add to queue ▶", button_style="success", layout=widgets.Layout(width="100%"))
+        add_copy = widgets.Button(description="Add copy", button_style="info", layout=widgets.Layout(width="100%"))
+        del_btn  = widgets.Button(description="Delete panel", button_style="danger", layout=widgets.Layout(width="100%"))
+
+        # callback pour supprimer ce panel
+        def _on_delete_panel(_):
+            self._remove_param_panel(panel)
+        del_btn.on_click(_on_delete_panel)
+
         def _on_add(_):
             keys = [k for (k, _), r in zip(cfg["geometry"]["geometry"].items(), rows)
                     if r.children[0].value]
@@ -1414,14 +1446,14 @@ class OptimizationTab:
             self.job_queue.append(job)
             self._refresh_queue()
         add_q.on_click(_on_add)
-        dup.on_click(lambda _: self._add_copy_panel(cfg_name))
+        add_copy.on_click(lambda _: self._add_copy_panel(cfg_name))
         # Assemble panel
         panel = widgets.VBox([
             widgets.HTML(f"<b>Bounds for {cfg_name}</b>"),
             cb_controls, bounds_box,
             widgets.HTML("<b>Type of Cost Function</b>"), cf_radio, lambda_box,
             widgets.HTML("<b>DE parameters</b>"),
-            widgets.HBox([budget_w, pop_w, add_q, dup], layout=widgets.Layout(gap="10px"))
+            widgets.HBox([budget_w, pop_w, add_q, add_copy, del_btn], layout=widgets.Layout(gap="10px"))
         ], layout=widgets.Layout(padding="10px", border="1px solid #bbb", margin="5px"))
         return panel
 
@@ -1432,8 +1464,8 @@ class OptimizationTab:
         for i, job in enumerate(self.job_queue, 1):
             # 1) icône de statut
             status_ico = {
-                "idle":    "⏲️",  # en attente
-                "running": "🔄",  # en cours
+                "idle":    "▶️",  # en attente
+                "running": "⌛",  # en cours
                 "done":    "✅",  # validé
                 "error":   "❌",  # erreur
             }[job["status"]]
