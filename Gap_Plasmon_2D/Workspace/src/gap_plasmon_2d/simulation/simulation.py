@@ -928,9 +928,9 @@ class SimulationTab:
         Affiche le tout dans self.sim_output et écrit le HDF5.
         """
 
-        with open("/home/yann/debug_sim.txt", "a") as f:
-            print(">>> _build_outputs CALLED", file=f)
-            sys.stdout.flush()
+        # with open("/home/yann/debug_sim.txt", "a") as f:
+        #     print(">>> _build_outputs CALLED", file=f)
+        #     sys.stdout.flush()
 
         # ─── variables mises en cache au lancement ───────────────────────
         lam_range  = self._lam_range

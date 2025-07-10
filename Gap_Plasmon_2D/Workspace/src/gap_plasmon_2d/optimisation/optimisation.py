@@ -312,14 +312,25 @@ class OptimizationFileArboWidget:
             / self.wave_dd.value
         )
         opts = self._list_h5(base) if base and base.is_dir() else []
+        # extrait juste les chemins pour comparer
+        paths = [path for (_, path) in opts]
+        current = self.file_dd.value
         self.file_dd.options = opts
-        self.file_dd.value   = opts[0][1] if opts else None
+        # Si l’ancien chemin existe toujours, on le remet, sinon on prend le premier
+        if current in paths:
+            self.file_dd.value = current
+        else:
+            self.file_dd.value = paths[0] if paths else None
+
+
 
     def _refresh_runs(self, change=None):
         h5path = self.file_dd.value
         runs   = list_runs_in_h5(h5path) if h5path else []
         self.run_dd.options = runs
         self.run_dd.value   = runs[0] if runs else None
+
+
 
     def get_selected_file(self) -> str | None:
         return self.file_dd.value
@@ -634,7 +645,7 @@ class OptimizationTab:
 
         # 2) Colonne de droite (Optimisation sous forme d’onglets)
         self.main_tabs.layout = widgets.Layout(
-            width='48%',
+            width='52%',
             padding='10px'
         )
         right_col = self.main_tabs
