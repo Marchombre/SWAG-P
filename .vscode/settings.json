@@ -1,8 +1,0 @@
-// settings.json
-
-{
-    "python.analysis.extraPaths": [
-        "./Gap_Plasmon_2D/Workspace/src"
-    ],
-    "python.analysis.autoImportCompletions": true
-}
