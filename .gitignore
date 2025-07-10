@@ -1,0 +1,29 @@
+# ─── Environnement virtuel ────────────────────────────────────────
+env/
+
+# ─── Python compilé (inutile à versionner) ────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ─── Fichiers temporaires Jupyter ─────────────────────────────────
+.ipynb_checkpoints/
+
+# ─── Résultats lourds NON versionnés volontairement ──────────────
+Gap_Plasmon_2D/Workspace/notebooks/results/summary_simulation/
+Gap_Plasmon_2D/Workspace/notebooks/results/summary_optimization/
+Gap_Plasmon_2D/Workspace/Arborescence_structuration/
+Gap_Plasmon_2D/BACK_UP/
+
+
+# ─── Fichiers de log, caches, sauvegardes ────────────────────────
+*.log
+*.bak
+*.tmp
+*~
+
+# ─── Fichiers persos ou IDE ───────────────────────────────────────
+.vscode/
+.DS_Store
+Thumbs.db
