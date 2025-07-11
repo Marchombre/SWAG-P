@@ -7861,7 +7861,7 @@
         "config_name": "Bragg_20_thick_new",
         "compartment": "Optimization",
         "geometry": {
-          "thick_super": 200.0,
+          "thick_super": 2000.0,
           "thick_reso": 0.0,
           "width_reso": 0.0,
           "thick_gap": 0.0,
@@ -7891,7 +7891,7 @@
           "thick_homo_new_20": 1.0,
           "thick_XIAOYI": 0.0,
           "thick_accroche": 0.0,
-          "thick_sub": 200.0,
+          "thick_sub": 2000.0,
           "period": 100.2153
         }
       },
@@ -7902,7 +7902,7 @@
             "key": "perm_env",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1",
               "override": [
                 300.0,
                 1000.0
@@ -7949,7 +7949,7 @@
             "key": "perm_homo_new_1",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -7960,7 +7960,7 @@
             "key": "perm_homo_new_2",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -7971,7 +7971,7 @@
             "key": "perm_homo_new_3",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -7982,7 +7982,7 @@
             "key": "perm_homo_new_4",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -7993,7 +7993,7 @@
             "key": "perm_homo_new_5",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -8004,7 +8004,7 @@
             "key": "perm_homo_new_6",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -8015,7 +8015,7 @@
             "key": "perm_homo_new_7",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -8026,7 +8026,7 @@
             "key": "perm_homo_new_8",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -8037,7 +8037,7 @@
             "key": "perm_homo_new_9",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -8048,7 +8048,7 @@
             "key": "perm_homo_new_10",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -8059,7 +8059,7 @@
             "key": "perm_homo_new_11",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -8070,7 +8070,7 @@
             "key": "perm_homo_new_12",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -8081,7 +8081,7 @@
             "key": "perm_homo_new_13",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -8092,7 +8092,7 @@
             "key": "perm_homo_new_14",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -8103,7 +8103,7 @@
             "key": "perm_homo_new_15",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -8114,7 +8114,7 @@
             "key": "perm_homo_new_16",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -8125,7 +8125,7 @@
             "key": "perm_homo_new_17",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -8136,7 +8136,7 @@
             "key": "perm_homo_new_18",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -8147,7 +8147,7 @@
             "key": "perm_homo_new_19",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "1.8**2",
               "override": [
                 300.0,
                 1000.0
@@ -8158,7 +8158,7 @@
             "key": "perm_homo_new_20",
             "material": {
               "type": "Custom",
-              "expression": "1.8**2",
+              "expression": "1.4**2",
               "override": [
                 300.0,
                 1000.0
@@ -8181,7 +8181,7 @@
             "key": "perm_sub",
             "material": {
               "type": "Custom",
-              "expression": "1.4**2",
+              "expression": "3.24**2",
               "override": [
                 300.0,
                 1000.0

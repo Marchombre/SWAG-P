@@ -255,41 +255,67 @@ def reflectance(geometry, wave, materials, n_mod):
     #    dans cet ordre fixe, si présentes
     # ---------------------------------
 
-    # on construit la liste ordonnée
-    ordered_keys = []
-    # 1) couche métallique
-    if "thick_metalliclayer" in geometry:
-        ordered_keys.append("thick_metalliclayer")
+    # 1) ordre physique complet
+    ordered_keys = ["thick_metalliclayer"] \
+                + [k for k in geometry if k.startswith("thick_homo_")] \
+                + ["thick_XIAOYI", "thick_accroche", "thick_sub"]
 
-    # 2) toutes les couches homo_* dans l'ordre d'insertion
-    for k in geometry.keys():
-        if k.startswith("thick_homo_"):
-            ordered_keys.append(k)
-            
-    # 3) XIAOYI, accroche et substrat
-    for suf in ("XIAOYI", "accroche", "sub"):
-        key_name = f"thick_{suf}"
-        if key_name in geometry:
-            ordered_keys.append(key_name)
+    # 2) ne garder que celles à épaisseur > 0
+    present_keys = [k for k in ordered_keys if geometry.get(k, 0) > 0]
 
-    # on applique la cascade pour chaque couche
-    for key in ordered_keys:
-        # épaisseur normalisée
-        thickness  = geometry[key] / period
-        # clé de matériau correspondante
+    # 3) boucle unique sur les couches réelles
+    for key in present_keys:
+        # normalized thickness
+        thickness = geometry[key] / period
+
+        # récupère la permittivité
         mat_key    = "perm_" + key[len("thick_"):]
-        perm_layer = materials.get(mat_key)
-        if perm_layer is None:
-            raise KeyError(f"Matériau manquant pour '{key}' → '{mat_key}'")
+        perm_layer = materials[mat_key]  # KeyError si absent
 
-        # propagation homogène puis cascade
+        # 3a) interface systématique
         P_layer, V_layer = homogene(k0, a0, polarization, perm_layer, n)
         S = cascade(S, interface(P_current, P_layer))
-        if thickness > 0:
-            S = c_bas(S, V_layer, thickness)
+
+        # 3b) propagation uniquement si épaisseur > 0 (toujours vrai ici)
+        S = c_bas(S, V_layer, thickness)
+
+        # mise à jour pour la couche suivante
         P_current = P_layer
 
 
+    # # on construit la liste ordonnée
+    # ordered_keys = []
+    # # 1) couche métallique
+    # if "thick_metalliclayer" in geometry:
+    #     ordered_keys.append("thick_metalliclayer")
+
+    # # 2) toutes les couches homo_* dans l'ordre d'insertion
+    # for k in geometry.keys():
+    #     if k.startswith("thick_homo_"):
+    #         ordered_keys.append(k)
+            
+    # # 3) XIAOYI, accroche et substrat
+    # for suf in ("XIAOYI", "accroche", "sub"):
+    #     key_name = f"thick_{suf}"
+    #     if key_name in geometry:
+    #         ordered_keys.append(key_name)
+
+    # # on applique la cascade pour chaque couche
+    # for key in ordered_keys:
+    #     # épaisseur normalisée
+    #     thickness  = geometry[key] / period
+    #     # clé de matériau correspondante
+    #     mat_key    = "perm_" + key[len("thick_"):]
+    #     perm_layer = materials.get(mat_key)
+    #     if perm_layer is None:
+    #         raise KeyError(f"Matériau manquant pour '{key}' → '{mat_key}'")
+
+    #     # propagation homogène puis cascade
+    #     P_layer, V_layer = homogene(k0, a0, polarization, perm_layer, n)
+    #     S = cascade(S, interface(P_current, P_layer))
+    #     if thickness > 0:
+    #         S = c_bas(S, V_layer, thickness)
+    #     P_current = P_layer
 
     # ---------------------------------
     # 7. Calcul de la réflectance

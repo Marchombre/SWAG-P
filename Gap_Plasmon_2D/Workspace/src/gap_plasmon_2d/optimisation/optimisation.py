@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 import sys
 
+import warnings
 import threading
-from functools import partial     # (pour l’init du Pool)
 import h5py
 
 import numpy as np
@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 from IPython.display import display
 from IPython import get_ipython
 import ipywidgets as widgets
-from tqdm.notebook import trange
+#from tqdm.notebook import trange
 import traceback, queue as q
 
 from gap_plasmon_2d import paths
@@ -97,52 +97,37 @@ json_combined_path = data_dir / "combined_materials.json"
 # évitant de devoir recharger/configurer le simulateur à chaque appel.
 _WORKER_SIM: SimulationTab = sim_tab
 
-# def init_worker(selected_config_name, lam_min, lam_max,
-#                 n_points, json_path,
-#                 sel_layers, delta_n_value,
-#                 mode_sel_value, fixed_n,
-#                 custom_map  ):
-#     """
-#     Initialisateur exécuté dans **chaque** process du pool.
-
-#     On recrée un SimulationTab « sans UI » et on le configure exactement
-#     comme dans le process maître.
-#     """
-#     global _WORKER_SIM
-#     _WORKER_SIM = SimulationTab()  # pas d’interface graphique
-
-#     # 1) Sélectionne la config voulue
-#     for name, cb in _WORKER_SIM.config_checkboxes.items():
-#         cb.value = name == selected_config_name
-
-#     # 2) Propagation des paramètres de simulation
-#     _WORKER_SIM.sim_lambda_min.value = lam_min
-#     _WORKER_SIM.sim_lambda_max.value = lam_max
-#     _WORKER_SIM.sim_n_points.value = n_points
-
-#     # 3) Chemin vers le JSON matériau combiné
-#     _WORKER_SIM.json_combined_path = json_path
-
-#     _WORKER_SIM.layer_selector.value = tuple(sel_layers)
-#     _WORKER_SIM.delta_n_widget.value = delta_n_value
-
-#    # --- paramètres RCWA repris de l’UI ---
-#     _WORKER_SIM.mode_selection.value = mode_sel_value      # 'fixed' / 'custom' / 'auto'
-#     _WORKER_SIM.sim_n_mod.value      = fixed_n             # utilisé si 'fixed'
-#     _WORKER_SIM.custom_n_mod_inputs  = {}                  # dict de IntText
-    
-#     for name, val in custom_map.items():                   # seulement si 'custom'
-#         _WORKER_SIM.custom_n_mod_inputs[name] = widgets.IntText(value=val)
-
-
-import warnings
-
-def cost_worker(args: Tuple[np.ndarray, List[str], str, Dict[str, Any]]) -> float:
+def cost_worker(
+    args: Tuple[
+        np.ndarray,       # x
+        List[str],        # keys
+        str,              # mode
+        Dict[str, Any],   # mode_kw
+        Dict[str, float]  # fixed_vals
+    ]
+) -> float:
     """
     Wrapper minimaliste et picklable pour multiprocessing.Pool.map,
     avec capture des LinAlgError et overflow en renvoyant un coût pénalisant.
     """
-    x, keys, mode, mode_kw = args
+    x, keys, mode, mode_kw, fixed = args
+
+    cfg = next(
+        c for c in _WORKER_SIM.all_configs
+        if _WORKER_SIM.config_checkboxes[c["config_name"]].value
+    )
+
+    # 1) on sauve toutes les entrées perm_*
+    geom = cfg["geometry"]["geometry"]
+    perm_backup = {k: v for k,v in geom.items() if k.startswith("perm_")}
+
+
+    # injecte valeur fixe geometry
+    for param, val in fixed.items():
+        cfg["geometry"]["geometry"][param] = float(val)   
+
+
+
     try:
         # on supprime les warnings d'overflow/invalid
         with warnings.catch_warnings():
@@ -189,7 +174,7 @@ class OptimizationFileArboWidget:
         self.run_bounds_out = widgets.Output(layout=widgets.Layout(
             border="1px solid #ccc",
             padding="4px",
-            max_height="210px",    # ≃ 7 lignes × 30px
+            max_height="250px",  
             overflow_y="auto"
         ))        
         # branchement du callback
@@ -205,28 +190,67 @@ class OptimizationFileArboWidget:
             # raccourcit un peu la zone de description
             dd.style = {"description_width": "initial"}
 
-        # 3) Organisation en deux lignes
+        # 1) Deux colonnes : 80% pour les sélecteurs, 20% pour le tableau déroulant
         row1 = widgets.HBox(
             [self.family_dd, self.cost_mode_dd, self.name_dd],
             layout=widgets.Layout(gap="20px")
         )
         row2 = widgets.HBox(
-            [self.budget_pop_dd, self.wave_dd, self.file_dd, self.run_dd],
+            [self.budget_pop_dd, self.wave_dd, self.file_dd],
+            layout=widgets.Layout(gap="20px")
+        )
+        row3 = widgets.HBox(
+            [self.run_dd],
             layout=widgets.Layout(gap="20px")
         )
 
-        # 4) Cadre global pour un rendu « panel »
-        self.widget = widgets.VBox(
-            [row1, row2,
-        self.run_bounds_out],
+        left_col = widgets.VBox(
+            [row1, row2, row3],
             layout=widgets.Layout(
-                border="1px solid #ccc",
-                padding="8px",
-                margin="4px 0px",
+                display="flex",
+                flex="4 1 auto",
+                flex_flow="column",
                 align_items="flex-start",
                 gap="5px"
             )
         )
+        right_col = widgets.VBox(
+            [self.run_bounds_out],
+            layout=widgets.Layout(
+                display="flex",
+                height="250px",
+                flex="1 1 auto",
+                align_items="flex-start"
+            )
+        )
+
+        select_row = widgets.HBox(
+            [left_col, right_col],
+            layout=widgets.Layout(
+                display="flex",
+                width="100%",
+                gap="20px",
+                align_items="flex-start"
+            )
+        )
+
+        # 2) Ligne du bouton Plot (déjà défini dans OptimizationTab, n'intervient pas ici)
+        # plot_row = widgets.HBox([...])
+
+        # 3) Empilement final de cet arborescence + (éventuel) plot_row
+        self.widget = widgets.VBox(
+            [select_row],  
+            layout=widgets.Layout(
+                display="flex",
+                flex_flow="column",
+                width="100%",
+                border="1px solid #ccc",
+                padding="8px",
+                margin="4px 0px",
+                gap="10px"
+            )
+        )
+
 
         # 5) Observers en cascade (inchangés)
         self.family_dd.observe(self._refresh_cost_modes,     names="value")
@@ -249,86 +273,72 @@ class OptimizationFileArboWidget:
         )
 
     def _refresh_families(self, change=None):
+        old = self.family_dd.value
         opts = self._list_subdirs(self.base_dir)
         self.family_dd.options = opts
-        self.family_dd.value   = opts[0] if opts else None
+        self.family_dd.value   = old if old in opts else (opts[0] if opts else None)
+        self._refresh_cost_modes()
 
     def _refresh_cost_modes(self, change=None):
-        base = self.base_dir / self.family_dd.value if self.family_dd.value else None
-        opts = self._list_subdirs(base) if base and base.is_dir() else []
+        old = self.cost_mode_dd.value
+        base = self.base_dir / (self.family_dd.value or "")
+        opts = self._list_subdirs(base) if base.is_dir() else []
         self.cost_mode_dd.options = opts
-        self.cost_mode_dd.value   = opts[0] if opts else None
+        self.cost_mode_dd.value   = old if old in opts else (opts[0] if opts else None)
+        self._refresh_configs()
 
     def _refresh_configs(self, change=None):
-        base = (
-            self.base_dir
-            / self.family_dd.value
-            / self.cost_mode_dd.value
-        )
-        opts = self._list_subdirs(base) if base and base.is_dir() else []
+        old = self.name_dd.value
+        base = self.base_dir / self.family_dd.value / self.cost_mode_dd.value
+        opts = self._list_subdirs(base) if base.is_dir() else []
         self.name_dd.options = opts
-        self.name_dd.value   = opts[0] if opts else None
+        self.name_dd.value   = old if old in opts else (opts[0] if opts else None)
+        self._refresh_budget_pops()
 
     def _refresh_budget_pops(self, change=None):
-        base = (
-            self.base_dir
-            / self.family_dd.value
-            / self.cost_mode_dd.value
-            / self.name_dd.value
-        )
-        # seuls les dossiers “budgetXX_popYY”
-        opts = sorted(
-            p.name
-            for p in base.iterdir()
-            if p.is_dir() and p.name.startswith("budget")
-        ) if base and base.is_dir() else []
+        old = self.budget_pop_dd.value
+        base = self.base_dir / self.family_dd.value / self.cost_mode_dd.value / self.name_dd.value
+        opts = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("budget")) if base.is_dir() else []
         self.budget_pop_dd.options = opts
-        self.budget_pop_dd.value   = opts[0] if opts else None
+        self.budget_pop_dd.value   = old if old in opts else (opts[0] if opts else None)
+        self._refresh_wavelengths()
 
     def _refresh_wavelengths(self, change=None):
+        old = self.wave_dd.value
         base = (
-            self.base_dir
-            / self.family_dd.value
-            / self.cost_mode_dd.value
-            / self.name_dd.value
-            / self.budget_pop_dd.value
+            self.base_dir /
+            self.family_dd.value /
+            self.cost_mode_dd.value /
+            self.name_dd.value /
+            self.budget_pop_dd.value
         )
-        # seuls les dossiers “wavelength_range_<min>:<max>”
-        opts = sorted(
-            p.name
-            for p in base.iterdir()
-            if p.is_dir() and p.name.startswith("wavelength_range_")
-        ) if base and base.is_dir() else []
+        opts = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("wavelength_range_")) if base.is_dir() else []
         self.wave_dd.options = opts
-        self.wave_dd.value   = opts[0] if opts else None
+        self.wave_dd.value   = old if old in opts else (opts[0] if opts else None)
+        self._refresh_files()
 
     def _refresh_files(self, change=None):
+        old = self.file_dd.value
         base = (
-            self.base_dir
-            / self.family_dd.value
-            / self.cost_mode_dd.value
-            / self.name_dd.value
-            / self.budget_pop_dd.value
-            / self.wave_dd.value
+            self.base_dir /
+            self.family_dd.value /
+            self.cost_mode_dd.value /
+            self.name_dd.value /
+            self.budget_pop_dd.value /
+            self.wave_dd.value
         )
-        opts = self._list_h5(base) if base and base.is_dir() else []
-        # extrait juste les chemins pour comparer
-        paths = [path for (_, path) in opts]
-        current = self.file_dd.value
+        opts = self._list_h5(base) if base.is_dir() else []
+        paths = [p for (_, p) in opts]
         self.file_dd.options = opts
-        # Si l’ancien chemin existe toujours, on le remet, sinon on prend le premier
-        if current in paths:
-            self.file_dd.value = current
-        else:
-            self.file_dd.value = paths[0] if paths else None
-
-
+        self.file_dd.value   = old if old in paths else (paths[0] if paths else None)
+        self._refresh_runs()
 
     def _refresh_runs(self, change=None):
-        h5path = self.file_dd.value
-        runs   = list_runs_in_h5(h5path) if h5path else []
+        old = self.run_dd.value
+        runs = list_runs_in_h5(self.file_dd.value) if self.file_dd.value else []
         self.run_dd.options = runs
-        self.run_dd.value   = runs[0] if runs else None
+        # on privilégie l'ancien run, sinon le **dernier** (souvent le plus récent)
+        self.run_dd.value   = old if old in runs else (runs[-1] if runs else None)
 
 
 
@@ -337,41 +347,69 @@ class OptimizationFileArboWidget:
     
 
     def _on_run_changed(self, change):
-        """Affiche un petit tableau des bounds du run sélectionné."""
+        """Affiche Param / Min / Max / Best **+** Fixed dès qu’on sélectionne un run."""
+        from gap_plasmon_2d.utils.data_readers import read_optimization_hdf5
         self.run_bounds_out.clear_output()
-        h5path = self.file_dd.value
+        h5path  = self.file_dd.value
         run_key = change["new"]
         if not h5path or run_key is None:
             return
 
+        data      = read_optimization_hdf5(h5path, run_key=run_key)
+        opt_keys  = data["keys"]
+        lowers    = data["lowers"]
+        uppers    = data["uppers"]
+        best_vals = data["best_final"]
+        fixed     = data.get("fixed", {})
+
+        # entête à 4 colonnes
+        header = "<tr><th>Paramètre</th><th>Min</th><th>Max</th><th>Valeur</th></tr>"
+        # ligne métrique
+        best_cost    = data["best_cost"]
+        metric_value = 1.0 - best_cost
+        label_map = {
+            "dip"          : "Sensitivity S (ΔR/Δn)",
+            "half"         : "Sensitivity S½ (ΔR/Δn)",
+            "fixed_lambda" : "Reflectance R(λ₀)",
+            "range_lambda" : "Mean reflectance ⟨R⟩",
+        }
+        metric_label = label_map.get(data["mode"], "Metric")
+        metric_row = (
+        f"<tr><td><b>{metric_label}</b></td>"
+        f"<td></td><td></td>"
+        f"<td><b>{metric_value:.3g}</b></td></tr>"
+        )
+
+        # lignes pour les paramètres optimisés
+        opt_rows = "\n".join(
+        f"<tr><td>{k}</td><td>{l:.3g}</td><td>{u:.3g}</td><td>{v:.3g}</td></tr>"
+        for k, l, u, v in zip(opt_keys, lowers, uppers, best_vals)
+        )
+
+        # lignes pour les paramètres fixés
+        fixed_rows = "\n".join(
+        f"<tr>"
+        f"<td>{k} (fixé)</td>"
+        f"<td>{v:.3g}</td>"
+        f"<td>{v:.3g}</td>"
+        f"<td>{v:.3g}</td>"
+        f"</tr>"
+        for k, v in fixed.items()
+        )
+
+        table_html = f"""
+        <div style="max-height:200px; overflow-y:auto; border:1px solid #ccc; padding:4px;">
+        <table style="border-collapse: collapse; width:100%;">
+            {header}
+            {metric_row}
+            {opt_rows}
+            {fixed_rows}
+        </table>
+        </div>
+        """
+
         with self.run_bounds_out:
-            try:
-                with h5py.File(h5path, "r") as f:
-                    grp = f[run_key]
-                    lows = grp.attrs.get("bounds_low", [])
-                    ups  = grp.attrs.get("bounds_up", [])
-                    # récupère aussi les clés pour les noms de colonne
-                    params = grp["parameters/keys"][:]
-                    params = [p.decode() if isinstance(p, bytes) else p for p in params]
-
-                # génère un petit tableau HTML
-                header = "<tr><th>Paramètre</th><th>Min</th><th>Max</th></tr>"
-                rows = "\n".join(
-                    f"<tr><td>{param}</td><td>{l:.3g}</td><td>{u:.3g}</td></tr>"
-                    for param, l, u in zip(params, lows, ups)
-                )
-                table_html = f"""
-                <div style="max-height: 180px; overflow-y: auto;">
-                <table style="border-collapse: collapse; width:100%">
-                    {header}
-                    {rows}
-                </table>
-                </div>
-                """
-                display(widgets.HTML(table_html))
-
-            except Exception as e:
-                display(widgets.HTML(f"<i>Erreur affichage bounds: {e}</i>"))
+            display(widgets.HTML(table_html))
 
 
 
@@ -394,7 +432,7 @@ class OptimizationTab:
         # runtime-state flags/handles
         self._is_running   = False         
         self._cancelled    = False
-        self._pool         = None
+        
         self._worker_thread = None
 
         # background process / queue (may still be used by DE_general)
@@ -543,6 +581,20 @@ class OptimizationTab:
         )
         self.plot_btn.on_click(self.plot_optimization_results)
 
+        # personnalise la taille du bouton Plot pour qu'il soit plus voyant
+        self.plot_btn.layout = widgets.Layout(width="80%", height="40px")
+
+        # crée une 4ᵉ ligne centrée contenant ce bouton
+        plot_row = widgets.HBox(
+            [self.plot_btn],
+            layout=widgets.Layout(
+                justify_content="center",
+                width="100%",
+                padding="10px 0"
+            )
+        )
+
+
 
         # -------------  PERMANENT runtime widgets (status + progress) -------------
         self._status_html  = widgets.HTML("")          # line that will show the text
@@ -593,7 +645,7 @@ class OptimizationTab:
             layout=widgets.Layout(
                 padding="10px",
                 border="1px solid #ccc",
-                height="100%"
+                height="auto",  # s’adapte à la hauteur de l’écran
             )
         )
 
@@ -645,17 +697,30 @@ class OptimizationTab:
 
         # 2) Colonne de droite (Optimisation sous forme d’onglets)
         self.main_tabs.layout = widgets.Layout(
-            width='52%',
+            width='55%',
             padding='10px'
         )
         right_col = self.main_tabs
 
 
-        # 3) Ligne du bas (full width)
-        bottom_controls = widgets.HBox([
-            self.opt_file_arbo.widget,
-            self.plot_btn,
-        ], layout=widgets.Layout(justify_content='space-around', margin='10px'))
+        # 3) Bas de page : arborescence puis bouton Plot centré
+        plot_row = widgets.HBox(
+            [self.plot_btn],
+            layout=widgets.Layout(
+                justify_content="center",
+                width="50%",
+                padding="10px 0"
+            )
+        )
+
+        bottom_controls = widgets.VBox(
+            [self.opt_file_arbo.widget, plot_row],
+            layout=widgets.Layout(
+                width="100%",
+                margin="10px 0",
+                gap="10px"
+            )
+        )
 
         # 4) Zone de sortie pour le plot (plein width)
         plot_area = self.out
@@ -670,9 +735,6 @@ class OptimizationTab:
         ], layout=widgets.Layout(padding='10px'))
 
 
-
-        # branchements initiaux
-        #self._attach_config_observers()
 
         # hook sur le bouton Refresh de SimulationTab
         self.sim.config_refresh_btn.on_click(self._on_configs_refreshed)
@@ -811,12 +873,20 @@ class OptimizationTab:
 
         # ----------  collect UI parameters  ----------
         extra_kwargs = {}
+
         mode = self.cost_mode.value
         if mode == "fixed_lambda":
             extra_kwargs["fixed_lambda"] = self.lambda0_w.value
         elif mode == "range_lambda":
             extra_kwargs["range_lambda"] = (self.band_min_w.value,
                                             self.band_max_w.value)
+
+        # **même logique que pour la queue** : on capture les valeurs « fixed »
+        extra_kwargs["fixed_vals"] = {
+            k: w["fixed"].value
+            for k, w in self.param_widgets.items()
+            if not w["opt"].value
+        }
 
         keys   = [k for k, w in self.param_widgets.items() if w["opt"].value]
         if not keys:
@@ -939,11 +1009,7 @@ class OptimizationTab:
         self._is_running = False
         self.cancel_btn.disabled = True
 
-        # terminate pool if alive
-        if self._pool is not None:
-            self._pool.terminate()
-            self._pool.join()
-            self._pool = None
+
 
         # terminate worker thread (let it die via the flag)
         self._status_html.value   = "❌ Optimization cancelled by user."
@@ -980,26 +1046,36 @@ class OptimizationTab:
 
             chk = widgets.Checkbox(value=True, indent=False, layout={"width": "30px"})
             lbl = widgets.Label(value=k, layout={"width": "150px"})
-            lo = widgets.FloatText(
-                value=low,
-                description="min:",
-                layout={"width": "120px"},
-                style={"description_width": "40px"},
-            )
-            hi = widgets.FloatText(
-                value=high,
-                description="max:",
-                layout={"width": "120px"},
-                style={"description_width": "40px"},
+            lo  = widgets.FloatText(value=low, description="min:", layout={"width": "120px"}, style={"description_width": "40px"})
+            hi  = widgets.FloatText(value=high, description="max:", layout={"width": "120px"}, style={"description_width": "40px"})
+            fixed = widgets.FloatText(value=val, description="fixed:", layout={"width": "120px"})
+            
+            # 1) callback pour toggle Low/Up ↔ Fixed
+            def _toggle(change, lo=lo, hi=hi, fixed=fixed):
+                if change["new"]:
+                    lo.layout.display = hi.layout.display = ""
+                    fixed.layout.display = "none"
+                else:
+                    lo.layout.display = hi.layout.display = "none"
+                    fixed.layout.display = ""
+
+
+            chk.observe(_toggle, names="value")
+            _toggle({"new": chk.value})
+
+            # 2) on stocke dans param_widgets
+            self.param_widgets[k] = {
+                "opt":   chk,
+                "low":   lo,
+                "up":    hi,
+                "fixed": fixed
+            }
+            # 3) on affiche la ligne complète
+            rows.append(
+                widgets.HBox([chk, lbl, lo, hi, fixed],
+                            layout=widgets.Layout(align_items="center", gap="10px"))
             )
 
-            self.param_widgets[k] = {"opt": chk, "low": lo, "up": hi}
-            rows.append(
-                widgets.HBox(
-                    [chk, lbl, lo, hi],
-                    layout=widgets.Layout(align_items="center", gap="10px"),
-                )
-            )
 
 
             # clear the log Output **only when nothing is running**
@@ -1027,6 +1103,7 @@ class OptimizationTab:
         uppers: np.ndarray,
         keys: List[str],
         mode: str = "dip",
+        fixed_vals: dict[str,float] | None = None,
         n_jobs: int = -1,
         seed: int | None = None,    # Répétabilité
         progress_queue: mp.Queue | None = None,
@@ -1058,12 +1135,13 @@ class OptimizationTab:
         n_params = len(keys)
         pop = lowers + (uppers - lowers) * rng.random((Npop, n_params))
 
-        # 2) Pool de process (vrai parallélisme CPU)
+        # 2) Pool de process (vrai parallélisme CPU), attaché au cancel_flag
         global _WORKER_SIM
         _WORKER_SIM = self.sim                              # objet partagé en COW
-        ctx   = mp.get_context("fork" if sys.platform != "win32" else "spawn")
-        pool  = ctx.Pool()                                  # processes == nb CPU
-        self._pool = pool
+        ctx  = mp.get_context("fork" if sys.platform!="win32" else "spawn")
+        pool = ctx.Pool()   # un Pool par appel
+        if cancel_flag is not None:
+            cancel_flag["pool"] = pool
 
         # --- gestion de l’annulation par job ---
         job = cancel_flag
@@ -1071,11 +1149,15 @@ class OptimizationTab:
             job["pool"] = pool
 
 
-
+        if fixed_vals is None:
+            fixed_vals = {}
 
         try:
             # Évaluation initiale (interruptible)
-            args0 = [(pop[i], keys, mode, mode_kw) for i in range(Npop)]
+            args0 = [
+                (pop[i], keys, mode, mode_kw, fixed_vals)
+                for i in range(Npop)
+            ]            
             cf_list: List[float] = []
             for r in pool.imap_unordered(cost_worker, args0, chunksize=1):
                 if self._cancelled:
@@ -1116,7 +1198,10 @@ class OptimizationTab:
                     z_list.append((p, z))
 
                 # évaluation enfants
-                args_child = [(z, keys, mode, mode_kw) for (_, z) in z_list]
+                args_child = [
+                    (z, keys, mode, mode_kw, fixed_vals)
+                    for (_, z) in z_list
+                ]                
                 cfz_list: List[float] = []
                 for r in pool.imap_unordered(cost_worker, args_child, chunksize=1):
                     # idem, vérification d’annulation
@@ -1145,7 +1230,10 @@ class OptimizationTab:
                             
 
             # 4) Ré-évaluation finale
-            argsf       = [(pop[i], keys, mode, mode_kw) for i in range(Npop)]
+            argsf = [
+                (pop[i], keys, mode, mode_kw, fixed_vals)
+                for i in range(Npop)
+            ]            
             cf_final_list: List[float] = []
 
             for r in pool.imap_unordered(cost_worker, argsf, chunksize=1):
@@ -1155,22 +1243,81 @@ class OptimizationTab:
             best_final = pop[np.argmin(cf_final)]
             best_cost  = cf_final.min()
 
+
+
+            # —–––––– DEBUG COMPARAISON –––––––—
+            # 1) calcul via cost() (même pipeline que dans la pool)
+            R_via_cost = 1.0 - self.cost(best_final, keys, mode=mode, **mode_kw)
+
+            # 2) calcul via run_simulation_one_combo (pipeline finale)
+            lam = np.linspace(
+                self.sim.sim_lambda_min.value,
+                self.sim.sim_lambda_max.value,
+                self.sim.sim_n_points.value
+            )
+            wave   = {"angle": 0, "polarization": 1}
+            # assurez-vous ici de prendre le même n_modes que cost() !
+            n_modes = self.sim.sim_n_mod.value  
+            Rup, Rdown, _ = run_simulation_one_combo(lam, wave, n_modes, cfg, self.json_combined_path)
+            R_via_final = float(np.interp(mode_kw.get("fixed_lambda", self.sim.lambda0_in.value), lam, Rup))
+
+            # 3) affichez dans votre Output-widget
+            with self.out:
+                self.out.clear_output(wait=True)
+                print(f"→ R via cost()       : {R_via_cost:.6f}")
+                print(f"→ R via final sim    : {R_via_final:.6f}")
+                print(f"→ Δ = {R_via_cost - R_via_final:.6f}")
+
+
+
+
             # 5) Tracé du spectre optimal + sauvegarde HDF5
             lam = np.linspace(self.sim.sim_lambda_min.value,
                               self.sim.sim_lambda_max.value,
                               self.sim.sim_n_points.value)
             cfg = next(c for c in self.sim.all_configs if self.sim.config_checkboxes[c["config_name"]].value)
-            for xi,k in zip(best_final, keys):
+            
+
+            # —–––––––– 1) D'abord, ceux que l'utilisateur a vraiment fixés
+            for k, v in (fixed_vals or {}).items():
+                # on ne touche qu'aux paramètres *non* optimisés
+                if k not in keys:
+                    cfg["geometry"]["geometry"][k] = float(v)
+
+            # —–––––––– 2) Ensuite, on écrase (ou confirme) *toujours* les optimisés
+            for xi, k in zip(best_final, keys):
                 cfg["geometry"]["geometry"][k] = float(xi)
 
+
+    
+            wave  = {"angle": 0, "polarization": 1}
+
+            # reprenez exactement le même n_modes que dans cost()
+            n_modes = self.sim._get_n_modes_for(cfg["config_name"])
+
+
+            with self.out:
+                # on vide l'ancien contenu
+                self.out.clear_output(wait=True)
+                # on affiche nos diagnostics
+                print(" keys optimisés :", keys)
+                print(" best_final     :", best_final)
+                print(" fixed_vals     :", fixed_vals)
+                print(" géométrie finale :")
+                for k in keys:
+                    print(f"   {k} = {cfg['geometry']['geometry'][k]}")
+
+
             Rup, Rdown, _ = run_simulation_one_combo(
-                lam, {"angle":0,"polarization":1}, self.sim.sim_n_mod.value, cfg, self.json_combined_path
+                lam, wave, n_modes, cfg, self.json_combined_path
             )
             Rup   = np.asarray(Rup, float)
             Rdown = np.asarray(Rdown, float)
 
             config_name = next(n for n,cb in self.sim.config_checkboxes.items() if cb.value)
             fam = 'gap_plasmon_resonator' if mode in ('dip','half') else 'multi_layer'
+
+            fixed_lambda_val = mode_kw.get("fixed_lambda", None)
 
             # Sauvegarde complète du run d’optimisation dans un fichier HDF5
             save_optimization_hdf5(
@@ -1185,7 +1332,7 @@ class OptimizationTab:
                 Npop=Npop,                          # Taille de population
                 
                 wavelength_range=(self.sim.sim_lambda_min.value, self.sim.sim_lambda_max.value),
-
+                fixed_vals=fixed_vals,
                 # — espace de recherche —
                 keys=keys,                          # Paramètres optimisés
                 lowers=lowers,                      # Bornes inf.
@@ -1202,6 +1349,7 @@ class OptimizationTab:
                 best=pop[np.argmin(cf_final)],      # Meilleur avant dernière sélection
                 best_final=best_final,              # Meilleur après rééval finale
                 best_cost=best_cost,                # Coût de best_final
+                fixed_lambda=fixed_lambda_val,
                 best_after_eval=np.asarray(best_after_eval),  # Snapshot du best à t instant
 
                 # — contexte de la métrique —
@@ -1222,11 +1370,9 @@ class OptimizationTab:
 
 
         finally:
-            # Ce bloc s’exécutera systématiquement, succès ou annulation
-            if hasattr(self, "_pool") and self._pool is not None:
-                self._pool.close()
-                self._pool.join()
-                self._pool = None
+            # ferme uniquement CE pool
+            pool.close()
+            pool.join()
 
     # ------------------------------------------------------------------#
     #  Plot HDF5 results                                                #
@@ -1292,18 +1438,22 @@ class OptimizationTab:
 
 
         # --------------------------- FIGURE ---------------------------- #
-        fig, axs = plt.subplots(2, 2, figsize=(12, 8))
-        ax0, ax1, ax2, ax3 = axs.flat
+        # on crée un layout 2×2 qui prend toute la largeur
+        fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(
+            2, 2, figsize=(15, 8), 
+            gridspec_kw={"wspace":0.1, "hspace":0.3},
+            constrained_layout=True    # active un ajustement automatique
+        )
+        # supprimez tout import de matplotlib.gridspec et fig.subplots_adjust
 
-        # Convergence
+        # 1) Convergence
         ax0.plot(range(1, len(conv_best)+1), conv_best, marker='.')
         ax0.set_title("DE convergence curve")
-        ax0.set_xlabel("Itérations")
+        ax0.set_xlabel("Iterations")
         ax0.set_ylabel("Cost")
         ax0.grid(True)
 
-
-        # Tracé consistency (tous les best_cost compatibles)
+        # 2) Consistency
         if len(all_best) >= 2:
             ax1.plot(all_best, marker='o')
             ax1.set_title("Consistency curve (all compatible runs)")
@@ -1311,10 +1461,10 @@ class OptimizationTab:
             ax1.text(0.5, 0.5,
                     " ≥ 2 compatibles runs needed to plot consistency curve",
                     ha='center', va='center', transform=ax1.transAxes)
+        ax1.set_xlabel("Best runs (sorted)")
+        ax1.set_ylabel("Cost")
 
-        # ------------------------------------------------------------
-        # 4) Bar-plot des paramètres optimisés du run courant
-        # ------------------------------------------------------------
+        # 3) Bar-plot params
         ax2.bar(range(len(keys)), best_vec)
         ax2.set_title("Optimized parameters")
         ax2.set_xticks(range(len(keys)))
@@ -1322,8 +1472,7 @@ class OptimizationTab:
         ax2.set_ylabel("Value")
         ax2.grid(True)
 
-
-        # Spectre
+        # 4) Spectrum
         lam, Rup, Rdown = None, None, None
         if "spectra" in data:
             lam = data["spectra"]["wavelength"]
@@ -1333,55 +1482,51 @@ class OptimizationTab:
         if lam is not None:
             ax3.plot(lam, Rup, label="Rup")
             if Rdown is not None:
-                ax3.plot(lam, Rdown, label="Rdown")
+                ax3.plot(lam, Rdown, linestyle='--', label="Rdown")
         ax3.set_title("Best config spectrum")
         ax3.set_xlabel("λ (nm)")
         ax3.set_ylabel("Reflectance")
         ax3.legend()
         ax3.grid(True)
 
-        # ------------------------------------------------------------------
-        # 1)  Mode et coût minimal
-        # ------------------------------------------------------------------
-        mode       = data["mode"]           # 'dip' | 'half' | 'fixed_lambda' | 'range_lambda'
-        best_cost  = float(data["best_cost"])  # Valeur de coût associée à best_final
+        if data["mode"] == "fixed_lambda":
+            lam0 = data["fixed_lambda"]  # valeur que tu as passée
+            if lam0 is not None and lam is not None and Rup is not None:                
+                # point exact utilisé dans cost()
+                R0 = float(np.interp(lam0, lam, Rup))
+                ax3.scatter([lam0], [R0], s=60, color="red", zorder=5)
+                ax3.axvline(lam0, ls=":", lw=1, color="red")
+                ax3.text(lam0, R0, f"  R(λ₀) = {R0:.3f}", va="bottom", color="red")
 
-        # ------------------------------------------------------------------
-        # 2)  Conversion 1-CF → métrique
-        # ------------------------------------------------------------------
-        metric_value = 1.0 - best_cost      # même formule pour tous les modes
-
-        label_map = {
-            "dip"          : "Sensitivity S (ΔR/Δn)",
-            "half"         : "Sensitivity S½ (ΔR/Δn)",
-            "fixed_lambda" : "Reflectance R(λ₀)",
-            "range_lambda" : "Mean reflectance ⟨R⟩",
-        }
-        metric_label = label_map.get(mode, "Metric")
-
-
-        # Tableau des paramètres
-        table_data = [
-            [metric_label, f"{metric_value:.3g}"],   # ligne métrique / valeur
-            ["Parameter",  "Value"]                 # en-têtes
-        ] + [[k, f"{v:.3g}"] for k, v in zip(keys, best_vec)]
         
-        table = ax3.table(
-            cellText=[[ *row ] for row in table_data[2:]],   # uniquement les vraies données
-            colLabels=table_data[1],                         # ["Parameter","Value"]
-            cellLoc="center", colLoc="center",
-            bbox=[0.0, -0.6, 1.0, 0.4],
-        )
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
+        r_up = float(np.interp(lam0, lam, Rup))
+        if Rdown is not None and len(Rdown) == len(lam):
+            r_down = float(np.interp(lam0, lam, Rdown))
+        else:
+            r_down = None
 
-        plt.tight_layout()
+        # --- debug info dans l'Output widget ---
+        debug_html = f"""
+        <pre style="font-size:12px;">
+        run_key         : {run_key}
+        best_cost       : {data['best_cost']:.6f}
+        1 - best_cost   : {1 - data['best_cost']:.6f}
+        grille λ        : {lam[0]:.1f} – {lam[-1]:.1f}  ({len(lam)} pts)
+        fixed_lambda    : {lam0}
+        # Interpolations directes :
+        R_up(λ₀)         : {r_up:.6f}
+        R_down(λ₀)      : {r_down:.6f}
+        </pre>
+        """
 
+        # ------------------------------------------------------------------
+        # Affichage
+        # ------------------------------------------------------------------
         with self.out:
-            self.out.clear_output(wait=True)   # efface le contenu précédent du widget
-            display(fig)                       # affiche la figure dans ce même widget
-
-        plt.close(fig) 
+            self.out.clear_output(wait=True)
+            display(fig)
+            display(widgets.HTML(debug_html))
+        plt.close(fig)
 
 
 
@@ -1399,12 +1544,14 @@ class OptimizationTab:
             titles.append(cfg_name)
         self.param_tabs.children = panels
 
-        for i, t in enumerate(titles):
-            self.param_tabs.set_title(i, t)
-
         if panels:
-            # ici on choisit de sélectionner automatiquement le dernier onglet
-            self.param_tabs.selected_index = len(panels) - 1  
+            # choisissez l’onglet que vous voulez (ici le dernier)
+            self.param_tabs.selected_index = len(panels) - 1
+            # et mettez à jour les titres
+            for i, t in enumerate(titles):
+                self.param_tabs.set_title(i, t)
+        else:
+            pass
 
 
     def _add_copy_panel(self, cfg_name: str):
@@ -1438,28 +1585,49 @@ class OptimizationTab:
     def _make_param_panel(self, cfg_name: str) -> widgets.VBox:
         """Construit tous les widgets pour la config cfg_name."""
         cfg = next(c for c in self.sim.all_configs if c["config_name"] == cfg_name)
-        geom_full = cfg["geometry"]["geometry"]
         geom = {k: v for k, v in cfg["geometry"]["geometry"].items() if v != 0.0}
         # Common bounds
-        common_low = widgets.FloatText(value=0.0, description="Low all:", layout={"width":"200px"})
-        common_up  = widgets.FloatText(value=1.0, description="Up all:", layout={"width":"200px"})
+        common_low = widgets.FloatText(value=0.0, description="Low all:", layout={"width":"150px"})
+        common_up  = widgets.FloatText(value=1.0, description="Up all:", layout={"width":"150px"})
         apply_cb   = widgets.Button(description="Apply to all", button_style="primary")
         cb_controls = widgets.HBox([common_low, common_up, apply_cb], layout=widgets.Layout(gap="10px"))
         # Individual bounds
         rows = []
+
         for k, val in geom.items():
             lo_val, hi_val = geometry_limits.get(k, (0.0, 0.0))
-            chk   = widgets.Checkbox(value=True, description=k, indent=False)
-            low_w = widgets.FloatText(value=lo_val, description="min:", layout={"width":"200px"})
-            up_w  = widgets.FloatText(value=hi_val, description="max:", layout={"width":"200px"})
-            rows.append(widgets.HBox([chk, low_w, up_w], layout=widgets.Layout(gap="10px")))        
+            chk     = widgets.Checkbox(value=True, description="", indent=False, layout={"width":"30px"})
+            lbl     = widgets.Label(value=k, layout={"width":"150px"})
+            low_w   = widgets.FloatText(value=lo_val, description="min:", layout={"width":"120px"}, style={"description_width":"40px"})
+            up_w    = widgets.FloatText(value=hi_val, description="max:", layout={"width":"120px"}, style={"description_width":"40px"})
+            fixed_w = widgets.FloatText(value=val, description="fixed:", layout={"width":"120px"}, style={"description_width":"40px"})
+            # callback pour basculer Low/Up ↔ Fixed
+            def _toggle(change, lo=low_w, up=up_w, fix=fixed_w):
+                if change["new"]:
+                    lo.layout.display = up.layout.display = ""
+                    fix.layout.display = "none"
+                else:
+                    lo.layout.display = up.layout.display = "none"
+                    fix.layout.display  = ""
+            chk.observe(_toggle, names="value")
+            _toggle({"new": chk.value})
+            rows.append(widgets.HBox(
+                [chk, lbl, low_w, up_w, fixed_w],
+                layout=widgets.Layout(align_items="center", gap="10px")
+            ))
+
+
         bounds_box = widgets.VBox(rows, layout=widgets.Layout(border="1px solid #ddd", padding="5px"))
         
         
         def _apply_all(_):
             for row in rows:
-                row.children[1].value = common_low.value
-                row.children[2].value = common_up.value
+                # row.children[2] est le FloatText “min”
+                row.children[2].value = common_low.value
+                # row.children[3] est le FloatText “max”
+                row.children[3].value = common_up.value
+
+        
         apply_cb.on_click(_apply_all)
         # Cost Function mode + λ
         cf_radio = widgets.RadioButtons(
@@ -1479,8 +1647,8 @@ class OptimizationTab:
             lammax.layout.display  = "" if cf_radio.value=="range_lambda" else "none"
         cf_radio.observe(_toggle, names="value"); _toggle(None)
         # DE parameters + actions
-        budget_w = widgets.IntText(value=100, description="Budget",     layout={"width":"200px"})
-        pop_w    = widgets.IntText(value=30,  description="Population", layout={"width":"200px"})
+        budget_w = widgets.IntText(value=100, description="Budget",     layout={"width":"150px"})
+        pop_w    = widgets.IntText(value=30,  description="Population", layout={"width":"150px"})
         add_q    = widgets.Button(description="Add to queue ▶", button_style="success", layout=widgets.Layout(width="100%"))
         add_copy = widgets.Button(description="Add copy", button_style="info", layout=widgets.Layout(width="100%"))
         del_btn  = widgets.Button(description="Delete panel", button_style="danger", layout=widgets.Layout(width="100%"))
@@ -1491,21 +1659,30 @@ class OptimizationTab:
         del_btn.on_click(_on_delete_panel)
 
         def _on_add(_):
-            # on recalcule la liste des noms de paramètres _filtrés_
-            param_keys = list(geom.keys())  
-            # rows[i] correspond à param_keys[i]
-            keys = [param_keys[i] for i, r in enumerate(rows) if r.children[0].value]
-
-            # 2) bornes low/up
-            bounds = [
-                (r.children[1].value, r.children[2].value)
-                for r in rows if r.children[0].value
+            param_keys = list(geom.keys())
+            # 1) sélection des paramètres à optimiser
+            keys = [
+                param_keys[i]
+                for i, r in enumerate(rows)
+                if r.children[0].value  # checkbox cochée
             ]
-
+            # 2) bornes correspondantes
+            bounds = [
+                (r.children[2].value, r.children[3].value)
+                for r in rows
+                if r.children[0].value
+            ]
+            # 3) paramètres laissés fixes
+            fixed_vals = {
+                param_keys[i]: r.children[4].value
+                for i, r in enumerate(rows)
+                if not r.children[0].value
+            }
             job = {
                 "config": cfg_name,
                 "keys": keys,                           
                 "bounds": bounds,
+                "fixed_vals": fixed_vals,
                 "cf_mode": cf_radio.value,
                 "lambda": (lambda0.value, lammin.value, lammax.value),
                 "budget": budget_w.value,
@@ -1588,10 +1765,14 @@ class OptimizationTab:
 
 
 
-    def _run_job(self, idx: int):
+    def _run_job(self, idx: int, *, refresh_ui: bool = True):
         job = self.job_queue[idx]
         job["status"] = "running"
-        self._refresh_queue()
+
+        # NE PAS reconstruire la file quand on enchaîne plusieurs lancements
+        if refresh_ui:
+            self._refresh_queue()
+
         # 1) création de la queue dédiée
         job_queue = q.Queue()
         job["progress_queue"] = job_queue
@@ -1605,11 +1786,17 @@ class OptimizationTab:
 
         # 3) préparation des extra_kwargs pour fixed/range lambda
         extra_kwargs = {}
+
         if job["cf_mode"] == "fixed_lambda":
             extra_kwargs["fixed_lambda"] = job["lambda"][0]
         elif job["cf_mode"] == "range_lambda":
             # on stocke (min, max) dans job["lambda"][1:]
             extra_kwargs["range_lambda"] = tuple(job["lambda"][1:])
+
+
+        # transférez ici fixed_vals
+        if "fixed_vals" in job:
+            extra_kwargs["fixed_vals"] = job["fixed_vals"]
 
         # 4) constitution du dict args
         args = dict(
@@ -1684,9 +1871,15 @@ class OptimizationTab:
         self._refresh_queue()
 
 
+    #  Run-all : on lance les jobs sans refresh intermédiaire
     def _run_all(self, _=None):
-        for i in range(len(self.job_queue)):
-            self._run_job(i)
+        # on conserve les indices avant toute mise-à-jour
+        for idx in range(len(self.job_queue)):
+            self._run_job(idx, refresh_ui=False)
+
+        # un seul redraw une fois tous les jobs lancés
+        self._refresh_queue()
+
 
     def _cancel_all(self, _=None):
         for i in range(len(self.job_queue)):

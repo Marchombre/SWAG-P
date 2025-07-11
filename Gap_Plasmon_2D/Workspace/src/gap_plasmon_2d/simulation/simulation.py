@@ -928,10 +928,6 @@ class SimulationTab:
         Affiche le tout dans self.sim_output et écrit le HDF5.
         """
 
-        # with open("/home/yann/debug_sim.txt", "a") as f:
-        #     print(">>> _build_outputs CALLED", file=f)
-        #     sys.stdout.flush()
-
         # ─── variables mises en cache au lancement ───────────────────────
         lam_range  = self._lam_range
         flags      = self._flags
@@ -1519,7 +1515,7 @@ class SimulationTab:
                         self.sim_lambda_max.value,
                         self.sim_n_points.value)
         wave    = {"angle": 0, "polarization": 1}
-        n_modes = self._get_n_modes_for(cfg["config_name"])  # fixed/custom/auto
+        n_modes = self.sim_n_mod.value
 
         sel_layers = list(self.layer_selector.value)
         delta_n    = max(self.delta_n_widget.value, 1e-6)

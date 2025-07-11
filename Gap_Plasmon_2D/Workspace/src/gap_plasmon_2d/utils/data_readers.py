@@ -593,6 +593,12 @@ def read_optimization_hdf5(
             "best_cost": float(grp.attrs["best_cost"]),
         }
 
+        # -- fixe : renvoie None si absent ----------------------
+
+        out["fixed_lambda"] = float(grp.attrs["fixed_lambda"]) \
+            if "fixed_lambda" in grp.attrs else None
+
+
         # 4) paramètres de l’espace de recherche
         params_grp = grp["parameters"]
         out.update({
@@ -626,6 +632,17 @@ def read_optimization_hdf5(
             else:
                 spectra["Rdown"] = None
             out["spectra"] = spectra
+
+        # 8) fixed parameters (optionnel)
+        if "fixed" in grp:
+            fx = grp["fixed"]
+            keys = [k.decode() for k in fx["keys"][:]]
+            vals = fx["values"][:]
+            out["fixed"] = dict(zip(keys, vals))
+        else:
+            out["fixed"] = {}
+
+
 
     return out
 

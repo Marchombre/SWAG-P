@@ -211,7 +211,7 @@ def save_optimization_hdf5(
     budget: int,
     Npop: int,
     wavelength_range: tuple[float, float],   # (lam_min, lam_max)
-    # --- le reste est inchangé ---
+    fixed_vals: dict[str, float] | None = None,
     keys: list[str],
     lowers: np.ndarray,
     uppers: np.ndarray,
@@ -221,6 +221,7 @@ def save_optimization_hdf5(
     best: np.ndarray,
     best_final: np.ndarray,
     best_cost: float,
+    fixed_lambda: float | None = None,
     best_after_eval: np.ndarray | None = None,
     mode: str,
     lam: np.ndarray | None = None,
@@ -264,6 +265,17 @@ def save_optimization_hdf5(
     with h5py.File(h5path, "a") as f:
         grp = f.require_group(run_key)
 
+        # ─── Fixed parameters ─────────────────────────────────────────────
+        if fixed_vals:
+            fx = grp.require_group("fixed")
+            # calcule la longueur max des clés pour éviter la troncature
+            max_len = max(len(k) for k in fixed_vals.keys())
+            keys_arr = np.array(list(fixed_vals.keys()), dtype=f"S{max_len}")
+            vals_arr = np.array(list(fixed_vals.values()), dtype=float)
+            fx.create_dataset("keys",   data=keys_arr)
+            fx.create_dataset("values", data=vals_arr)
+
+
         # ─── Méta-données générales ──────────────────────────────────────
         # → pour que le front-end puisse récupérer les bornes en tooltip
         grp.attrs['bounds_low']  = lowers.tolist()
@@ -276,7 +288,12 @@ def save_optimization_hdf5(
             Npop=Npop,
             mode=mode,
             best_cost=best_cost,
+            fixed_lambda=fixed_lambda if fixed_lambda is not None else np.nan
         )
+
+        if fixed_lambda is not None:
+            grp.attrs['fixed_lambda'] = float(fixed_lambda)
+        
 
         # ─── Paramètres de l’espace de recherche ────────────────────────
         p = grp.require_group("parameters")
