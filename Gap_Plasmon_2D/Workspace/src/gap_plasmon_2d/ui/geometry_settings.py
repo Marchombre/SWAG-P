@@ -7,6 +7,7 @@ import ipywidgets as widgets
 from IPython.display import clear_output, display
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.axes import Axes
 import numpy as np
 
 # Configuration par défaut (les valeurs réelles utilisées pour les calculs de réflectance restent inchangées)
@@ -93,6 +94,9 @@ def draw_layer(ax, x, y, w, h, color, label, hatch=None):
     ax.add_patch(rect)
     if label and h > 0:
         ax.text(x + w/2, y + h/2, label, ha="center", va="center", fontsize=9)
+
+
+
 
 def create_geometry_widget():
     """

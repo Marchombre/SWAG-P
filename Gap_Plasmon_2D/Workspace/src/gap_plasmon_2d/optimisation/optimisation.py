@@ -21,6 +21,7 @@ import sys
 import warnings
 import threading
 import h5py
+from copy import deepcopy
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,7 +32,9 @@ import ipywidgets as widgets
 import traceback, queue as q
 
 from gap_plasmon_2d import paths
-from gap_plasmon_2d.ui.geometry_settings import geometry_limits
+from gap_plasmon_2d.optimisation.cost_function import compute_cost
+from gap_plasmon_2d.ui.geometry_settings import geometry_limits, geometry_config
+from gap_plasmon_2d.ui.optimized_geometry import plot_geometry_static_from_run
 from gap_plasmon_2d.simulation.simulation import SimulationTab, sim_tab
 from gap_plasmon_2d.simulation.simulate_and_plot import run_simulation_one_combo
 from gap_plasmon_2d.utils.saving__functions import save_optimization_hdf5
@@ -95,54 +98,82 @@ json_combined_path = data_dir / "combined_materials.json"
 # `sim_tab` de SimulationTab importée depuis le module simulation.
 # Grâce au fork, chaque sous-processus héritera de cette même instance en Copy-On-Write,
 # évitant de devoir recharger/configurer le simulateur à chaque appel.
+# --------------------------------------------------------------------------- #
+#  Worker‑side globals                                                        #
+# --------------------------------------------------------------------------- #
 _WORKER_SIM: SimulationTab = sim_tab
 
+
+# --------------------------------------------------------------------------- #
+#  cost_worker                                            #
+# --------------------------------------------------------------------------- #
 def cost_worker(
     args: Tuple[
-        np.ndarray,       # x
-        List[str],        # keys
-        str,              # mode
-        Dict[str, Any],   # mode_kw
-        Dict[str, float]  # fixed_vals
+        int,                 # idx  → position de l’individu dans pop
+        np.ndarray,          # x    → vecteur des épaisseurs optimisées
+        List[str],           # keys → noms des paramètres optimisés
+        str,                 # mode → 'dip' | 'half' | 'fixed_lambda' | 'range_lambda'
+        Dict[str, Any],      # mode_kw → fixed_lambda=..., range_lambda=(...)
+        Dict[str, float]     # fixed_vals → épaisseurs laissées fixes
     ]
-) -> float:
+) -> Tuple[int, float]:
     """
-    Wrapper minimaliste et picklable pour multiprocessing.Pool.map,
-    avec capture des LinAlgError et overflow en renvoyant un coût pénalisant.
+    Fonction picklable appelée par multiprocessing.Pool.
+    Elle renvoie **(idx, coût)** – l’indice permet de recréer un tableau
+    de coûts dans le même ordre que la population, même avec imap_unordered.
     """
-    x, keys, mode, mode_kw, fixed = args
+    idx, x, keys, mode, mode_kw, fixed = args
 
+    # ------------------------------------------------------------------ #
+    # 1) Récupère la configuration cochée dans l’instance partagée        #
+    # ------------------------------------------------------------------ #
     cfg = next(
         c for c in _WORKER_SIM.all_configs
         if _WORKER_SIM.config_checkboxes[c["config_name"]].value
     )
 
-    # 1) on sauve toutes les entrées perm_*
     geom = cfg["geometry"]["geometry"]
-    perm_backup = {k: v for k,v in geom.items() if k.startswith("perm_")}
 
+    # ------------------------------------------------------------------ #
+    # 2) Backup éventuel : on ne modifie que les clés fixes               #
+    # ------------------------------------------------------------------ #
+    backup = {param: geom[param] for param in fixed.keys()}
 
-    # injecte valeur fixe geometry
+    # Injection des valeurs fixes
     for param, val in fixed.items():
-        cfg["geometry"]["geometry"][param] = float(val)   
+        geom[param] = float(val)
 
-
-
+    # ------------------------------------------------------------------ #
+    # 3) Évaluation du coût (avec suppression des warnings numériques)    #
+    # ------------------------------------------------------------------ #
     try:
-        # on supprime les warnings d'overflow/invalid
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            val = _WORKER_SIM.cost(x, keys, mode=mode, **mode_kw)
+            cost_val = compute_cost(
+                _WORKER_SIM,          # instance SimulationTab
+                x, keys,
+                mode=mode,
+                **mode_kw
+            )
 
-        # en cas de NaN ou inf, on pénalise très fort
-        if not np.isfinite(val):
-            return 1e6
-        return val
+        # NaN / Inf  → pénalité très forte
+        if not np.isfinite(cost_val):
+            cost_val = 1e6
 
-    except np.linalg.LinAlgError:
-        return 1e6
-    except Exception:
-        return 1e6
+    except Exception:                     # inclut LinAlgError
+        cost_val = 1e6
+
+    finally:
+        # ------------------------------------------------------------------
+        # 4) Restauration des valeurs fixes pour laisser la config propre
+        # ------------------------------------------------------------------
+        for param, old in backup.items():
+            geom[param] = old
+
+    # ---------------------------------------------------------------------- #
+    # 5) On renvoie l’indice ET le coût                                       #
+    # ---------------------------------------------------------------------- #
+    return idx, float(cost_val)
 
 
 
@@ -170,6 +201,8 @@ class OptimizationFileArboWidget:
         self.wave_dd       = widgets.Dropdown(description="Wavelength range:")
         self.file_dd       = widgets.Dropdown(description="File:")
         self.run_dd        = widgets.Dropdown(description="Run:")
+
+        self._user_selecting = False          # ← flag global au widget
 
         self.run_bounds_out = widgets.Output(layout=widgets.Layout(
             border="1px solid #ccc",
@@ -337,9 +370,11 @@ class OptimizationFileArboWidget:
         old = self.run_dd.value
         runs = list_runs_in_h5(self.file_dd.value) if self.file_dd.value else []
         self.run_dd.options = runs
-        # on privilégie l'ancien run, sinon le **dernier** (souvent le plus récent)
-        self.run_dd.value   = old if old in runs else (runs[-1] if runs else None)
-
+        # -- ne touche pas à .value si l’utilisateur vient d’agir --
+        if not self._user_selecting:
+            self.run_dd.value = (
+                old if old in runs else (runs[-1] if runs else None)
+            )
 
 
     def get_selected_file(self) -> str | None:
@@ -348,69 +383,72 @@ class OptimizationFileArboWidget:
 
     def _on_run_changed(self, change):
         """Affiche Param / Min / Max / Best **+** Fixed dès qu’on sélectionne un run."""
-        from gap_plasmon_2d.utils.data_readers import read_optimization_hdf5
-        self.run_bounds_out.clear_output()
-        h5path  = self.file_dd.value
-        run_key = change["new"]
-        if not h5path or run_key is None:
-            return
+        self._user_selecting = True              # l’utilisateur vient de cliquer
+        try:
+            self.run_bounds_out.clear_output()
+            h5path  = self.file_dd.value
+            run_key = change["new"]
+            if not h5path or run_key is None:
+                return
 
-        data      = read_optimization_hdf5(h5path, run_key=run_key)
-        opt_keys  = data["keys"]
-        lowers    = data["lowers"]
-        uppers    = data["uppers"]
-        best_vals = data["best_final"]
-        fixed     = data.get("fixed", {})
+            data      = read_optimization_hdf5(h5path, run_key=run_key)
+            opt_keys  = data["keys"]
+            lowers    = data["lowers"]
+            uppers    = data["uppers"]
+            best_vals = data["best_final"]
+            fixed     = data.get("fixed", {})
 
-        # entête à 4 colonnes
-        header = "<tr><th>Paramètre</th><th>Min</th><th>Max</th><th>Valeur</th></tr>"
-        # ligne métrique
-        best_cost    = data["best_cost"]
-        metric_value = 1.0 - best_cost
-        label_map = {
-            "dip"          : "Sensitivity S (ΔR/Δn)",
-            "half"         : "Sensitivity S½ (ΔR/Δn)",
-            "fixed_lambda" : "Reflectance R(λ₀)",
-            "range_lambda" : "Mean reflectance ⟨R⟩",
-        }
-        metric_label = label_map.get(data["mode"], "Metric")
-        metric_row = (
-        f"<tr><td><b>{metric_label}</b></td>"
-        f"<td></td><td></td>"
-        f"<td><b>{metric_value:.3g}</b></td></tr>"
-        )
+            # entête à 4 colonnes
+            header = "<tr><th>Paramètre</th><th>Min</th><th>Max</th><th>Valeur</th></tr>"
+            # ligne métrique
+            best_cost    = data["best_cost"]
+            metric_value = 1.0 - best_cost
+            label_map = {
+                "dip"          : "Sensitivity S (ΔR/Δn)",
+                "half"         : "Sensitivity S½ (ΔR/Δn)",
+                "fixed_lambda" : "Reflectance R(λ₀)",
+                "range_lambda" : "Mean reflectance ⟨R⟩",
+            }
+            metric_label = label_map.get(data["mode"], "Metric")
+            metric_row = (
+            f"<tr><td><b>{metric_label}</b></td>"
+            f"<td></td><td></td>"
+            f"<td><b>{metric_value:.3g}</b></td></tr>"
+            )
 
-        # lignes pour les paramètres optimisés
-        opt_rows = "\n".join(
-        f"<tr><td>{k}</td><td>{l:.3g}</td><td>{u:.3g}</td><td>{v:.3g}</td></tr>"
-        for k, l, u, v in zip(opt_keys, lowers, uppers, best_vals)
-        )
+            # lignes pour les paramètres optimisés
+            opt_rows = "\n".join(
+            f"<tr><td>{k}</td><td>{l:.3g}</td><td>{u:.3g}</td><td>{v:.3g}</td></tr>"
+            for k, l, u, v in zip(opt_keys, lowers, uppers, best_vals)
+            )
 
-        # lignes pour les paramètres fixés
-        fixed_rows = "\n".join(
-        f"<tr>"
-        f"<td>{k} (fixé)</td>"
-        f"<td>{v:.3g}</td>"
-        f"<td>{v:.3g}</td>"
-        f"<td>{v:.3g}</td>"
-        f"</tr>"
-        for k, v in fixed.items()
-        )
+            # lignes pour les paramètres fixés
+            fixed_rows = "\n".join(
+            f"<tr>"
+            f"<td>{k} (fixé)</td>"
+            f"<td>{v:.3g}</td>"
+            f"<td>{v:.3g}</td>"
+            f"<td>{v:.3g}</td>"
+            f"</tr>"
+            for k, v in fixed.items()
+            )
 
-        table_html = f"""
-        <div style="max-height:200px; overflow-y:auto; border:1px solid #ccc; padding:4px;">
-        <table style="border-collapse: collapse; width:100%;">
-            {header}
-            {metric_row}
-            {opt_rows}
-            {fixed_rows}
-        </table>
-        </div>
-        """
+            table_html = f"""
+            <div style="max-height:200px; overflow-y:auto; border:1px solid #ccc; padding:4px;">
+            <table style="border-collapse: collapse; width:100%;">
+                {header}
+                {metric_row}
+                {opt_rows}
+                {fixed_rows}
+            </table>
+            </div>
+            """
 
-        with self.run_bounds_out:
-            display(widgets.HTML(table_html))
+            with self.run_bounds_out:
+                display(widgets.HTML(table_html))
 
+        finally:
+            self._user_selecting = False         # ← rendu la main
 
 
 # -----------------------------------------------------------------------------#
@@ -629,16 +667,31 @@ class OptimizationTab:
         )
         self.run_all_btn    = widgets.Button(description="Run all ▶",    button_style="primary")
         self.cancel_all_btn = widgets.Button(description="Cancel all ⏹", button_style="warning")
+
+        # supprime toute la queue d’un coup -----------------
+        self.delete_all_btn = widgets.Button(
+            description="Delete all ❌",
+            button_style="danger",
+        )
+
+        self.run_all_btn.disabled    = True
+        self.delete_all_btn.disabled = True
+        self.cancel_all_btn.disabled = True
+
+
         # bind des callbacks
         self.run_all_btn.on_click(self._run_all)
-        self.cancel_all_btn.on_click(self._cancel_all)
+        self.cancel_all_btn.on_click(self._cancel_all)        
+        self.delete_all_btn.on_click(self._delete_all)
+
+
 
         queue_pane = widgets.VBox(
             [
                 widgets.HTML("<b>Job Queue</b>"),
                 self.queue_box,
                 widgets.HBox(
-                    [self.run_all_btn, self.cancel_all_btn],
+                    [self.run_all_btn, self.cancel_all_btn, self.delete_all_btn],
                     layout=widgets.Layout(gap="10px")
                 ),
             ],
@@ -733,8 +786,6 @@ class OptimizationTab:
             self.runtime_box,
             plot_area
         ], layout=widgets.Layout(padding='10px'))
-
-
 
         # hook sur le bouton Refresh de SimulationTab
         self.sim.config_refresh_btn.on_click(self._on_configs_refreshed)
@@ -951,7 +1002,7 @@ class OptimizationTab:
             self._progress_bar.layout.display = ""
 
         if tag == "PROG":
-            frac, _ = payload
+            frac = payload[0]
             self._progress_bar.value       = frac
             self._progress_bar.description = f"{int(frac*100)} %"
 
@@ -1050,7 +1101,7 @@ class OptimizationTab:
             hi  = widgets.FloatText(value=high, description="max:", layout={"width": "120px"}, style={"description_width": "40px"})
             fixed = widgets.FloatText(value=val, description="fixed:", layout={"width": "120px"})
             
-            # 1) callback pour toggle Low/Up ↔ Fixed
+            # callback pour toggle Low/Up ↔ Fixed
             def _toggle(change, lo=lo, hi=hi, fixed=fixed):
                 if change["new"]:
                     lo.layout.display = hi.layout.display = ""
@@ -1063,14 +1114,14 @@ class OptimizationTab:
             chk.observe(_toggle, names="value")
             _toggle({"new": chk.value})
 
-            # 2) on stocke dans param_widgets
+            # on stocke dans param_widgets
             self.param_widgets[k] = {
                 "opt":   chk,
                 "low":   lo,
                 "up":    hi,
                 "fixed": fixed
             }
-            # 3) on affiche la ligne complète
+            # on affiche la ligne complète
             rows.append(
                 widgets.HBox([chk, lbl, lo, hi, fixed],
                             layout=widgets.Layout(align_items="center", gap="10px"))
@@ -1127,7 +1178,7 @@ class OptimizationTab:
             Référence au dict job pour annulation externe.
         """
 
-        # 1) Initialisation RNG & population
+        # Initialisation RNG & population
         rng = np.random.default_rng(seed)
         if budget < Npop:
             raise ValueError("Le budget doit être ≥ à la taille de la population.")
@@ -1135,7 +1186,7 @@ class OptimizationTab:
         n_params = len(keys)
         pop = lowers + (uppers - lowers) * rng.random((Npop, n_params))
 
-        # 2) Pool de process (vrai parallélisme CPU), attaché au cancel_flag
+        # Pool de process (vrai parallélisme CPU), attaché au cancel_flag
         global _WORKER_SIM
         _WORKER_SIM = self.sim                              # objet partagé en COW
         ctx  = mp.get_context("fork" if sys.platform!="win32" else "spawn")
@@ -1153,18 +1204,19 @@ class OptimizationTab:
             fixed_vals = {}
 
         try:
-            # Évaluation initiale (interruptible)
+            # ─────────────────  Évaluation initiale  ──────────────────
             args0 = [
-                (pop[i], keys, mode, mode_kw, fixed_vals)
+                (i, pop[i], keys, mode, mode_kw, fixed_vals)   # ← idx d’abord
                 for i in range(Npop)
-            ]            
-            cf_list: List[float] = []
-            for r in pool.imap_unordered(cost_worker, args0, chunksize=1):
+            ]
+
+            cf = np.empty(Npop)
+            for idx, val in pool.imap_unordered(cost_worker, args0, chunksize=1):
                 if self._cancelled:
                     pool.terminate()
                     raise OptimizationCancelled()
-                cf_list.append(r)
-            cf = np.array(cf_list)
+                cf[idx] = val
+
 
 
             conv_best  = np.zeros(Ngen)
@@ -1184,41 +1236,40 @@ class OptimizationTab:
                     pool.terminate()
                     raise OptimizationCancelled()
 
-                # génération des enfants
-                z_list: List[Tuple[int,np.ndarray]] = []
+                # ───────────── mutation / crossover → z_list ─────────────
+                z_list: list[tuple[int, np.ndarray]] = []
                 for p in range(Npop):
-                    a,b,c = pop[rng.choice(Npop,3,replace=False)]
+                    a, b, c = pop[rng.choice(Npop, 3, replace=False)]
                     best_ind = pop[np.argmin(cf)]
-                    y = c + F1*(a-b) + F2*(best_ind-c)
+                    y = c + F1 * (a - b) + F2 * (best_ind - c)
                     mask = rng.random(n_params) < cr
                     if not mask.any():
                         mask[rng.integers(n_params)] = True
                     z = np.where(mask, y, pop[p])
                     z = np.clip(z, lowers, uppers)
-                    z_list.append((p, z))
+                    z_list.append((p, z))          # ← on garde l’index du parent
 
-                # évaluation enfants
+                # ───────────── évaluation parallèle des enfants ───────────
                 args_child = [
-                    (z, keys, mode, mode_kw, fixed_vals)
-                    for (_, z) in z_list
-                ]                
-                cfz_list: List[float] = []
-                for r in pool.imap_unordered(cost_worker, args_child, chunksize=1):
-                    # idem, vérification d’annulation
+                    (i, z, keys, mode, mode_kw, fixed_vals)         # ← même paquet 6‑tuple
+                    for (i, z) in z_list
+                ]
+
+                cfz = np.empty(Npop)
+                for idx, val in pool.imap_unordered(cost_worker, args_child, chunksize=1):
                     if job is not None and job["cancel_flag"]:
                         pool.terminate()
                         raise OptimizationCancelled()
-                    
                     if self._cancelled:
                         pool.terminate()
                         raise OptimizationCancelled()
-                    cfz_list.append(r)
-                cfz = cfz_list
+                    cfz[idx] = val
 
-                # sélection
-                for (i,z),cval in zip(z_list, cfz):
-                    if cval < cf[i]:
-                        pop[i], cf[i] = z, cval
+                # ───────────── 3. sélection ─────────────────────────────────
+                for (i, z) in z_list:            # i = index du parent
+                    if cfz[i] < cf[i]:
+                        pop[i], cf[i] = z, cfz[i]
+
 
                 best_after_eval.append(cf.min())
                 conv_best[g] = cf.min()
@@ -1229,62 +1280,42 @@ class OptimizationTab:
                                                 float(cf.min())))     # meilleur coût courant
                             
 
-            # 4) Ré-évaluation finale
+            # Ré-évaluation finale
             argsf = [
-                (pop[i], keys, mode, mode_kw, fixed_vals)
+                (i, pop[i], keys, mode, mode_kw, fixed_vals)
                 for i in range(Npop)
-            ]            
-            cf_final_list: List[float] = []
+            ]
 
-            for r in pool.imap_unordered(cost_worker, argsf, chunksize=1):
-                cf_final_list.append(r)
-            cf_final = np.array(cf_final_list)
+            cf_final = np.empty(Npop)
+            for idx, val in pool.imap_unordered(cost_worker, argsf, chunksize=1):
+                cf_final[idx] = val
+
 
             best_final = pop[np.argmin(cf_final)]
             best_cost  = cf_final.min()
+            
 
 
-
-            # —–––––– DEBUG COMPARAISON –––––––—
-            # 1) calcul via cost() (même pipeline que dans la pool)
-            R_via_cost = 1.0 - self.cost(best_final, keys, mode=mode, **mode_kw)
-
-            # 2) calcul via run_simulation_one_combo (pipeline finale)
-            lam = np.linspace(
-                self.sim.sim_lambda_min.value,
-                self.sim.sim_lambda_max.value,
-                self.sim.sim_n_points.value
-            )
-            wave   = {"angle": 0, "polarization": 1}
-            # assurez-vous ici de prendre le même n_modes que cost() !
-            n_modes = self.sim.sim_n_mod.value  
-            Rup, Rdown, _ = run_simulation_one_combo(lam, wave, n_modes, cfg, self.json_combined_path)
-            R_via_final = float(np.interp(mode_kw.get("fixed_lambda", self.sim.lambda0_in.value), lam, Rup))
-
-            # 3) affichez dans votre Output-widget
-            with self.out:
-                self.out.clear_output(wait=True)
-                print(f"→ R via cost()       : {R_via_cost:.6f}")
-                print(f"→ R via final sim    : {R_via_final:.6f}")
-                print(f"→ Δ = {R_via_cost - R_via_final:.6f}")
-
-
-
-
-            # 5) Tracé du spectre optimal + sauvegarde HDF5
+            # Tracé du spectre optimal + sauvegarde HDF5
             lam = np.linspace(self.sim.sim_lambda_min.value,
                               self.sim.sim_lambda_max.value,
                               self.sim.sim_n_points.value)
-            cfg = next(c for c in self.sim.all_configs if self.sim.config_checkboxes[c["config_name"]].value)
             
+            orig_cfg = next(c for c in self.sim.all_configs
+                            if self.sim.config_checkboxes[c["config_name"]].value)
+            cfg = deepcopy(orig_cfg)          # copie isolée, propre à CE thread            
 
-            # —–––––––– 1) D'abord, ceux que l'utilisateur a vraiment fixés
+            # calcul via cost() (même pipeline que dans la pool)
+            #R_via_cost = 1.0 - self.sim.cost(best_final, keys, mode=mode, **mode_kw)
+
+
+            # —–––––––– D'abord, ceux que l'utilisateur a vraiment fixés
             for k, v in (fixed_vals or {}).items():
                 # on ne touche qu'aux paramètres *non* optimisés
                 if k not in keys:
                     cfg["geometry"]["geometry"][k] = float(v)
 
-            # —–––––––– 2) Ensuite, on écrase (ou confirme) *toujours* les optimisés
+            # —–––––––– Ensuite, on écrase (ou confirme) *toujours* les optimisés
             for xi, k in zip(best_final, keys):
                 cfg["geometry"]["geometry"][k] = float(xi)
 
@@ -1295,17 +1326,24 @@ class OptimizationTab:
             # reprenez exactement le même n_modes que dans cost()
             n_modes = self.sim._get_n_modes_for(cfg["config_name"])
 
+            Rup, Rdown, _ = run_simulation_one_combo(lam, wave, n_modes, cfg, self.json_combined_path)
 
-            with self.out:
-                # on vide l'ancien contenu
-                self.out.clear_output(wait=True)
-                # on affiche nos diagnostics
-                print(" keys optimisés :", keys)
-                print(" best_final     :", best_final)
-                print(" fixed_vals     :", fixed_vals)
-                print(" géométrie finale :")
-                for k in keys:
-                    print(f"   {k} = {cfg['geometry']['geometry'][k]}")
+
+            # —–––––––– DEBUG
+            #R_via_final = float(np.interp(mode_kw.get("fixed_lambda", self.sim.lambda0_in.value), lam, Rup))
+            # with self.out:
+            #     # on vide l'ancien contenu
+            #     self.out.clear_output(wait=True)
+            #     # on affiche nos diagnostics
+            #     print(" keys optimisés :", keys)
+            #     print(" best_final     :", best_final)
+            #     print(" fixed_vals     :", fixed_vals)
+            #     print("R via cost()    :" , R_via_cost)
+            #     print("R via final sim :" , R_via_final)
+            #     print("Δ =", R_via_cost - R_via_final)
+            #     print(" géométrie finale :")
+            #     for k in keys:
+            #         print(f"   {k} = {cfg['geometry']['geometry'][k]}")
 
 
             Rup, Rdown, _ = run_simulation_one_combo(
@@ -1332,6 +1370,7 @@ class OptimizationTab:
                 Npop=Npop,                          # Taille de population
                 
                 wavelength_range=(self.sim.sim_lambda_min.value, self.sim.sim_lambda_max.value),
+                n_modes=n_modes,
                 fixed_vals=fixed_vals,
                 # — espace de recherche —
                 keys=keys,                          # Paramètres optimisés
@@ -1359,10 +1398,12 @@ class OptimizationTab:
                 lam=lam,                            # Grille λ
                 Rup=Rup,                            # Spectre R_up
                 Rdown=Rdown,                        # Spectre R_down
+                geometry=cfg["geometry"]["geometry"],
             )
 
-
-
+            # on rafraîchit la liste des runs disponibles
+            get_ipython().kernel.io_loop.add_callback(self.opt_file_arbo._refresh_runs)
+            
             if progress_queue is not None:
                     progress_queue.put(("DONE",
                                         conv_best, conv_evals, best_final, best_cost))
@@ -1435,6 +1476,10 @@ class OptimizationTab:
         best_vec = data["best_final"]     # Meilleur structure après réévaluation final
         conv_best = data.get("conv_best", data.get("best_after_eval"))    # Meilleur coût à chaque génération
 
+        if data.get("n_modes") is not None:
+            forced_n_modes = int(data["n_modes"])
+        else:
+            forced_n_modes = self.sim._get_n_modes_for(ref_cfg)
 
 
         # --------------------------- FIGURE ---------------------------- #
@@ -1464,13 +1509,28 @@ class OptimizationTab:
         ax1.set_xlabel("Best runs (sorted)")
         ax1.set_ylabel("Cost")
 
-        # 3) Bar-plot params
-        ax2.bar(range(len(keys)), best_vec)
-        ax2.set_title("Optimized parameters")
-        ax2.set_xticks(range(len(keys)))
-        ax2.set_xticklabels(keys, rotation=45, ha="right")
-        ax2.set_ylabel("Value")
-        ax2.grid(True)
+        # -----------------------------------------------------------------
+        # 3)  Schéma dynamique des couches avec les *best parameters*
+        # -----------------------------------------------------------------
+        # --- juste après avoir lu le fichier HDF5 ---
+        keys      = data["keys"]
+        best_vec  = data["best_final"]
+        fixed_vals= data.get("fixed", {})
+
+        # fig, ax definitions déjà présents ...
+        ax_geom = ax2     # par exemple le 3ᵉ subplot
+        
+        geo_ref = data.get("geometry", {})
+        plot_geometry_static_from_run(
+            ax_geom,
+            keys,
+            best_vec,
+            fixed_vals,
+            default_geom=geo_ref,
+            ax_offset=(-0.18, -0.1)   
+        )
+
+
 
         # 4) Spectrum
         lam, Rup, Rdown = None, None, None
@@ -1481,6 +1541,8 @@ class OptimizationTab:
 
         if lam is not None:
             ax3.plot(lam, Rup, label="Rup")
+            lam0 = data.get("fixed_lambda", np.nan)
+
             if Rdown is not None:
                 ax3.plot(lam, Rdown, linestyle='--', label="Rdown")
         ax3.set_title("Best config spectrum")
@@ -1489,21 +1551,29 @@ class OptimizationTab:
         ax3.legend()
         ax3.grid(True)
 
-        if data["mode"] == "fixed_lambda":
-            lam0 = data["fixed_lambda"]  # valeur que tu as passée
-            if lam0 is not None and lam is not None and Rup is not None:                
-                # point exact utilisé dans cost()
-                R0 = float(np.interp(lam0, lam, Rup))
-                ax3.scatter([lam0], [R0], s=60, color="red", zorder=5)
-                ax3.axvline(lam0, ls=":", lw=1, color="red")
-                ax3.text(lam0, R0, f"  R(λ₀) = {R0:.3f}", va="bottom", color="red")
+        # ------------------------------------------------------------------
+        # repère éventuel λ0 (mode fixed_lambda uniquement)
+        # ------------------------------------------------------------------
+        lam0 = data.get("fixed_lambda", None)           # float ou None
 
-        
-        r_up = float(np.interp(lam0, lam, Rup))
-        if Rdown is not None and len(Rdown) == len(lam):
-            r_down = float(np.interp(lam0, lam, Rdown))
+        if data["mode"] == "fixed_lambda" and lam0 is not None \
+        and lam is not None and Rup is not None and np.isfinite(lam0):
+            R0 = float(np.interp(lam0, lam, Rup))
+            ax3.scatter([lam0], [R0], s=60, color="red", zorder=5)
+            ax3.axvline(lam0, ls=":", lw=1, color="red")
+            ax3.text(lam0, R0, f"  R(λ₀) = {R0:.3f}", va="bottom", color="red")
+
+        # ------------------------------------------------------------------
+        # valeurs interpolées pour le bloc debug_html
+        # ------------------------------------------------------------------
+        if lam0 is not None and lam is not None and np.isfinite(lam0):
+            r_up   = float(np.interp(lam0, lam, Rup))
+            r_down = float(np.interp(lam0, lam, Rdown)) if Rdown is not None else None
         else:
-            r_down = None
+            r_up = r_down = float("nan")
+
+
+
 
         # --- debug info dans l'Output widget ---
         debug_html = f"""
@@ -1710,6 +1780,13 @@ class OptimizationTab:
         return panel
 
 
+    # ------------------------------------------------------------------
+    # Helper : dit s'il reste des jobs "running"
+    # ------------------------------------------------------------------
+    def _any_running(self) -> bool:
+        return any(job["status"] == "running" for job in self.job_queue)
+
+
     def _refresh_queue(self):
         """Met à jour la liste des jobs et leurs barres de progression."""
         rows = []
@@ -1762,6 +1839,14 @@ class OptimizationTab:
 
         # 6) on met à jour le VBox principal
         self.queue_box.children = rows
+
+        #  état des boutons globaux 
+        running = self._any_running()
+        self.run_all_btn.disabled    = running or not self.job_queue
+        self.delete_all_btn.disabled = running or not self.job_queue
+        self.cancel_all_btn.disabled = not running
+
+
 
 
 
@@ -1873,6 +1958,8 @@ class OptimizationTab:
 
     #  Run-all : on lance les jobs sans refresh intermédiaire
     def _run_all(self, _=None):
+        if self._any_running():
+            return
         # on conserve les indices avant toute mise-à-jour
         for idx in range(len(self.job_queue)):
             self._run_job(idx, refresh_ui=False)
@@ -1882,11 +1969,20 @@ class OptimizationTab:
 
 
     def _cancel_all(self, _=None):
+        if not self._any_running():
+            return
         for i in range(len(self.job_queue)):
             self._cancel_job(i)
 
 
+    def _delete_all(self, _=None):
+        if self._any_running():
+            return
+        """Vide entièrement la job‑queue et rafraîchit l’affichage."""
+        self.job_queue.clear()
+        self._refresh_queue()
 
+        
 # -----------------------------------------------------------------------------#
 #  Helper                                                                     #
 # -----------------------------------------------------------------------------#

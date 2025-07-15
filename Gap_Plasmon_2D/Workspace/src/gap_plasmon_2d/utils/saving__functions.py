@@ -211,6 +211,7 @@ def save_optimization_hdf5(
     budget: int,
     Npop: int,
     wavelength_range: tuple[float, float],   # (lam_min, lam_max)
+    n_modes: int | None = None,
     fixed_vals: dict[str, float] | None = None,
     keys: list[str],
     lowers: np.ndarray,
@@ -227,6 +228,7 @@ def save_optimization_hdf5(
     lam: np.ndarray | None = None,
     Rup: np.ndarray | None = None,
     Rdown: np.ndarray | None = None,
+    geometry: dict[str, float] | None = None,
 ) -> str:
     """
     Sauvegarde **COMPLÈTE** d’un run DE.
@@ -281,6 +283,7 @@ def save_optimization_hdf5(
         grp.attrs['bounds_low']  = lowers.tolist()
         grp.attrs['bounds_up']   = uppers.tolist()
 
+
         grp.attrs.update(
             date=datetime.now().isoformat(),
             config_name=config_name,    
@@ -290,6 +293,9 @@ def save_optimization_hdf5(
             best_cost=best_cost,
             fixed_lambda=fixed_lambda if fixed_lambda is not None else np.nan
         )
+
+        grp.attrs['n_modes'] = int(n_modes)
+
 
         if fixed_lambda is not None:
             grp.attrs['fixed_lambda'] = float(fixed_lambda)
@@ -323,6 +329,15 @@ def save_optimization_hdf5(
             spec.create_dataset("Rup",        data=Rup, compression="gzip")
             if Rdown is not None:
                 spec.create_dataset("Rdown",  data=Rdown, compression="gzip")
+
+
+        # ─── Géométrie finale ───────────────────────────
+        if geometry is not None:
+            g = grp.require_group("geometry")
+            for k, v in geometry.items():
+                g.attrs[k] = float(v)
+
+
 
     print(f"[Saving] Optimization saved to {h5path}")
     return str(h5path)

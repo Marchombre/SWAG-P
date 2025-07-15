@@ -49,6 +49,7 @@ from IPython import get_ipython
 from gap_plasmon_2d.utils.file_watchers import start_watcher
 
 # dépendances internes
+from gap_plasmon_2d.optimisation.cost_function import compute_cost
 from gap_plasmon_2d.simulation.simulate_and_plot     import ordered_params, run_simulation_one_combo
 from gap_plasmon_2d.utils.data_readers          import list_sim_summary_files
 from gap_plasmon_2d.analysis.convergence_analysis  import create_multi_convergence_widget
@@ -307,17 +308,17 @@ class SimulationTab:
 
         # ─── Spectre & points────────────────────────────────────────────────
         self.sim_lambda_min = widgets.FloatText(
-            value=300.0, description="λ min (nm):",
+            value=450.0, description="λ min (nm):",
             layout=widgets.Layout(width='150px'),
             style={'description_width':'initial'}
         )
         self.sim_lambda_max = widgets.FloatText(
-            value=900.0, description="λ max (nm):",
+            value=750.0, description="λ max (nm):",
             layout=widgets.Layout(width='150px'),
             style={'description_width':'initial'}
         )
         self.sim_n_points = widgets.IntText(
-            value=400, description="Points:",
+            value=300, description="Points:",
             layout=widgets.Layout(width='200px'),
             style={'description_width':'initial'}
         )
@@ -1489,84 +1490,17 @@ class SimulationTab:
 
 
 
-    # ----------------------------------------------------------------- #
-    #                            fonction de coût                       #
-    # ----------------------------------------------------------------- #
-
+    # ------------------------------------------------------------------
+    #  Cost wrapper (appelle la fonction indépendante)
+    # ------------------------------------------------------------------
     def cost(self, x, keys, mode="dip", fixed_lambda=None, range_lambda=None):
-        """
-        Injection de x sur les clés `keys`, simulation, puis on choisit
-        le dip optimal via find_best_dip (max ΔR/Δn ou Δλ/Δn selon mode).
-        Retourne 1 – best_S_R.
-        """
-        # 1) Récupère la config cochée
-        sel = [c for c in self.all_configs
-            if self.config_checkboxes[c["config_name"]].value]
-        if not sel:
-            raise RuntimeError("Select configuration.")
-        cfg = deepcopy(sel[0])
-
-        # 2) Injecte uniquement les paramètres optimisés
-        for xi, k in zip(x, keys):
-            cfg["geometry"]["geometry"][k] = float(xi)
-
-        # 3) Prépare la grille & les autres paramètres
-        lam = np.linspace(self.sim_lambda_min.value,
-                        self.sim_lambda_max.value,
-                        self.sim_n_points.value)
-        wave    = {"angle": 0, "polarization": 1}
-        n_modes = self.sim_n_mod.value
-
-        sel_layers = list(self.layer_selector.value)
-        delta_n    = max(self.delta_n_widget.value, 1e-6)
-
-        # 4) Simule le spectre de base
-        Rup0, _, _ = run_simulation_one_combo(
-            lam, wave, n_modes, cfg, self.json_combined_path
+        """Délègue au module optimisation.cost_function.compute_cost"""
+        return compute_cost(
+            self, x, keys,
+            mode=mode,
+            fixed_lambda=fixed_lambda,
+            range_lambda=range_lambda
         )
-        Rup0 = np.asarray(Rup0, float)
-
-        # valeurs λ issues des widgets si non fournies
-        fixed_lambda = fixed_lambda or self.lambda0_in.value
-
-        if mode == 'fixed_lambda':
-            R = float(np.interp(fixed_lambda, lam, Rup0))
-            return 1.0 - R
-
-        elif mode == 'range_lambda':
-            lam_min, lam_max = range_lambda
-            mask = (lam >= lam_min) & (lam <= lam_max)
-            R_mean = float(np.mean(Rup0[mask]))
-            return 1.0 - R_mean
-
-        
-        # 8) Retourne le coût 1 – ΔR/Δn (plus ΔR/Δn est grand, plus le coût est petit)
-        # ↓ ne lance la recherche de dip que si nécessaire
-        if mode in ('dip', 'half'):
-            best_out, _, _ = find_best_dip(
-            cfg=cfg,
-            wavelength=lam,
-            reflectance=Rup0,
-            wave=wave,
-            n_modes=n_modes,
-            sel_layers=sel_layers,
-            delta_n=delta_n,
-            json_combined_path=self.json_combined_path,
-            smooth_win=0, polyorder=0,
-            dip_prom=1e-2, dip_dist=1,
-            peak_dist=1,
-            verbose=False,
-            cfg_name=cfg["config_name"],
-            mode=('half' if mode=="half" else 'dip')
-        )
-            
-            
-            if best_out is None:
-                return 1.0
-            
-            idx_dR = 13 if mode == 'dip' else 15   # 15 = best_dR_half
-            best_dR = float(best_out[idx_dR])
-            return 1.0 - best_dR
 
         
     

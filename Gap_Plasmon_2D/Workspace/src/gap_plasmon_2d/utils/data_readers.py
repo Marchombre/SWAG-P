@@ -598,6 +598,8 @@ def read_optimization_hdf5(
         out["fixed_lambda"] = float(grp.attrs["fixed_lambda"]) \
             if "fixed_lambda" in grp.attrs else None
 
+        out["n_modes"] = int(grp.attrs["n_modes"]) if "n_modes" in grp.attrs else None
+
 
         # 4) paramètres de l’espace de recherche
         params_grp = grp["parameters"]
@@ -620,7 +622,7 @@ def read_optimization_hdf5(
         else:
             out["best_after_eval"] = None
 
-        # 7) spectra (optionnels)
+        # 7) spectra 
         if "spectra" in grp:
             spec = grp["spectra"]
             spectra: Dict[str, Any] = {
@@ -633,7 +635,7 @@ def read_optimization_hdf5(
                 spectra["Rdown"] = None
             out["spectra"] = spectra
 
-        # 8) fixed parameters (optionnel)
+        # 8) fixed parameters 
         if "fixed" in grp:
             fx = grp["fixed"]
             keys = [k.decode() for k in fx["keys"][:]]
@@ -642,6 +644,15 @@ def read_optimization_hdf5(
         else:
             out["fixed"] = {}
 
+
+        # 9) Géométrie finale
+        geom = {}
+        if "geometry" in grp:
+            g = grp["geometry"]
+            # les épaisseurs sont sauvées comme attributs scalaires
+            for k, v in g.attrs.items():      # k = nom du paramètre
+                geom[k] = float(v)            # v = valeur
+        out["geometry"] = geom
 
 
     return out
