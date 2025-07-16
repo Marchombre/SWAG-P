@@ -876,7 +876,7 @@
             "data": "main/Ag/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              999.97
+              1936.97
             ]
           }
         },
@@ -890,7 +890,7 @@
             "data": "main/Au/nk/Rakic-BB.yml",
             "override": [
               247.97,
-              999.97
+              1936.97
             ]
           }
         },
@@ -909,7 +909,12 @@
         {
           "key": "perm_sub",
           "material": {
-            "type": "None"
+            "type": "Custom",
+            "expression": "1.5**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         }
       ],
@@ -922,7 +927,7 @@
           "data": "main/Ag/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            999.97
+            1936.97
           ]
         },
         "perm_metalliclayer": {
@@ -933,7 +938,7 @@
           "data": "main/Au/nk/Rakic-BB.yml",
           "override": [
             247.97,
-            999.97
+            1936.97
           ]
         }
       }
@@ -1005,7 +1010,7 @@
       "RI_OVERRIDES": {}
     },
     {
-      "config_name": "Opti_mat",
+      "config_name": "Opti_n30_g3_m10",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",

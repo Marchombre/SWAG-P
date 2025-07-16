@@ -231,7 +231,7 @@ class SimulationTab:
         )
         # … vos ajustements de layout …
         self.fig.subplots_adjust(
-            left=0.10, right=0.8,
+            left=0.08, right=0.95,
             top=0.98,  bottom=0.05,
             hspace=0.2
         )
@@ -313,18 +313,18 @@ class SimulationTab:
             style={'description_width':'initial'}
         )
         self.sim_lambda_max = widgets.FloatText(
-            value=750.0, description="λ max (nm):",
+            value=900.0, description="λ max (nm):",
             layout=widgets.Layout(width='150px'),
             style={'description_width':'initial'}
         )
         self.sim_n_points = widgets.IntText(
             value=300, description="Points:",
-            layout=widgets.Layout(width='200px'),
+            layout=widgets.Layout(width='150px'),
             style={'description_width':'initial'}
         )
         self.sim_n_mod = widgets.IntText(
             value=5,
-            layout=widgets.Layout(width='200px'),
+            layout=widgets.Layout(width='150px'),
             style={'description_width':'initial'}
         )
         for w in (self.sim_lambda_min, self.sim_lambda_max, self.sim_n_points):
@@ -333,12 +333,12 @@ class SimulationTab:
         # ─── Métrique λ₀ / range ─────────────────────────────────────────────
         self.band_min_in = widgets.FloatText(
             value=650.0, description="λmin:",
-            layout=widgets.Layout(width='120px'),
+            layout=widgets.Layout(width='150px'),
             style={'description_width':'initial'}
         )
         self.band_max_in = widgets.FloatText(
             value=750.0, description="λmax:",
-            layout=widgets.Layout(width='120px'),
+            layout=widgets.Layout(width='150px'),
             style={'description_width':'initial'}
         )
         self.band_box_in = widgets.HBox(
@@ -387,11 +387,19 @@ class SimulationTab:
 
         # ─── RCWA modes fixe/custom/auto ─────────────────────────────────────
         self.mode_selection      = widgets.RadioButtons(
-            options=[('Fixe','fixed'),('Personnalisé','custom'),('Auto','auto')],
+            options=[('Fixe','fixed'),('Custum','custom'),('Auto','auto')],
             value='fixed',
-            style={'description_width':'initial'}
+            description='RCWA modes (opt)',
+            style={'description_width':'initial'},
+            layout=widgets.Layout(width='220px')
         )
-        self.custom_modes_box    = widgets.VBox()
+        self.custom_modes_box = widgets.VBox(
+            value=5, min=1,
+            description='n_mod',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='400px')
+            )
+        
         self.custom_n_mod_inputs = {}
 
         # ─── Fichiers résumé & download ─────────────────────────────────────
@@ -437,8 +445,7 @@ class SimulationTab:
         )
         visible = min(len(rows), 10)
         self.config_list = widgets.VBox(
-            [widgets.HTML("<b>Configs & Δn</b>"),
-            widgets.HBox([self.select_all_cfg_btn, self.select_all_dn_btn],
+            [widgets.HBox([self.select_all_cfg_btn, self.select_all_dn_btn],
                         layout=widgets.Layout(gap='10px')),
             *rows],
             layout=widgets.Layout(
@@ -485,20 +492,27 @@ class SimulationTab:
         self.delta_n_widget.observe(_positive, names='value')
 
         # ─── Debug & verbose ─────────────────────────────────────────────────
-        self.verbose_toggle     = widgets.Checkbox(
-            value=False, description="Verbose", indent=False,
-            layout=widgets.Layout(width='100%'),
-            style={'description_width':'initial'}
+        # ► 1.a  case à cocher  (active par défaut)
+        self.verbose_toggle = widgets.Checkbox(
+            value=True,                # ← ON par défaut
+            description="Verbose log",
+            indent=False,
+            style={'description_width': 'initial'}
         )
-        self.debug_out          = widgets.Textarea(
-            placeholder='Logs verbose…',
+
+        # ► 1.b  zone HTML plein‑écran
+        self.debug_out = widgets.HTML(
+            value="",
             layout=widgets.Layout(
-                width='100%', height='120px',
+                width='100%',          # occupe toute la largeur future
+                border='1px solid #cfd8dc',
+                padding='6px',
                 overflow_y='auto',
-                margin = '2px 0 0 0',
-                border='1px solid darkred'
+                max_height='200px',
+                display=''             # visible dès le début (car verbose = True)
             )
         )
+
 
 
     def _build_panels(self):
@@ -840,15 +854,29 @@ class SimulationTab:
         # 2) Fin normale
         # ----------------------------------------------------------------
         elif tag == "DONE":
+            # -- état interne --------------------------------------------------
             self._is_running = False
             self.sim_cancel_button.disabled = True
-            self._progress_bar.value = 1.0
-            self._progress_bar.description = "100 %"
-            self._progress_bar.bar_style = "success"
 
-            # Reconstruit et affiche dans canvas_output
+            # -- cache la barre & remet à zéro ---------------------------------
+            self._progress_bar.layout.display = "none"
+            self._progress_bar.value          = 0
+            self._progress_bar.bar_style      = "info"        # prêt pour le prochain run
+
+            # -- message “Done” chic -------------------------------------------
+            self._status_html.layout.display = ""             # (au cas où il était masqué)
+            self._status_html.value = (
+                "<span style='"
+                "display:inline-flex; align-items:center; gap:6px; "
+                "font-weight:600; color:#2E7D32; font-size:14px;'>"
+                "&#x2705; Done"
+                "</span>"
+            )
+
+            # -- continue avec l’affichage des résultats -----------------------
             self._build_outputs(payload[0])
             return
+
 
 
 
@@ -1111,14 +1139,19 @@ class SimulationTab:
                     self.ax_plot.scatter([lam_dip], [R_dip], marker='o',
                                     facecolor='none', edgecolor=color, s=70)
 
-                # ------------------------------------------------------------------
-                # Verbose : log détaillé
-                # ------------------------------------------------------------------
-                if verbose:
-                    dips_nm = ", ".join(f"{lam_range[d]:.1f}" for d in dips_idx_list)
-                    debug_lines.append(
-                        f"{name} dips[{dips_nm}] λ0={lam_dip:.2f} nm "
-                        f"FWHM={fwhm:.1f} ΔR/Δn={best_S_R if best_S_R is not None else '–'}")
+                # -------------------------------------------------
+                #  Collecte pour la future table verbose
+                # -------------------------------------------------
+                debug_rows = getattr(self, "_debug_rows", [])
+                debug_rows.append(dict(
+                    name     = name,
+                    mode     = "FWHM ½" if use_half else "Dip",
+                    lambda0  = f"{lam_dip:.1f} nm",
+                    fwhm     = f"{fwhm:.1f}",
+                    SR       = f"{best_S_R:.3f}" if best_S_R is not None else "–",
+                    comment  = "No valid dip !" if Best_values_out is None else ""
+                ))
+                self._debug_rows = debug_rows      # on persiste pour la fin
 
                 # ------------------------------------------------------------------
                 # Accumulateurs pour le tableau
@@ -1212,10 +1245,55 @@ class SimulationTab:
                 )
 
             # ----------------------------------------------------------------------
-            # Affichage verbose
+            #  VERBOSE  – tableau responsive plein‑écran
             # ----------------------------------------------------------------------
             if verbose:
-                self.debug_out.value = "\n".join(debug_lines)
+                rows = getattr(self, "_debug_rows", [])
+                mode_sel = "FWHM ½" if use_half else "Dip"
+
+                best_cfg = next((cfg_labels[i] for i,v in enumerate(S_R_vals)
+                                if v == np.nanmax(S_R_vals)), "—")
+
+                table_body = "\n".join(
+                    f"<tr>"
+                    f"<td>{r['name']}</td>"
+                    f"<td>{r['mode']}</td>"
+                    f"<td>{r['lambda0']}</td>"
+                    f"<td>{r['fwhm']}</td>"
+                    f"<td>{r['SR']}</td>"
+                    f"<td>{r['comment']}</td>"
+                    f"</tr>"
+                    for r in rows
+                ) or "<tr><td colspan='6' style='text-align:center;'>No entry</td></tr>"
+
+                verbose_html = f"""
+                <style>
+                .vlog * {{ font-family:Consolas, monospace; font-size:12px; }}
+                .vlog table{{border-collapse:collapse;width:100%;}}
+                .vlog th,.vlog td{{border:1px solid #ddd;padding:3px 6px;white-space:nowrap;}}
+                .vlog thead th{{background:#455a64;color:#fff;}}
+                .vlog tbody tr:nth-child(odd){{background:#f7f9fa;}}
+                .vlog caption{{caption-side:top;text-align:left;font-weight:bold;
+                                margin:2px 0 6px;color:#1565c0;}}
+                </style>
+
+                <div class="vlog">
+                <caption>Verbose log — mode : <b>{mode_sel}</b> | best config : <b>{best_cfg}</b></caption>
+                <table>
+                    <thead>
+                    <tr><th>Config</th><th>Mode</th><th>λ₀</th><th>FWHM (nm)</th><th>ΔR/Δn</th><th>Note</th></tr>
+                    </thead>
+                    <tbody>
+                    {table_body}
+                    </tbody>
+                </table>
+                </div>
+                """
+
+                self.debug_out.value = verbose_html
+                # réinitialise pour la prochaine simulation
+                self._debug_rows = []
+
 
             # ----------------------------------------------------------------------
             # Construction du tableau final 
@@ -1305,14 +1383,6 @@ class SimulationTab:
             labels  = [lab for lab in labels if lab and not lab.startswith('_')]
             if labels:
                 self.ax_plot.legend(handles, labels, loc='best', fontsize=9, frameon=False)
-
-
-
-            # with self.canvas_output:
-            #     clear_output(wait=True)
-            #     self.canvas.draw()
-            #     display(self.fig.canvas, self._last_download_link)
-
 
 
         except Exception as e:
@@ -1461,7 +1531,7 @@ class SimulationTab:
             it = widgets.IntText(
                 value=self.sim_n_mod.value,
                 description=name,
-                layout=Layout(width='300px'),
+                layout=Layout(width='150px'),
                 style={'description_width':'initial'}
             )
             self.custom_n_mod_inputs[name] = it
@@ -1505,29 +1575,38 @@ class SimulationTab:
         
     
     def _assemble_layout(self):
-        # Fixer 50% de largeur à chaque « colonne »
+        # ---- colonne gauche (contrôles) ----
         self.panel_controls.layout = widgets.Layout(
-            width='50%',
+            width='40%',
             padding='0 10px 0 0'
         )
+
+        # ---- colonne droite (metrics + figure) ----
         right_column = widgets.VBox(
-            [self.metrics_panel, self.canvas_output, self.debug_out],
+            [self.metrics_panel, self.canvas_output],
             layout=widgets.Layout(
-                width='50%',
+                width='60%',
                 padding='0 0 0 5px',
                 gap='5px',
                 align_items='stretch'
             )
         )
 
-        # On met le tout sur une seule ligne
-        self.tab = widgets.HBox(
+        # ---- 1ᵉ ligne : contrôles + figure ----
+        top_row = widgets.HBox(
             [self.panel_controls, right_column],
             layout=widgets.Layout(
                 width='100%',
                 align_items='flex-start'
             )
         )
+
+        # ---- assemblage final : log dessous, pleine largeur ----
+        self.tab = widgets.VBox(
+            [top_row, self.debug_out],
+            layout=widgets.Layout(width='100%', gap='6px')
+        )
+
 
 
 

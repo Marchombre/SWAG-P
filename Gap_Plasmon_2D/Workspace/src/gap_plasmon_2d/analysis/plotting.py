@@ -65,6 +65,69 @@ def clean_config_label(label: str) -> str:
     return re.sub(r'\s*\([^\)]*\)\s*$', '', label or '')
 
 
+
+# ───────────────────────────────────────────────────────────────────────
+# Helper : génère le tableau « Verbose summary » façon onglet Simulation
+# ───────────────────────────────────────────────────────────────────────
+def verbose_summary_html(rows: list[dict], *, mode_label: str, best_cfg: str) -> str:
+    """rows : [
+        {'cfg','mode',
+         'dips_all','dips_sel',
+         'fwhm_all','fwhm_sel',
+         'sr_all','sr_sel',
+         'note'},
+        …
+    ]"""
+    
+    if not rows:
+        return ""
+
+    def _td(txt):  # garde les cellules non‑vides alignées
+        return txt if txt not in (None, "", "–") else "&nbsp;"
+
+    body = "\n".join(
+        "<tr>"
+        f"<td>{_td(r['cfg'])}</td>"
+        f"<td>{_td(r['mode'])}</td>"
+        f"<td>{_td(r['dips_all'])}</td>"
+        f"<td>{_td(r['dips_sel'])}</td>"
+        f"<td>{_td(r['fwhm_all'])}</td>"
+        f"<td>{_td(r['fwhm_sel'])}</td>"
+        f"<td>{_td(r['sr_all'])}</td>"
+        f"<td>{_td(r['sr_sel'])}</td>"
+        f"<td>{_td(r['note'])}</td>"
+        "</tr>"
+        for r in rows
+    )
+
+    return f"""
+    <style>
+      .vb-sum {{border-collapse:collapse;width:100%;font-family:Consolas,monospace;font-size:12px}}
+      .vb-sum th,.vb-sum td{{border:1px solid #eee;padding:3px 6px;white-space:nowrap}}
+      .vb-sum thead tr{{background:#37474f;color:#fff;font-weight:600}}
+      .vb-sum tbody tr:nth-child(odd){{background:#fafafa}}
+    </style>
+    <details open class="debug-box">
+      <summary><b>Verbose log — mode : {mode_label} | best config : {best_cfg}</b></summary>
+      <div style='max-height:220px;overflow:auto'>
+        <table class="vb-sum">
+                <thead>
+                <tr>
+                    <th>Config</th><th>Mode</th>
+                    <th>Dips – all (nm)</th><th>Dips – sel. (nm)</th>
+                    <th>FWHM – all (nm)</th><th>FWHM – sel. (nm)</th>
+                    <th>ΔR/Δn – all</th><th>ΔR/Δn – sel.</th>
+                    <th>Note</th>
+                </tr>
+                </thead>
+          <tbody>{body}</tbody>
+        </table>
+      </div>
+    </details>
+    """
+
+
+
 # ------------------------------------------------------------------ #
 #                           Classe PlotTab                           #
 # ------------------------------------------------------------------ #
@@ -100,37 +163,31 @@ class PlotTab:
         )
         self.spectra_select.observe(self._on_spectra_change, names="value")
 
-        # Verbose toggle
+        # Verbose (HTML) – activé par défaut
         self.verbose_chk = widgets.Checkbox(
             value=True, description="Verbose",
             layout=Layout(width='100%'), indent=False,
             style={'description_width':'initial'}
         )
 
-        # Bouton Draw
         self.draw_b = widgets.Button(
-            description="Draw", button_style="info"
+            description="Draw",            # libellé du bouton
+            button_style="info",           # couleur bleue Info
+            icon="line-chart"              # facultatif : icône FontAwesome
         )
+        self.draw_b.on_click(self._draw)   # callback
 
-        # Afficher les légendes
-        self.show_labels_chk = widgets.Checkbox(
-            value=False, description="Show labels",
-            indent=False, layout=Layout(width='auto'),
-            style={'description_width':'initial'}
-        )
 
-        # Debug output
-        self.debug_out = widgets.Textarea(
-            value='',
-            placeholder='Logs verbose…',
+        # Zone HTML qui contiendra le verbose moderne
+        self.verbose_html = widgets.HTML(
+            value="",
             layout=Layout(
-                width='100%', height='200px',
-                overflow_y='scroll', border='1px solid darkred'
-            ),
-            disabled=False
+                width='100%', border='1px solid #ccc',
+                padding='6px', margin='4px 0',
+                display='none'          # masqué quand verbose=False
+            )
         )
         self.verbose_chk.observe(self._toggle_dbg, names='value')
-        self.debug_out.layout.display = 'none'
 
         # ────────────────────────────────────────────────────────────
         # 3) Éditeurs de labels custom
@@ -252,6 +309,17 @@ class PlotTab:
             )
         )
 
+
+        # Bouton pour (dé)masquer la légende matplotlib
+        self.show_labels_chk = widgets.Checkbox(
+            value=False,                # ou True si vous préférez
+            description="Show labels",
+            indent=False,
+            layout=Layout(width="auto"),
+            style={'description_width': 'initial'}
+        )
+
+
         # ────────────────────────────────────────────────────────────
         # 7) Assemblage final
         # ────────────────────────────────────────────────────────────
@@ -268,12 +336,14 @@ class PlotTab:
                 VBox([
                     self.toggle_labels_editors_btn,
                     self.labels_editors_panel
-                ], layout=Layout(align_items="flex-start", min_width="260px"))
+                ], layout=Layout(align_items="flex-start", min_width="600px"))
             ], layout=Layout(grid_gap='12px'))
         ], layout=Layout(width='100%'))
 
         self.tab = VBox(
-            [self.controls_box, self.debug_out, self.plot_out],
+            [self.controls_box,     # panneau de contrôle
+             self.verbose_html,     # verbose (au même endroit qu'avant)
+             self.plot_out],        # figure + tableau
             layout=Layout(display='flex', flex_flow='column nowrap', width='100%')
         )
 
@@ -284,13 +354,15 @@ class PlotTab:
         self._update_spectra()
 
 
+
     # ====================================================================
     #                         Méthodes internes                           #
     # ====================================================================
+    # la nouvelle fonction garde simplement l’affichage masqué/visible
     def _toggle_dbg(self, change):
-        self.debug_out.layout.display = 'block' if change['new'] else 'none'
+        self.verbose_html.layout.display = 'block' if change['new'] else 'none'
         if not change['new']:
-            self.debug_out.value = ''
+            self.verbose_html.value = ''
 
     def _on_toggle_labels_panel(self, change):
         show = change['new']
@@ -356,7 +428,7 @@ class PlotTab:
                         lab,
                         clean_config_label(lab)+" (R + Δn)"
                     ),
-                    description="Label Δn:", layout=Layout(width="180px")
+                    description="Label Δn:", layout=Layout(width="250px")
                 )
                 txt_dn._orig_lab = lab
                 txt_dn._is_dn = True
@@ -370,7 +442,7 @@ class PlotTab:
                 )
                 txt_car = widgets.Text(
                     value=default,
-                    description=f"Carré {typ}:", layout=Layout(width="160px")
+                    description=f"Carré {typ}:", layout=Layout(width="250px")
                 )
                 txt_car._orig_lab = lab
                 txt_car._carre_type = typ
@@ -408,9 +480,11 @@ class PlotTab:
         self._update_spectra()
         verbose = self.verbose_chk.value
         # ── INITIALISATION DU VERBOSE
-        debug_lines: list[str] = []
-        if verbose:
-            debug_lines.append("[Plot] Start Draw()")
+        summary_rows: list[dict] = []
+        
+        # On cache/affiche la boîte dès le départ (contenu vide pour l'instant)
+        self.verbose_html.layout.display = 'block' if verbose else 'none'
+        self.verbose_html.value = ""          # sera rempli en toute fin
 
         labels = list(self.spectra_select.value) or list(self.Rup_dict.keys())
         if not labels:
@@ -436,8 +510,6 @@ class PlotTab:
 
         # 4) Boucle sur chaque spectre sélectionné
         for idx, lab in enumerate(labels):
-            if verbose:
-                debug_lines.append(f"[Plot] Spectrum #{idx} «{lab}»")
             lam, Rup = self.Rup_dict[lab]
             Rup_dn_tuple = self.Rup_dn_dict.get(lab)
 
@@ -473,8 +545,7 @@ class PlotTab:
                 verbose=verbose, cfg_name=lab
             )
             if not dip_idx:
-                if verbose:
-                    debug_lines.append(f"[Plot] No dip detected for « {lab} »")
+            
                 continue
 
             # 4.4) Calcul métriques Δn ou raw_score
@@ -558,10 +629,7 @@ class PlotTab:
                 best_idx      = best_idx_raw
                 best_SR       = None
                 best_S_lambda = None
-                if verbose:
-                    debug_lines.append(
-                        f"[Plot] No Δn → selection raw_score idx={best_idx}"
-                    )
+
 
             # 4.5) Extraction métriques du dip retenu
             lam_left = lam_left_list[best_idx]
@@ -738,26 +806,34 @@ class PlotTab:
                                   f"{clean_config_label(lab)} S_R dip R(λ; n+Δn)")
                         )
 
-            # 4.8) Debug texte
-            if verbose:
-                dips_nm   = ", ".join(f"{lam[i]:.1f}" for i in dip_idx)
-                depths_str= ", ".join(f"{x:.3f}" for x in depth_list_arr)
-                fwhm_str  = ", ".join(f"{w:.3f}" for w in width_list)
-                dR_str    = ", ".join(f"{s:.3f}" for s in dR_over_dn_list)
-                dL_str    = ", ".join(f"{lmb:.3f}" for lmb in dLam_over_dn_list)
-                SR_txt    = f"{best_SR:.3f}" if best_SR is not None else "–"
-                SL_txt    = f"{best_S_lambda:.3f}" if best_S_lambda is not None else "–"
 
-                debug_lines.append(
-                    f"{clean_config_label(lab)}: λ0s[{dips_nm}]nm, λ0 {lam_dip:.1f}nm  "
-                    f"depths[{depths_str}], depth={depth:.3f}  "
-                    f"FWHMs[{fwhm_str}], FWHM={fwhm:.1f}  "
-                    f"ΔR/Δn[{dR_str}], best ΔR/Δn={SR_txt}  "
-                    f"Δλ/Δn[{dL_str}], best Δλ/Δn={SL_txt}"
-                )
-                debug_lines.append("")
+            SR_txt    = f"{best_SR:.3f}" if best_SR is not None else "–"
+            SL_txt    = f"{best_S_lambda:.3f}" if best_S_lambda is not None else "–"
+            
+            # 4.5) après avoir calculé lam_dip_list, fwhm_list, dR_over_dn_list, …
+            dips_all   = ", ".join(f"{l:.1f}"   for l in lam_dip_list)
+            fwhms_all  = ", ".join(f"{w:.1f}"   for w in fwhm_list)
+            sr_all     = ", ".join(f"{s:.3f}"   for s in dR_over_dn_list)
+            # valeur « retenue » (= best_idx) :
+            dips_sel   = f"{lam_dip:.1f} nm"
+            fwhm_sel   = f"{fwhm:.1f}"
+            sr_sel     = f"{best_SR:.3f}" if best_SR is not None else "–"
+
 
             # 4.9) Prépare ligne de tableau pour ce spectre
+            summary_rows.append({
+                "cfg":      clean_config_label(lab),
+                "mode":     "FWHM ½" if use_half else "Dip",
+                "dips_all": ", ".join(f"{l:.1f}" for l in lam_dip_list),
+                "dips_sel": f"{lam_dip:.1f} nm",
+                "fwhm_all": ", ".join(f"{w:.1f}" for w in fwhm_list),
+                "fwhm_sel": f"{fwhm:.1f}",
+                "sr_all":   ", ".join(f"{s:.3f}" for s in dR_over_dn_list),
+                "sr_sel":   (f"{best_SR:.3f}" if best_SR is not None else "–"),
+                "note":     ("raw‑score" if best_SR is None else "")
+            })
+
+            
             cfg_labels.append(clean_config_label(lab))
             geom_sum.append(self.summaries[lab][0])
             mat_sum .append(self.summaries[lab][1])
@@ -779,14 +855,6 @@ class PlotTab:
             except Exception:
                 pass
 
-        # 5) Après boucle : ajoute meilleure config au debug
-        debug_lines.append(
-            f"Meilleure configuration: {best_config['name']} avec S_R = {best_config['SR']:.3f}"
-        )
-
-        # 6) Affiche debug si demandé
-        if verbose:
-            self.debug_out.value = "\n".join(debug_lines)
 
         # 7) Construction du tableau final
         flags = {
@@ -798,12 +866,6 @@ class PlotTab:
             'show_deltaR_half' : self.show_deltaR_half_chk.value,
             'show_Q' : self.show_Q_chk.value
         }
-
-        # Avertissement si S_R demandé mais pas de données
-        if flags['show_S_dn'] and not any(dRdn_sum) and verbose:
-            self.debug_out.value += (
-                "\n[Plot] no data ΔR/Δn found, S_R will not be displayed."
-            )
 
         # Filtrage geometry / material
         base_geom = set(geom_sum[0].splitlines())
@@ -908,8 +970,15 @@ class PlotTab:
             
         # ── AFFICHAGE DU VERBOSE
         if verbose:
-            self.debug_out.value = "\n".join(debug_lines)
-            
+            mode_lbl = "FWHM ½" if use_half else "Dip"
+            self.verbose_html.value = verbose_summary_html(
+                summary_rows,
+                mode_label=mode_lbl,
+                best_cfg=(best_config['name'] or "—")
+            )
+                
+
+
         # ── FERMETURE DES FIGURES
         plt.close(fig_plot)
         plt.close(fig_table)

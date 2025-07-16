@@ -997,6 +997,17 @@
         "stable_required": 3,
         "optimal_n_mode": 71
       }
+    ],
+    "Opti_n30_g3_m10 + Opti_n30_g3_m10": [
+      {
+        "timestamp": "2025-07-16T13:32:21.886771",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 61
+      }
     ]
   }
 }

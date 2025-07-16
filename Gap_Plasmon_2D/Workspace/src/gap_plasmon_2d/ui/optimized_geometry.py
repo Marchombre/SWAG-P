@@ -28,13 +28,18 @@ def plot_geometry_static_from_run(ax,
 
     
     # ---------- 1) reconstitution complète ----------------------------------
-    all_keys = geometry_config.keys()          # mêmes clés que le widget
-    base     = {k: 0.0 for k in all_keys}      # ← tout est 0 par défaut
+    # 1) on part de l’ordre exact du JSON (default_geom)
+    base = {k: 0.0 for k in (default_geom or {}).keys()}   # ← ordre préservé
 
-    # 1) valeurs venant du fichier (default_geom) puis fixed / optimisées
-    base.update(default_geom or {})
+    # 2) on complète avec les clés manquantes (celles de geometry_config)
+    for k in geometry_config:
+        base.setdefault(k, 0.0)    # n’ajoute que si absent → pas de casse d’ordre
+
+    
+    
     for k, v in (fixed_vals or {}).items():
         base[k] = float(v)
+    
     for k, v in zip(keys, best_vec):
         base[k] = float(v)
 
@@ -62,9 +67,11 @@ def plot_geometry_static_from_run(ax,
     t_mol    = geom.get("thick_mol", 0.0)
     w_reso   = geom.get("width_reso", 0.0)
 
-    extra_keys = sorted(
-        k for k in geom if k.startswith("thick_homo_") and geom[k] > 0.0
-    )
+    extra_keys = [
+        k for k in geom                 # l'ordre du dict est conservé
+        if k.startswith("thick_homo_") and geom[k] > 0.0
+    ]
+
     t_extras   = [geom[k] for k in extra_keys]
 
     # ---------- 3) Substrate / Superstrate (70 % mini pour le reste) --------
@@ -109,6 +116,18 @@ def plot_geometry_static_from_run(ax,
     disp_func   = disp_dict.get("thick_func",         0.0)
     disp_mol    = disp_dict.get("thick_mol",          0.0)
     disp_extra = [disp_dict[k] for k in extra_keys]
+
+
+    # ───────── Ajuste la largeur affichée du nanocube pour qu’il reste carré ──────
+    if t_reso > 0:
+        scale_h      = disp_reso / t_reso        # même facteur que l’axe vertical
+        w_reso_disp  = w_reso * scale_h          # largeur affichée
+    else:
+        w_reso_disp  = w_reso                    # cube absent → on garde w_reso
+
+    cx      = (p - w_reso_disp) / 2              # nouvelle abscisse du cube
+    lat_w   = cx                                 # largeur des zones latérales
+
 
 
     # ---------- 6) dessin : schéma de la géométrie -----------------------------
@@ -178,50 +197,50 @@ def plot_geometry_static_from_run(ax,
                 "gold", _name("Metallic layer", t_metal))
     y_metal_top = y + disp_metal  # même si disp_metal == 0
 
+
     # ---------------------------------------------------------------------------
-    #  Gap + Nanocube
+    #  Gap + Nanocube  (avec w_reso_disp)
     # ---------------------------------------------------------------------------
-    cx = (p - w_reso) / 2
     if disp_gap > 0:
-        draw_layer(ax, cx, y_metal_top,           w_reso, disp_gap,
+        draw_layer(ax, cx, y_metal_top,            w_reso_disp, disp_gap,
                 "lightgreen", _name("Gap", t_gap))
     if disp_reso > 0:
-        draw_layer(ax, cx, y_metal_top + disp_gap, w_reso, disp_reso,
+        draw_layer(ax, cx, y_metal_top + disp_gap, w_reso_disp, disp_reso,
                 "silver",     _name("Nanocube", t_reso))
     y_cube_top = y_metal_top + disp_gap + disp_reso
+
 
     # ---------------------------------------------------------------------------
     #  Parois latérales : Polymer / Func / Mol
     # ---------------------------------------------------------------------------
-    lat_w = cx
     y_lat = y_metal_top
 
     if disp_dielectric > 0:
         draw_layer(ax, 0, y_lat, lat_w, disp_dielectric,
                 "green", _name("Photopolymer", t_diel))
-        draw_layer(ax, cx+w_reso, y_lat, lat_w, disp_dielectric,
+        draw_layer(ax, cx+w_reso_disp, y_lat, lat_w, disp_dielectric,
                 "green", "")
         y_lat += disp_dielectric
 
     if disp_func > 0:
         draw_layer(ax, 0, y_lat, lat_w, disp_func,
                 "pink", _name("Functionalisation", t_func))
-        draw_layer(ax, cx+w_reso, y_lat, lat_w, disp_func,
+        draw_layer(ax, cx+w_reso_disp, y_lat, lat_w, disp_func,
                 "pink", "")
         y_lat += disp_func
 
     if disp_mol > 0:
         draw_layer(ax, 0, y_lat, lat_w, disp_mol,
                 "violet", _name("Molecule", t_mol))
-        draw_layer(ax, cx+w_reso, y_lat, lat_w, disp_mol,
+        draw_layer(ax, cx+w_reso_disp, y_lat, lat_w, disp_mol,
                 "violet", "")
         y_lat += disp_mol
 
     # Environnement latéral éventuel
     lat_fill = y_cube_top - y_lat
     if lat_fill > 0:
-        draw_layer(ax, 0,           y_lat, lat_w, lat_fill, "lightblue", "Env.")
-        draw_layer(ax, cx + w_reso, y_lat, lat_w, lat_fill, "lightblue", "")
+        draw_layer(ax, 0,           y_lat, lat_w, lat_fill, "lightblue", "")
+        draw_layer(ax, cx + w_reso_disp, y_lat, lat_w, lat_fill, "lightblue", "")
 
     # ---------------------------------------------------------------------------
     #  Superstrate

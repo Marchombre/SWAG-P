@@ -19,240 +19,203 @@ def load_json_config(file_name):
         return json.load(f)
 
 
+# -----------------------------------------------------------------------------#
+#  Geometry ✕ Material — modern UI                                             #
+# -----------------------------------------------------------------------------#
 def create_geometry_material_widget():
     """
-    Widget pour créer des paires (géométrie, matériau), les combiner,
-    les sauvegarder, et supprimer des configurations sauvées.
+    Sélecteur visuel (géométrie, matériau) modernisé :
+      • lignes compactes façon tableau ;
+      • boutons icônes (➕  ✅  🗑️) avec tooltips ;
+      • panneau « Saved combos » pliable, suppression par clic direct ;
+      • rechargement auto quand un JSON change (watchdog conservé).
     """
 
-    # ─── (1) Chargement initial ───────────────────────────────────────
-    geom_data = load_json_config("geometry_configurations.json") \
-                    .get("ALL_GEOMETRY_CONFIGS", [])
-    mat_data  = load_json_config("material_config.json") \
-                    .get("ALL_CONFIGS", [])
-
+    # ╭─ 0 |  Data & watcher  ───────────────────────────────────────────────╮
     module_dir         = os.path.dirname(os.path.abspath(__file__))
-    workspace_dir      = os.path.dirname(module_dir)
-    CONFIGURATIONS_dir = os.path.join(str(paths.CONFIGS_DIR))
-    combos_file        = os.path.join(CONFIGURATIONS_dir, "geom_mat_combinations.json")
-    
-    row_widgets  = []  # stocke {'geom':…, 'mat':…, 'container':…}
-    output_area  = widgets.Output(layout=widgets.Layout(padding="10px"))
+    CONFIG_DIR         = str(paths.CONFIGS_DIR)
+    combos_file        = os.path.join(CONFIG_DIR, "geom_mat_combinations.json")
 
-    # ─── (2) Fonction de rechargement ─────────────────────────────────
-    def _reload_config():
-        nonlocal geom_data, mat_data, row_widgets, delete_selector
-
-        # 2.1) reload JSON sources
-        geom_data = load_json_config("geometry_configurations.json") \
-                        .get("ALL_GEOMETRY_CONFIGS", [])
-        mat_data  = load_json_config("material_config.json") \
-                        .get("ALL_CONFIGS", [])
-
-        # 2.2) ne ré-affecte que si les options ont réellement changé
-        geom_opts = [(c["config_name"], c) for c in geom_data] or [("None", None)]
-        mat_opts  = [(c["config_name"], c) for c in mat_data]  or [("None", None)]
-
-        # initialise les caches au premier appel
-        if not hasattr(_reload_config, "last_geom_opts"):
-            _reload_config.last_geom_opts = None
-            _reload_config.last_mat_opts  = None
-
-        # compare avant de toucher les widgets
-        if geom_opts != _reload_config.last_geom_opts or mat_opts != _reload_config.last_mat_opts:
-            for it in row_widgets:
-                it["geom"].options = geom_opts
-                if it["geom"].value not in [opt[1] for opt in geom_opts]:
-                    it["geom"].value = geom_opts[0][1]
-                it["mat"].options = mat_opts
-                if it["mat"].value not in [opt[1] for opt in mat_opts]:
-                    it["mat"].value = mat_opts[0][1]
-            # met à jour les caches
-            _reload_config.last_geom_opts = geom_opts
-            _reload_config.last_mat_opts  = mat_opts
-
-        # 2.3) reload liste des configs combinées pour suppression
+    def _load(fname, key):
         try:
-            saved = json.load(open(combos_file, "r", encoding="utf-8")) \
+            return (load_json_config(fname) or {}).get(key, [])
+        except FileNotFoundError:
+            return []
+
+    geom_data = _load("geometry_configurations.json", "ALL_GEOMETRY_CONFIGS")
+    mat_data  = _load("material_config.json",          "ALL_CONFIGS")
+
+    # petit watcher sur /CONFIG_DIR (hérite de ton util)
+    _watcher = start_watcher(
+        path=CONFIG_DIR,
+        callback=lambda *_: _reload_options(),
+        extensions=[".json"],
+        recursive=False,
+    )
+
+    # ╭─ 1 |  Fabrique des Dropdowns  ───────────────────────────────────────╮
+    def _geom_dd():
+        opts = [(c["config_name"], c) for c in geom_data] or [("—", None)]
+        return widgets.Dropdown(
+            options=opts, value=opts[0][1],
+            layout=widgets.Layout(width="240px")
+        )
+
+    def _mat_dd():
+        opts = [(c["config_name"], c) for c in mat_data] or [("—", None)]
+        return widgets.Dropdown(
+            options=opts, value=opts[0][1],
+            layout=widgets.Layout(width="240px")
+        )
+
+    # ╭─ 2 |  Ligne “tableau” (geom • mat • 🗑️)  ───────────────────────────╮
+    row_pool, rows_box = [], widgets.VBox()
+
+    def _add_row(_=None):
+        geom, mat = _geom_dd(), _mat_dd()
+        trash = widgets.Button(icon="trash", tooltip="Delete row",
+                               layout=widgets.Layout(width="38px"),
+                               button_style="danger")
+        row = widgets.HBox([geom, mat, trash],
+                           layout=widgets.Layout(gap="6px", align_items="center"))
+        row_pool.append(row)
+        rows_box.children = row_pool
+
+        trash.on_click(lambda *_: (row_pool.remove(row),
+                                   setattr(rows_box, "children", row_pool)))
+
+    _add_row()                                                # première ligne
+
+    # ╭─ 3 |  Actions globales  ─────────────────────────────────────────────╮
+    btn_add  = widgets.Button(icon="plus",  tooltip="Add a new row",
+                              button_style="info",
+                              layout=widgets.Layout(width="38px"))
+    btn_save = widgets.Button(icon="check", tooltip="Combine & save selections",
+                              button_style="success",
+                              layout=widgets.Layout(width="38px"))
+
+    btn_add.on_click(_add_row)
+
+    # enregistrées → SelectMultiple dans un Accordion
+    saved_sel = widgets.SelectMultiple(layout=widgets.Layout(height="140px"))
+    btn_del_saved = widgets.Button(icon="trash", button_style="danger",
+                                   tooltip="Delete selected combos",
+                                   layout=widgets.Layout(width="38px"))
+    saved_box = widgets.HBox([saved_sel, btn_del_saved],
+                             layout=widgets.Layout(gap="6px"))
+    acc_saved = widgets.Accordion(children=[saved_box])
+    acc_saved.set_title(0, "📁  Saved combinations")
+
+    # ╭─ 4 |  Helpers de rechargement  ──────────────────────────────────────╮
+    def _reload_options():
+        nonlocal geom_data, mat_data
+        geom_data = _load("geometry_configurations.json", "ALL_GEOMETRY_CONFIGS")
+        mat_data  = _load("material_config.json",          "ALL_CONFIGS")
+
+        # met à jour chaque dropdown existant
+        for row in row_pool:
+            for dd, src in ((row.children[0], geom_data),
+                            (row.children[1], mat_data)):
+                opts = [(c["config_name"], c) for c in src] or [("—", None)]
+                prev = dd.value
+                dd.options = opts
+                if prev not in [o[1] for o in opts]:
+                    dd.value = opts[0][1]
+
+        # recharge la liste saved combos
+        try:
+            saved = json.load(open(combos_file, encoding="utf-8")) \
                         .get("ALL_COMBINED_CONFIGS", [])
         except (FileNotFoundError, json.JSONDecodeError):
             saved = []
-        names = [c["config_name"] for c in saved]
-        delete_selector.options = names
-        # préserver les sélections encore valides
-        delete_selector.value = tuple(v for v in delete_selector.value if v in names)
+        saved_sel.options = [c["config_name"] for c in saved]
 
-    # ─── (3) Watchdog ───────────────────────────────────────────────────
-    _watcher = start_watcher(
-        path=CONFIGURATIONS_dir,
-        callback=_reload_config,
-        extensions=[".json"],
-        recursive=False
+    _reload_options()                                         # init
+
+    # ╭─ 5 |  Sauvegarde / suppression  ────────────────────────────────────╮
+    def _save(_):
+        combos = []
+        for row in row_pool:
+            g, m = row.children[0].value, row.children[1].value
+            if g and m:
+                combos.append({
+                    "config_name": f"{g['config_name']} + {m['config_name']}",
+                    "geometry": g, "material": m
+                })
+
+        if not combos:
+            status.value = "⚠️ Nothing to save."
+            return
+
+        # lit l’existant
+        try:
+            existing = json.load(open(combos_file, encoding="utf-8")) \
+                          .get("ALL_COMBINED_CONFIGS", [])
+        except (FileNotFoundError, json.JSONDecodeError):
+            existing = []
+
+        merged = {c["config_name"]: c for c in existing}
+        for c in combos:
+            merged[c["config_name"]] = c
+
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        json.dump({"ALL_COMBINED_CONFIGS": list(merged.values())},
+                  open(combos_file, "w", encoding="utf-8"),
+                  indent=2, ensure_ascii=False)
+        status.value = f"✅ Saved {len(combos)} structure(s)."
+        _reload_options()
+
+    btn_save.on_click(_save)
+
+    def _del_saved(_):
+        todel = set(saved_sel.value)
+        if not todel:
+            status.value = "⚠️ Select combos to delete."
+            return
+        try:
+            data = json.load(open(combos_file, encoding="utf-8"))
+            keep = [c for c in data.get("ALL_COMBINED_CONFIGS", [])
+                    if c["config_name"] not in todel]
+            json.dump({"ALL_COMBINED_CONFIGS": keep},
+                      open(combos_file, "w", encoding="utf-8"),
+                      indent=2, ensure_ascii=False)
+            status.value = f"🗑️ Deleted {len(todel)} combo(s)."
+            _reload_options()
+        except FileNotFoundError:
+            status.value = "⚠️ Nothing to delete."
+
+    btn_del_saved.on_click(_del_saved)
+
+    # ╭─ 6 |  Status bar  ──────────────────────────────────────────────────╮
+    status = widgets.HTML("")
+    status.layout.margin = "4px 0 0 4px"
+
+    # ╭─ 7 |  Mise en page globale  ────────────────────────────────────────╮
+    header = widgets.HTML(
+        "<h3 style='margin:0;font-family:Segoe UI,Arial;'>"
+        "Geometry × Material composer</h3>"
     )
 
-    # ─── (4) Helpers pour Dropdown géométrie / matériau ───────────────
-    def make_geom_dd():
-        opts = [(c["config_name"], c) for c in geom_data] or [("None", None)]
-        return widgets.Dropdown(
-            options=opts, value=opts[0][1],
-            description="Geometry:",
-            layout=widgets.Layout(width="250px"),
-            style={"description_width": "80px"}
-        )
-
-    def make_mat_dd():
-        opts = [(c["config_name"], c) for c in mat_data] or [("None", None)]
-        return widgets.Dropdown(
-            options=opts, value=opts[0][1],
-            description="Material:",
-            layout=widgets.Layout(width="250px"),
-            style={"description_width": "80px"}
-        )
-
-    # ─── (5) Container de lignes ───────────────────────────────────────
-    rows_container = widgets.VBox([], layout=widgets.Layout(margin="10px 0"))
-
-    def update_rows():
-        rows_container.children = [it["container"] for it in row_widgets]
-
-    def add_row(_=None):
-        geom_dd = make_geom_dd()
-        mat_dd  = make_mat_dd()
-        del_btn = widgets.Button(
-            description="Delete", button_style="danger",
-            layout=widgets.Layout(width="80px")
-        )
-        container = widgets.HBox(
-            [geom_dd, mat_dd, del_btn],
-            layout=widgets.Layout(margin="5px 0", align_items="center")
-        )
-        row_widgets.append({"geom": geom_dd, "mat": mat_dd, "container": container})
-        update_rows()
-
-        def on_delete(_):
-            row_widgets.remove(next(it for it in row_widgets if it["container"] is container))
-            update_rows()
-        del_btn.on_click(on_delete)
-
-    # création de la première ligne
-    add_row()
-
-    # ─── (6) Boutons Add / Combine ──────────────────────────────────────
-    add_btn     = widgets.Button(
-        description="Add Row", button_style="info",
-        layout=widgets.Layout(width="120px")
-    )
-    combine_btn = widgets.Button(
-        description="Combine & Save", button_style="success",
-        layout=widgets.Layout(width="150px")
-    )
-    add_btn.on_click(add_row)
-
-    def on_combine(btn):
-        with output_area:
-            clear_output()
-            print("🔄 Combine clicked")  # debug
-            try:
-                combined = []
-                for it in row_widgets:
-                    g, m = it["geom"].value, it["mat"].value
-                    if g is None or m is None:
-                        continue
-                    combined.append({
-                        "config_name": f"{g['config_name']} - {m['config_name']}",
-                        "geometry":    g,
-                        "material":    m
-                    })
-                if not combined:
-                    print("❗ No valid combination selected.")
-                    return
-
-                # on s'assure que le dossier existe
-                os.makedirs(CONFIGURATIONS_dir, exist_ok=True)
-
-                # on lit l'existant
-                try:
-                    with open(combos_file, "r", encoding="utf-8") as f:
-                        existing = json.load(f).get("ALL_COMBINED_CONFIGS", [])
-                except (FileNotFoundError, json.JSONDecodeError):
-                    existing = []
-
-                # on fusionne sans doublons
-                merged = {c["config_name"]: c for c in existing}
-                for c in combined:
-                    merged[c["config_name"]] = c
-
-                # on écrit
-                with open(combos_file, "w", encoding="utf-8") as f:
-                    json.dump(
-                        {"ALL_COMBINED_CONFIGS": list(merged.values())},
-                        f, indent=2, ensure_ascii=False
-                    )
-                print(f"✅ Saved {len(merged)} combination(s) to\n   {combos_file}")
-
-                # on rafraîchit l'affichage
-                _reload_config()
-
-            except Exception as e:
-                # on capture TOUTE erreur et on l'affiche
-                print("🔥 Exception in on_combine:", e)
-
-    combine_btn.on_click(on_combine)
-
-    control_buttons = widgets.HBox(
-        [add_btn, combine_btn],
-        layout=widgets.Layout(justify_content="space-around", margin="10px 0")
+    buttons_bar = widgets.HBox(
+        [btn_add, btn_save],
+        layout=widgets.Layout(gap="8px", align_items="center")
     )
 
+    # petit style global
+    style = widgets.HTML("""
+    <style>
+    .combo-panel{
+        border:1px solid #ddd;border-radius:8px;padding:12px;
+        background:#fafafa;box-shadow:0 2px 4px rgba(0,0,0,.05);
+    }
+    </style>
+    """)
 
-    # ─── (7) SelectMultiple + bouton pour suppression ───────────────────
-    delete_selector = widgets.SelectMultiple(
-        options=[], description="Delete config(s):",
-        layout=widgets.Layout(width="400px", height="100px")
+    panel = widgets.VBox(
+        [style, header, rows_box, buttons_bar, acc_saved, status],
+        layout=widgets.Layout(width="680px", gap="6px"),
     )
-    delete_btn = widgets.Button(
-        description="Delete selected", button_style="danger",
-        layout=widgets.Layout(width="150px")
-    )
+    # garde le watcher vivant
+    panel._watcher = _watcher
+    return panel
 
-    def on_delete_selected(_):
-        with output_area:
-            clear_output()
-            to_delete = delete_selector.value
-            if not to_delete:
-                print("No configuration selected to delete.")
-                return
-            try:
-                saved = json.load(open(combos_file, "r", encoding="utf-8")) \
-                                .get("ALL_COMBINED_CONFIGS", [])
-            except:
-                saved = []
-            remaining = [c for c in saved if c["config_name"] not in to_delete]
-            json.dump(
-                {"ALL_COMBINED_CONFIGS": remaining},
-                open(combos_file, "w", encoding="utf-8"),
-                indent=2, ensure_ascii=False
-            )
-            print(f"Deleted {len(to_delete)} configuration(s).")
-            delete_selector.value = ()
-            _reload_config()
-
-    delete_btn.on_click(on_delete_selected)
-
-    delete_box = widgets.HBox(
-        [delete_selector, delete_btn],
-        layout=widgets.Layout(justify_content="space-between", margin="10px 0")
-    )
-
-    # ─── (8) Assemblage final ────────────────────────────────────────────
-    main_widget = widgets.VBox(
-        [rows_container, control_buttons, delete_box, output_area],
-        layout=widgets.Layout(padding="10px", width="650px", background_color="#f9f9f9")
-    )
-    # Empêche le watcher d'être garbage-collected
-    main_widget._config_watcher = _watcher
-    
-    # ─── (9) On force un premier chargement des configs existantes ────────
-    _reload_config()
-    
-    return main_widget

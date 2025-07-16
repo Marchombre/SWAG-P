@@ -645,14 +645,21 @@ def read_optimization_hdf5(
             out["fixed"] = {}
 
 
-        # 9) Géométrie finale
+        # 9) geometry  
         geom = {}
         if "geometry" in grp:
             g = grp["geometry"]
-            # les épaisseurs sont sauvées comme attributs scalaires
-            for k, v in g.attrs.items():      # k = nom du paramètre
-                geom[k] = float(v)            # v = valeur
+            if {"keys", "values"} <= set(g):
+                # NOUVEAU format ordonné
+                keys = [k.decode() for k in g["keys"][...]]
+                vals = g["values"][...]
+                geom = dict(zip(keys, vals))
+            else:
+                # Ancien format : attributs (ordre perdu)
+                for k, v in g.attrs.items():
+                    geom[k] = float(v)
         out["geometry"] = geom
+
 
 
     return out

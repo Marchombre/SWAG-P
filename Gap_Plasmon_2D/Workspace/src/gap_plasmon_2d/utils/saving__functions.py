@@ -331,11 +331,18 @@ def save_optimization_hdf5(
                 spec.create_dataset("Rdown",  data=Rdown, compression="gzip")
 
 
-        # ─── Géométrie finale ───────────────────────────
+        # ─── Géométrie finale (ordre respecté) ─────────────────────────────
         if geometry is not None:
             g = grp.require_group("geometry")
-            for k, v in geometry.items():
-                g.attrs[k] = float(v)
+
+            # clé → valeur, dans l’ordre exact du dict `geometry`
+            keys   = np.array(list(geometry.keys()),   dtype="S")   # bytes, pas str
+            values = np.array(list(geometry.values()), dtype=float)
+
+            # on crée 2 datasets parallèles, compressés
+            g.create_dataset("keys",   data=keys,   compression="gzip")
+            g.create_dataset("values", data=values, compression="gzip")
+
 
 
 

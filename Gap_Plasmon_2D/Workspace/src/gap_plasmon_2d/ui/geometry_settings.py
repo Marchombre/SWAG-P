@@ -47,6 +47,53 @@ def displayed_thickness(t):
     """
     return t / 10
 
+
+def _adjust_sub_super(d_sub, d_sup, p, *, min_central_ratio=0.70):
+    """
+    Réduit proportionnellement Substrate & Superstrate quand ils prennent
+    trop de place, de sorte que la « zone centrale » garde au moins
+    `min_central_ratio · p` de hauteur.
+    """
+    max_subsuper = p * (1.0 - min_central_ratio)
+    total = d_sub + d_sup
+    if total <= 0 or total <= max_subsuper:         # rien à faire
+        return d_sub, d_sup
+    k = max_subsuper / total                       # facteur < 1
+    return d_sub * k, d_sup * k
+
+
+def _rescale_with_min(thicknesses, H_avail, h_min):
+    """
+    Ramène la liste *thicknesses* dans la hauteur disponible *H_avail*
+    en imposant une hauteur mini *h_min* à chaque couche non nulle.
+    """
+    h = np.asarray(thicknesses, float)
+    if h.sum() == 0:
+        return np.zeros_like(h)
+
+    # 1) mise à l’échelle linéaire
+    h *= H_avail / h.sum()
+
+    # 2) contrainte h ≥ h_min
+    small  = h < h_min
+    if not small.any():
+        return h
+
+    deficit = (h_min - h[small]).sum()
+    large   = ~small
+    surplus = (h[large] - h_min).sum()
+
+    if surplus <= 0:                     # cas extrême : tout est min
+        h[:] = h_min
+        return h * (H_avail / h.sum())
+
+    factor     = 1 - deficit / surplus
+    h[large]   = h_min + (h[large] - h_min) * factor
+    h[small]   = h_min
+    return h
+
+
+
 def get_geometry_save_path():
     """
     Retourne le chemin vers le fichier JSON utilisé pour stocker les configurations géométriques.
@@ -529,110 +576,123 @@ def create_geometry_widget():
             # dynamiques
             t_extras = [geometry_sliders[k].value for k in extra_layer_keys]
 
-            # disp sub/super
-            disp_sub   = displayed_thickness(t_sub)
-            disp_super = displayed_thickness(t_super)
+            # ---------- conversion Sub / Super + liste centrale -----------------
+            disp_sub_raw   = displayed_thickness(t_sub)
+            disp_super_raw = displayed_thickness(t_super)
+            disp_sub, disp_super = _adjust_sub_super(
+                disp_sub_raw, disp_super_raw, p, min_central_ratio=0.70
+            )
 
-            # factor vertical
-            hauteur_totale = p
-            hauteur_dispo   = hauteur_totale - (disp_sub + disp_super)
-            somme_centrale  = t_acc + t_XIAOYI + sum(t_extras) + t_metal + t_gap + t_reso
-            facteur_centrale = hauteur_dispo / somme_centrale if somme_centrale>0 else 1
+            # ordre physique complet (on suit le JSON) ---------------------------
+            central_pairs = [
+                ("thick_accroche",       t_acc),
+                ("thick_XIAOYI",         t_XIAOYI),
+                *[(k, geometry_sliders[k].value) for k in extra_layer_keys],  # homo_*
+                ("thick_metalliclayer",  t_metal),
+                ("thick_gap",            t_gap),
+                ("thick_reso",           t_reso),
+                ("thick_diel",           t_diel),
+                ("thick_func",           t_func),
+                ("thick_mol",            t_mol),
+            ]
+            central_pairs = [(k, v) for k, v in central_pairs if v > 0]        # on vire les 0 nm
+            central_keys, central_real = zip(*central_pairs) if central_pairs else ([], [])
 
-            # disp centrales
-            disp_acc    = t_acc    * facteur_centrale
-            disp_XIAOYI = t_XIAOYI * facteur_centrale
-            disp_extras = [t*facteur_centrale for t in t_extras]
-            disp_metal  = t_metal  * facteur_centrale
-            disp_gap    = t_gap    * facteur_centrale
-            disp_reso   = t_reso   * facteur_centrale
+            H_avail = p - (disp_sub + disp_super)
+            h_min   = max(0.5, 0.02 * H_avail)         # ≥ 0,5 nm ou 2 % de la zone
+            disp_all = _rescale_with_min(central_real, H_avail, h_min)
+            disp_map = dict(zip(central_keys, disp_all))
 
-            # disp latérales
-            disp_dielectric = t_diel * facteur_centrale
-            disp_func       = t_func * facteur_centrale
-            disp_mol        = t_mol  * facteur_centrale
+            # ---------------- redistribution explicite --------------------------
+            disp_acc        = disp_map.get("thick_accroche",      0.0)
+            disp_x          = disp_map.get("thick_XIAOYI",        0.0)
+            disp_metal      = disp_map.get("thick_metalliclayer", 0.0)
+            disp_gap        = disp_map.get("thick_gap",           0.0)
+            disp_reso       = disp_map.get("thick_reso",          0.0)
+            disp_dielectric = disp_map.get("thick_diel",          0.0)
+            disp_func       = disp_map.get("thick_func",          0.0)
+            disp_mol        = disp_map.get("thick_mol",           0.0)
+            disp_extras     = [disp_map[k] for k in extra_layer_keys]
 
             # Case A/B
             case_str = "Case A" if (t_diel+t_func+t_mol)<t_gap else "Case B"
             case_label_widget.value = f"Case: {case_str}"
 
-            # création fig
-            fig, ax = plt.subplots(figsize=(6,6))
+            # ------------------------------------------------------------------
+            #  Création de la figure et calcul de la largeur affichée du cube
+            # ------------------------------------------------------------------
+            fig, ax = plt.subplots(figsize=(6, 6))
             ax.set_title(f"Schematics – {case_label_widget.value}", fontsize=10, pad=5)
 
-            # positions verticales
-            y_sub_bottom    = 0
-            y_sub_top       = y_sub_bottom + disp_sub
-            y_acc_bottom    = y_sub_top
-            y_acc_top       = y_acc_bottom + disp_acc
-            y_XIAOYI_bottom = y_acc_top
-            y_XIAOYI_top    = y_XIAOYI_bottom + disp_XIAOYI
+            # — largeur affichée pour rendre le nanocube carré —
+            if t_reso > 0:
+                scale_h = disp_reso / t_reso          # facteur d’échelle vertical appliqué au cube
+                w_reso_disp = w_reso * scale_h        # largeur affichée
+            else:
+                w_reso_disp = w_reso                  # cas « cube » absent
 
-            # couches dynamiques
-            y_cursor = y_XIAOYI_top
+            central_x = (p - w_reso_disp) / 2         # position x du cube centrée
+            lat_width = central_x                     # largeur des zones latérales
+
+            # ------------------------------------------------------------------
+            #  Substrate – Accroche – XIAOYI – couches homo_* déjà dans y_cursor
+            # ------------------------------------------------------------------
+            bande = min(0.05 * p, disp_sub, disp_super)
+            draw_layer(ax, 0, 0, p, disp_sub, "brown", "Substrate")
+            draw_layer(ax, 0, 0, p, bande, "none", "", hatch='///')
+
+            y = disp_sub
+            draw_layer(ax, 0, y, p, disp_acc, "orange", "Accroche"); y += disp_acc
+            draw_layer(ax, 0, y, p, disp_x, "purple", "XIAOYI");     y += disp_x
+
             for key, h in zip(extra_layer_keys, disp_extras):
-                lbl   = key.replace("thick_homo_","")
-                color = extra_layer_colors.get(key, "#888888")
-                draw_layer(ax, 0, y_cursor, p, h, color, lbl)
-                y_cursor += h
+                color = extra_layer_colors.get(key, "#888")
+                draw_layer(ax, 0, y, p, h, color, key.replace("thick_homo_", ""))
+                y += h
 
+            # ------------------------------------------------------------------
+            #  Metallic layer, Gap, Nanocube
+            # ------------------------------------------------------------------
+            draw_layer(ax, 0, y, p, disp_metal, "gold", "Metallic layer")
+            y_metal_top = y + disp_metal
+            draw_layer(ax, central_x, y_metal_top,           w_reso_disp, disp_gap,  "lightgreen", "Gap")
+            draw_layer(ax, central_x, y_metal_top + disp_gap, w_reso_disp, disp_reso, "silver",     "Nanocube")
+            y_cube_top = y_metal_top + disp_gap + disp_reso
 
-            # métal → gap → cube → superstrate etc.
-            y_metal_bottom = y_cursor
-            y_metal_top    = y_metal_bottom + disp_metal
-            y_inter_bottom = y_metal_top
-            y_gap_bottom   = y_inter_bottom
-            y_gap_top      = y_gap_bottom + disp_gap
-            y_cube_bottom  = y_gap_top
-            y_cube_top     = y_cube_bottom + disp_reso
-            y_super_bottom = y_cube_top
+            # ------------------------------------------------------------------
+            #  Parois latérales
+            # ------------------------------------------------------------------
+            y_lat = y_metal_top
+            draw_layer(ax, 0,              y_lat, lat_width, disp_dielectric, "green",  "Photopolymer")
+            draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, disp_dielectric, "green",  "")
+            y_lat += disp_dielectric
 
-            # dessin
-            bande = min(0.05*p, disp_sub, disp_super)
-            draw_layer(ax, 0, y_sub_bottom, p, disp_sub, "brown", "Substrate")
-            draw_layer(ax, 0, y_sub_bottom, p, bande, "none", "", hatch='///')
-            draw_layer(ax, 0, y_acc_bottom, p, disp_acc, "orange", "Accroche")
-            draw_layer(ax, 0, y_XIAOYI_bottom, p, disp_XIAOYI, "purple", "XIAOYI")
-            draw_layer(ax, 0, y_metal_bottom, p, disp_metal, "gold", "Metallic layer")
-            central_x = (p - w_reso)/2
-            draw_layer(ax, central_x, y_gap_bottom, w_reso, disp_gap, "lightgreen", "Gap")
-            draw_layer(ax, central_x, y_cube_bottom, w_reso, disp_reso, "silver", "Nanocube")
-            lateral_width = (p - w_reso)/2
-            y_lat_start = y_inter_bottom
-            # Photopolymer
-            draw_layer(ax, 0,      y_lat_start, lateral_width, disp_dielectric, "green",  "Photopolymer")
-            draw_layer(ax, central_x+w_reso, y_lat_start, lateral_width, disp_dielectric, "green",  "Photopolymer")
-            # Functionalisation
-            y_lat = y_lat_start + disp_dielectric
-            draw_layer(ax, 0,      y_lat, lateral_width, disp_func, "pink",   "Functionalisation")
-            draw_layer(ax, central_x+w_reso, y_lat, lateral_width, disp_func, "pink",   "Functionalisation")
-            # Molecule
+            draw_layer(ax, 0,              y_lat, lat_width, disp_func, "pink",  "Functionalisation")
+            draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, disp_func, "pink",  "")
             y_lat += disp_func
-            draw_layer(ax, 0,      y_lat, lateral_width, disp_mol, "violet", "Molecule")
-            draw_layer(ax, central_x+w_reso, y_lat, lateral_width, disp_mol, "violet", "Molecule")
 
-            #  "Environnement" lateral
-            y_lat_end     = y_lat_start + disp_dielectric + disp_func + disp_mol
-            lateral_filler = y_super_bottom - y_lat_end
-            if lateral_filler > 0:
-                # gauche
-                draw_layer(ax, 0, y_lat_end,
-                        lateral_width, lateral_filler,
-                        "lightblue", "Environnement")
-                # droite
-                draw_layer(ax, central_x + w_reso, y_lat_end,
-                        lateral_width, lateral_filler,
-                        "lightblue", "Environnement")
-            
-                        
-            # Superstrate
-            draw_layer(ax, 0, y_super_bottom, p, hauteur_totale - y_super_bottom,
-                       "lightblue", "Superstrate\n(environnement)")
-            draw_layer(ax, 0, hauteur_totale - bande, p, bande, "none", "", hatch='///')
+            draw_layer(ax, 0,              y_lat, lat_width, disp_mol, "violet", "Molecule")
+            draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, disp_mol, "violet", "")
+            y_lat += disp_mol
 
-            ax.set_xlim(0, p); ax.set_ylim(0, p)
-            ax.set_aspect('equal', adjustable='box'); ax.margins(0)
+            # éventuel remplissage
+            if y_cube_top > y_lat:
+                h_fill = y_cube_top - y_lat
+                draw_layer(ax, 0,              y_lat, lat_width, h_fill, "lightblue", "")
+                draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, h_fill, "lightblue", "")
+
+            # ------------------------------------------------------------------
+            #  Superstrate
+            # ------------------------------------------------------------------
+            draw_layer(ax, 0, y_cube_top, p, p - y_cube_top, "lightblue", "Superstrate")
+            draw_layer(ax, 0, p - bande, p, bande, "none", "", hatch='///')
+
+            ax.set_xlim(0, p)
+            ax.set_ylim(0, p)
+            ax.set_aspect('equal', adjustable='box')
+            ax.axis('off')
             plt.show()
+
 
     # 7) Observers & première trace
     for s in geometry_sliders.values():

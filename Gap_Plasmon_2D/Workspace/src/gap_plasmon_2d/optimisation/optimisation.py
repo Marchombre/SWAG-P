@@ -22,6 +22,7 @@ import warnings
 import threading
 import h5py
 from copy import deepcopy
+import json
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,8 +33,9 @@ import ipywidgets as widgets
 import traceback, queue as q
 
 from gap_plasmon_2d import paths
+
 from gap_plasmon_2d.optimisation.cost_function import compute_cost
-from gap_plasmon_2d.ui.geometry_settings import geometry_limits, geometry_config
+from gap_plasmon_2d.ui.geometry_settings import geometry_limits
 from gap_plasmon_2d.ui.optimized_geometry import plot_geometry_static_from_run
 from gap_plasmon_2d.simulation.simulation import SimulationTab, sim_tab
 from gap_plasmon_2d.simulation.simulate_and_plot import run_simulation_one_combo
@@ -78,6 +80,8 @@ summary_opt_dir = BASE_NOTEBOOKS / "summary_optimisation"
 # Création du dossier s’il n’existe pas (parents=True gère la création récursive)
 summary_opt_dir.mkdir(parents=True, exist_ok=True)
 
+summary_convergence = Path(paths.RESULTS_DIR) / "summary_convergence"
+
 # data_dir : dossier des données brutes (matériaux, géométries, etc.)
 # contient notamment les fichiers de propriétés optiques
 data_dir = Path(paths.DATA_DIR)
@@ -86,9 +90,58 @@ data_dir = Path(paths.DATA_DIR)
 # et leurs propriétés optiques (indice de réfraction vs λ).
 json_combined_path = data_dir / "combined_materials.json"
 
+# dossier des fichiers « configs »
+configurations_dir = Path(paths.CONFIGS_DIR)  
+CONFIG_LIST_JSON = configurations_dir / "geom_mat_combinations.json"
 
 
+# ------------------------------------------------------------------ #
+# Fichier de combinaisons géométrie/matériaux : deux formats possibles
+# ------------------------------------------------------------------ #
+def _load_available_configs() -> list[str]:
+    """
+    Retourne la liste des noms de configuration présents dans
+    « geom_mat_combinations.json ».
 
+    • Ancien format  (clé “configs”) :
+        {
+            "configs": {
+                "cfg_A": {...},
+                "cfg_B": {...},
+                ...
+            }
+        }
+
+    • Format utilisé par l’onglet Simulation (clé “ALL_COMBINED_CONFIGS”) :
+        {
+            "ALL_COMBINED_CONFIGS": [
+                { "config_name": "cfg_A", ... },
+                { "config_name": "cfg_B", ... },
+                ...
+            ]
+        }
+    """
+    try:
+        with open(CONFIG_LIST_JSON, encoding="utf-8") as f:
+            data = json.load(f)
+
+        # ① ancien format
+        if "configs" in data:
+            return sorted(data["configs"].keys())
+
+        # ② nouveau format (celui de SimulationTab)
+        if "ALL_COMBINED_CONFIGS" in data:
+            return sorted(
+                cfg["config_name"]              # ← même champ que SimulationTab
+                for cfg in data["ALL_COMBINED_CONFIGS"]
+                if "config_name" in cfg
+            )
+
+        return []                               # format inattendu
+    except Exception:
+        return []                               # fichier illisible ? → vide
+
+    
 
 # -----------------------------------------------------------------------------#
 #  Worker-side globals & helpers                                               #
@@ -99,80 +152,64 @@ json_combined_path = data_dir / "combined_materials.json"
 # Grâce au fork, chaque sous-processus héritera de cette même instance en Copy-On-Write,
 # évitant de devoir recharger/configurer le simulateur à chaque appel.
 # --------------------------------------------------------------------------- #
-#  Worker‑side globals                                                        #
-# --------------------------------------------------------------------------- #
-_WORKER_SIM: SimulationTab = sim_tab
+# Worker-side globals (communs à tous les subprocess)
+_WORKER_SIM: SimulationTab = sim_tab             # ← déjà présent
 
 
+
 # --------------------------------------------------------------------------- #
-#  cost_worker                                            #
+#  cost_worker                                 #
 # --------------------------------------------------------------------------- #
 def cost_worker(
     args: Tuple[
-        int,                 # idx  → position de l’individu dans pop
-        np.ndarray,          # x    → vecteur des épaisseurs optimisées
-        List[str],           # keys → noms des paramètres optimisés
-        str,                 # mode → 'dip' | 'half' | 'fixed_lambda' | 'range_lambda'
-        Dict[str, Any],      # mode_kw → fixed_lambda=..., range_lambda=(...)
-        Dict[str, float]     # fixed_vals → épaisseurs laissées fixes
+        int,                 # idx dans la pop
+        np.ndarray,          # x  (vecteur d’épaisseurs)
+        List[str],           # keys optimisées
+        str,                 # cfg_name
+        str,                 # mode
+        Dict[str, Any],      # mode_kw
+        Dict[str, float],     # fixed_vals
+        int,
+        float,                          # delta_n à utiliser
+        list[int]
     ]
 ) -> Tuple[int, float]:
-    """
-    Fonction picklable appelée par multiprocessing.Pool.
-    Elle renvoie **(idx, coût)** – l’indice permet de recréer un tableau
-    de coûts dans le même ordre que la population, même avec imap_unordered.
-    """
-    idx, x, keys, mode, mode_kw, fixed = args
+    idx, x, keys, cfg_name, mode, mode_kw, fixed, n_modes, delta_n, sel_layers = args
 
-    # ------------------------------------------------------------------ #
-    # 1) Récupère la configuration cochée dans l’instance partagée        #
-    # ------------------------------------------------------------------ #
-    cfg = next(
-        c for c in _WORKER_SIM.all_configs
-        if _WORKER_SIM.config_checkboxes[c["config_name"]].value
-    )
+    # 1) récupère la config voulue dans _WORKER_SIM
+    cfg = next(c for c in _WORKER_SIM.all_configs
+               if c["config_name"] == cfg_name)
 
-    geom = cfg["geometry"]["geometry"]
 
-    # ------------------------------------------------------------------ #
-    # 2) Backup éventuel : on ne modifie que les clés fixes               #
-    # ------------------------------------------------------------------ #
-    backup = {param: geom[param] for param in fixed.keys()}
 
-    # Injection des valeurs fixes
-    for param, val in fixed.items():
-        geom[param] = float(val)
+    # 3) injection des valeurs fixes
+    geom   = cfg["geometry"]["geometry"]
+    backup = {k: geom[k] for k in fixed}
+    for k, v in fixed.items():
+        geom[k] = float(v)
 
-    # ------------------------------------------------------------------ #
-    # 3) Évaluation du coût (avec suppression des warnings numériques)    #
-    # ------------------------------------------------------------------ #
+    # 4) calcul du coût
     try:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
+            warnings.simplefilter("ignore", RuntimeWarning)
             cost_val = compute_cost(
-                _WORKER_SIM,          # instance SimulationTab
-                x, keys,
+                _WORKER_SIM, x, keys,
                 mode=mode,
+                n_modes=n_modes,
+                selected_cfg=cfg,
+                delta_n=delta_n,
+                sel_layers=sel_layers,
                 **mode_kw
             )
-
-        # NaN / Inf  → pénalité très forte
         if not np.isfinite(cost_val):
             cost_val = 1e6
-
-    except Exception:                     # inclut LinAlgError
+    except Exception:
         cost_val = 1e6
-
     finally:
-        # ------------------------------------------------------------------
-        # 4) Restauration des valeurs fixes pour laisser la config propre
-        # ------------------------------------------------------------------
-        for param, old in backup.items():
-            geom[param] = old
+        # restauration des valeurs fixes
+        for k, v in backup.items():
+            geom[k] = v
 
-    # ---------------------------------------------------------------------- #
-    # 5) On renvoie l’indice ET le coût                                       #
-    # ---------------------------------------------------------------------- #
     return idx, float(cost_val)
 
 
@@ -459,6 +496,107 @@ class OptimizationTab:
     Onglet d’optimisation (widgets + logique de calcul).
     """
 
+
+    # ------------------------------------------------------------------#
+    #  Config selector dédié à l’onglet Optimisation                    #
+    # ------------------------------------------------------------------#
+    # ------------------------------------------------------------------#
+    #  Config selector (identique à Simulation, sans synchro)           #
+    # ------------------------------------------------------------------#
+    def _build_opt_config_selector(self):
+        # dictionnaires   {cfg_name: Checkbox}
+        self.opt_cfg_check = {}
+        self.opt_dn_check  = {}
+
+        # --- bouton toggle (ouvre/ferme la liste) ---
+        self.opt_toggle_btn = widgets.ToggleButton(
+            description="Select Configs & Δn",
+            value=True,                      # ouvert par défaut
+            icon="caret-up",
+            button_style="warning",
+            layout=widgets.Layout(width="520px")
+        )
+        self.opt_toggle_btn.observe(self._toggle_config_list, names="value")
+
+        # --- “Tout sélectionner” ---
+        self.opt_select_all_cfg_btn = widgets.Button(
+            description="Tout sélectionner Configs", button_style="info",
+            layout=widgets.Layout(margin="0 5px 5px 0")
+        )
+        self.opt_select_all_dn_btn  = widgets.Button(
+            description="Tout sélectionner Δn",     button_style="info",
+            layout=widgets.Layout(margin="0 0 5px 0")
+        )
+        self.opt_select_all_cfg_btn.on_click(self._toggle_all_cfg)
+        self.opt_select_all_dn_btn.on_click(self._toggle_all_dn)
+
+        # --- lignes Config / Δn ---
+        rows = []
+        for cfg_name in _load_available_configs():
+            chk_cfg = widgets.Checkbox(value=False, description=cfg_name, indent=False)
+            chk_dn  = widgets.Checkbox(value=False, description="Δn", indent=False,
+                                       layout=widgets.Layout(width="46px"))
+
+            chk_dn.observe(self._update_dn_widgets_state, names="value")
+
+
+            # callbacks internes
+            chk_cfg.observe(self._refresh_parametrization, names="value")
+            chk_cfg.observe(self._opt_refresh_custom_modes, names="value")
+
+            self.opt_cfg_check[cfg_name] = chk_cfg
+            self.opt_dn_check[cfg_name]  = chk_dn
+            rows.append(widgets.HBox([chk_cfg, chk_dn], layout=widgets.Layout(gap="5px")))
+
+        # conteneur scrollable
+        visible = min(len(rows), 10)      # 10 lignes max avant scroll
+        self.opt_config_list = widgets.VBox(
+            [widgets.HBox([self.opt_select_all_cfg_btn, self.opt_select_all_dn_btn],
+                          layout=widgets.Layout(gap="10px")),
+             *rows],
+            layout=widgets.Layout(
+                width="500px",
+                height=f"{30 + visible*30}px",
+                overflow_y="auto",
+                border="1px solid lightgray",
+                padding="5px",
+                display="none"            # affiché par le toggle
+            )
+        )
+
+        # assembly final
+        self.opt_config_selector = widgets.VBox(
+            [self.opt_toggle_btn, self.opt_config_list],
+            layout=widgets.Layout(padding="5px")
+        )
+
+        # Compatibilité : certaines parties du code attendent opt_cfg_box
+        self.opt_cfg_box = self.opt_config_selector
+
+
+
+
+    def _rebuild_opt_config_selector(self, *_):
+        """Recharge la liste des configurations puis reconstruit les check-boxes
+        en conservant les cases déjà cochées quand c’est possible."""
+        prev_sel = {n: cb.value  for n, cb in self.opt_cfg_check.items()}
+        prev_dn  = {n: cb.value  for n, cb in self.opt_dn_check.items()}
+        self._build_opt_config_selector()              # recrée tout
+
+        # restaure l’état (quand les noms existent toujours)
+        for name, cb in self.opt_cfg_check.items():
+            cb.value = prev_sel.get(name, False)
+        for name, cb in self.opt_dn_check.items():
+            cb.value = prev_dn.get(name, True)
+
+        # met à jour les panneaux dépendants
+        self._refresh_parametrization()
+        self._opt_refresh_custom_modes()
+
+
+
+
+
     # ------------------------------------------------------------------#
     #  Construction / UI                                                 #
     # ------------------------------------------------------------------#
@@ -548,6 +686,57 @@ class OptimizationTab:
             layout=widgets.Layout(width='300px')
         )
 
+        self._build_opt_config_selector()
+        self._toggle_config_list({'new': True})
+
+        self._cfg_watcher = start_watcher(
+            path=str(CONFIG_LIST_JSON),
+            callback=lambda *_: self._rebuild_opt_config_selector(),
+            extensions=[".json"],
+            recursive=False,
+        )
+
+        # ─── RCWA modes (Optimisation) ──────────────────────────────────────────
+        self.opt_mode_selection = widgets.RadioButtons(
+            options=[('Fixe', 'fixed'),
+                    ('Custum', 'custom'),
+                    ('Auto', 'auto')],
+            value='fixed',
+            description='RCWA modes (opt)',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='220px')
+        )
+
+        self.opt_fixed_n_mod = widgets.IntText(          # visible si 'fixed'
+            value=5, min=1,
+            description='n_mod',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='120px')
+        )
+
+        self.opt_custom_modes_box = widgets.VBox(
+            value=5, min=1,
+            description='n_mod',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='400px')
+            )       
+        
+        self._opt_custom_n_mod_inputs: dict[str, widgets.IntText] = {}
+
+
+        # ── callbacks ----------------------------------------------------------------
+        # 1)  Fixe / Perso / Auto  →   afficher / masquer le IntText « n_mod fixe »
+        self.opt_mode_selection.observe(self._toggle_opt_fixed_n_mod,  names='value')
+        # 2)  + mise à jour des champs « n_mod personnalisés »
+        self.opt_mode_selection.observe(self._opt_refresh_custom_modes, names='value')    
+                
+        for cb in self.opt_cfg_check.values():           # quand on (dé)coche une config
+            cb.observe(self._opt_refresh_custom_modes, names='value')
+        
+        # états initiaux
+        self._toggle_opt_fixed_n_mod()
+        self._opt_refresh_custom_modes()
+
 
         # Widgets spécifiques au mode 'fixed_lambda' ou 'range_lambda'
         self.lambda0_w = widgets.FloatText(
@@ -568,13 +757,41 @@ class OptimizationTab:
             layout=widgets.Layout(gap="200px"),
         )
 
+        # --- copie visuelle du FloatText Δn ---
+        sim_dn = self.sim.delta_n_widget        # widget d'origine (Simulation)
+
+        self.delta_n_widget = widgets.FloatText(
+            value      = sim_dn.value,
+            description= sim_dn.description,
+            step       = sim_dn.step,
+            layout     = sim_dn.layout  
+        )
+
+        # --- copie visuelle du sélecteur de couche(s) ---
+        sim_layer = self.sim.layer_selector     # peut être IntText, SelectMultiple, …
+
+        if isinstance(sim_layer, widgets.SelectMultiple):
+            self.layer_selector = widgets.SelectMultiple(
+                options     = sim_layer.options,
+                value       = sim_layer.value,
+                description = sim_layer.description,
+                layout      = sim_layer.layout    # réutilisation
+            )
+        else:
+            self.layer_selector = type(sim_layer)(
+                value       = sim_layer.value,
+                min         = getattr(sim_layer, "min", None),
+                max         = getattr(sim_layer, "max", None),
+                step        = getattr(sim_layer, "step", 1),
+                description = sim_layer.description,
+                layout      = sim_layer.layout    # idem
+            )
+
+
 
 
         self._toggle_CF_mode_widgets({"new": self.cost_mode.value})      # état initial
         self.cost_mode.observe(self._toggle_CF_mode_widgets, names="value")
-
-
-
 
         # Widget arborescent pour filtrer les fichiers HDF5
         self.summary_opt_dir = summary_opt_dir
@@ -670,7 +887,7 @@ class OptimizationTab:
 
         # supprime toute la queue d’un coup -----------------
         self.delete_all_btn = widgets.Button(
-            description="Delete all ❌",
+            description="Delete all ✖️",
             button_style="danger",
         )
 
@@ -709,7 +926,7 @@ class OptimizationTab:
         self.main_tabs.set_title(1, "Queue pane")
 
         # E) Observer les cases à cocher de config pour rafraîchir Parametrization
-        for cb in self.sim.config_checkboxes.values():
+        for cb in self.opt_cfg_check.values():
             # on enlève l’ancien observer qui appelait update_optimization
             try:
                 cb.unobserve(self.update_optimization, names="value")
@@ -725,10 +942,10 @@ class OptimizationTab:
 
 
 
+
         # 1) Colonne de gauche (Simulation)
         left_col = widgets.VBox([
-            widgets.HTML(value="<b>Configurations & Δn</b>"),
-            self.sim.config_selector,  # toggle + refresh + cases Config/Δn
+            self.opt_config_selector,  # toggle + refresh + cases Config/Δn
 
             widgets.HTML(value="<b>Spectrum (nm)</b>"),
             widgets.HBox(
@@ -736,16 +953,17 @@ class OptimizationTab:
                 layout=widgets.Layout(gap='10px')
             ),
 
-            widgets.HTML(value="<b>RCWA Fourier modes</b>"),
-            self.sim.mode_selection,
-            self.sim.sim_n_mod,
-            self.sim.custom_modes_box,
+            widgets.HTML("<b>RCWA Fourier modes</b>"),
+            self.opt_mode_selection,
+            widgets.HBox([self.opt_fixed_n_mod]),
+            self.opt_custom_modes_box,
 
             widgets.HTML(value="<b>Δn & Layers</b>"),
             widgets.HBox(
-                [self.sim.delta_n_widget, self.sim.layer_selector],
+                [self.delta_n_widget, self.layer_selector],
                 layout=widgets.Layout(gap='10px')
             ),
+
         ], layout=widgets.Layout(width='48%', padding='10px'))
 
         # 2) Colonne de droite (Optimisation sous forme d’onglets)
@@ -787,16 +1005,18 @@ class OptimizationTab:
             plot_area
         ], layout=widgets.Layout(padding='10px'))
 
-        # hook sur le bouton Refresh de SimulationTab
-        self.sim.config_refresh_btn.on_click(self._on_configs_refreshed)
 
-
+        # surveille combined_materials.json
         self._json_watcher = start_watcher(
             path=str(json_combined_path),
             callback=lambda *_: self.sim.config_refresh_btn.click(),
             extensions=[".json"],
             recursive=False,
         )
+
+
+
+
 
         # s'assurer que l'attribut existe, même si update_optimization retourne tôt
         self.param_widgets: Dict[str, Dict[str, widgets.Widget]] = {}
@@ -824,26 +1044,130 @@ class OptimizationTab:
         _attach_observers()
 
 
+
+        self._update_dn_widgets_state()
+
     # ------------------------------------------------------------------#
     #  UI helpers                                                       #
     # ------------------------------------------------------------------#
-    def _on_configs_refreshed(self, _):
+    
+    
+    def _update_dn_widgets_state(self, *_):
         """
-        Quand SimulationTab recharge ses config_checkboxes,
-        on rebranche nos observers et on vide le bounds_box
-        pour que l’utilisateur puisse recliquer et repeupler.
+        Active (ou grise) les widgets Δn et layer_selector.
+
+        • Ils ne sont utiles que si :
+            – le mode de coût est 'dip' ou 'half',  ET
+            – au moins une config a sa case « Δn » cochée.
         """
-        # 1) (re)branche la callback sur TOUTES les cases
-        self._attach_config_observers()
-        # 2) on vide la zone des bounds (update_optimization la repopulera)
-        self.bounds_box.children = []
-        self.param_widgets = {}
+        uses_dn_mode   = self.cost_mode.value in ("dip", "half")
+        any_dn_checked = any(cb.value for cb in self.opt_dn_check.values())
+        enable         = uses_dn_mode and any_dn_checked
+
+        self.delta_n_widget.disabled = not enable
+        self.layer_selector.disabled = not enable
+    
+
+
+
+
+
+    def _toggle_config_list(self, change):
+        show = "block" if change["new"] else "none"
+        self.opt_config_list.layout.display = show
+        self.opt_toggle_btn.icon = "caret-up" if change["new"] else "caret-down"
+
+    def _toggle_all_cfg(self, _=None):
+        all_on = all(cb.value for cb in self.opt_cfg_check.values())
+        for cb in self.opt_cfg_check.values():
+            cb.value = not all_on     # inverse l’état
+
+    def _toggle_all_dn(self, _=None):
+        all_on = all(cb.value for cb in self.opt_dn_check.values())
+        for cb in self.opt_dn_check.values():
+            cb.value = not all_on
+
+
+
+    def _toggle_opt_fixed_n_mod(self, change=None):
+        # si le RadioButtons vaut 'fixed'  → on affiche le IntText
+        # sinon                            → on le cache
+        self.opt_fixed_n_mod.layout.display = (
+            ''    if self.opt_mode_selection.value == 'fixed'
+            else 'none'
+        )
+
+
+
+    def _opt_get_n_modes_for(self, cfg_name: str) -> int:
+        """
+        Nombre de modes RCWA à utiliser pour *cfg_name* selon le choix
+        de l’onglet Optimisation (fixed / custom / auto).
+        Le mode 'auto' lit directement summary_convergence/convergence_results.json
+        pour être indépendant de l’onglet Simulation.
+        """
+        sel = self.opt_mode_selection.value
+
+        # 1)  Fixed
+        if sel == 'fixed':
+            return int(self.opt_fixed_n_mod.value)
+
+        # 2)  Custom
+        if sel == 'custom':
+            it = self._opt_custom_n_mod_inputs.get(cfg_name)
+            return int(it.value) if it is not None else int(self.opt_fixed_n_mod.value)
+
+        # 3)  Auto ⇒ on lit summary_convergence
+        try:
+            conv_json = summary_convergence / "convergence_results.json"
+            with open(conv_json, encoding='utf-8') as f:
+                master = json.load(f)
+            auto_modes = {
+                name: r[-1]["optimal_n_mode"]
+                for name, r in master.get("configs", {}).items() if r
+            }
+            return int(auto_modes[cfg_name])
+        except (FileNotFoundError, KeyError, ValueError):
+            # Fallback : valeur affichée dans le champ n_mod fixe
+            return int(self.opt_fixed_n_mod.value)
+    
+    
+    def _opt_refresh_custom_modes(self, *_):
+        """Affiche un IntText par config cochée quand 'Personnalisé' est actif."""
+        if self.opt_mode_selection.value != 'custom':
+            self.opt_custom_modes_box.children = ()
+            return
+
+        # quelles configs sont cochées ?
+        selected = [name for name, cb in self.opt_cfg_check.items() if cb.value]
+        inputs   = []
+        for name in selected:
+            it = self._opt_custom_n_mod_inputs.get(name)
+            if it is None:        # première fois
+                it = widgets.IntText(
+                    value=self.opt_fixed_n_mod.value,
+                    description=name,
+                    style={'description_width': 'initial'},
+                    layout=widgets.Layout(width='250px')
+                )
+                self._opt_custom_n_mod_inputs[name] = it
+            inputs.append(it)
+
+        self.opt_custom_modes_box.children = tuple(inputs)
+
+        
+    
+    
+    def _on_configs_refreshed(self, _=None):
+        """Appelé quand SimulationTab a rechargé les configs."""
+        self._rebuild_opt_config_selector()
+
 
 
 
     def _attach_config_observers(self):
         """(Re)branche update_optimization sur chaque checkbox."""
-        for cb in self.sim.config_checkboxes.values():
+        for cb in self.opt_cfg_check.values():
             cb.observe(self.update_optimization, names="value")
 
 
@@ -852,18 +1176,25 @@ class OptimizationTab:
         m = change["new"]
         self.lambda0_w.layout.display = "" if m == "fixed_lambda" else "none"
         self.band_box.layout.display = "" if m == "range_lambda" else "none"
+        uses_dn = (m in ("dip", "half"))             # ← nouveau
+        self.delta_n_widget.disabled = not uses_dn
 
+        # Active/désactive les petites cases “Δn” devant chaque config
+        for cb in self.opt_dn_check.values():        # existe déjà dans l'objet
+            cb.disabled = not uses_dn
+            if not uses_dn:
+                cb.value = False                     # on décoche proprement
 
+        self._update_dn_widgets_state()
 
     def close(self) -> None:
         """Explicitly release resources held by the observer."""
-        if hasattr(self, "_observer") and self._observer is not None:
+        if hasattr(self, "_cfg_watcher") and self._cfg_watcher is not None:
             try:
-                self._observer.stop()
-                self._observer.join()
-            except Exception:
-                pass
-            self._observer = None
+                self._cfg_watcher.stop()
+                self._cfg_watcher.join()
+            finally:
+                self._cfg_watcher = None
 
 
 
@@ -890,7 +1221,6 @@ class OptimizationTab:
         for k, widgets_dict in self.param_widgets.items():
             widgets_dict["low"].value = low
             widgets_dict["up"].value  = up
-
 
 
     # ------------------------------------------------------------------#
@@ -949,6 +1279,14 @@ class OptimizationTab:
         lowers = np.array([self.param_widgets[k]["low"].value for k in keys])
         uppers = np.array([self.param_widgets[k]["up"].value  for k in keys])
 
+        # --- nouvelle sélection de la config ---
+        try:
+            sel_cfg_name = next(name for name, cb in self.opt_cfg_check.items() if cb.value)
+        except StopIteration:
+            self._status_html.value = "⚠️ No configuration selected."
+            self._is_running = False
+            self.cancel_btn.disabled = True
+            return
 
         # ── queue de progression & thread lanceur ──────────
         self._result_queue = q.Queue()
@@ -956,8 +1294,11 @@ class OptimizationTab:
                     Npop   =self.pop_w.value,
                     lowers =lowers, uppers=uppers,
                     keys   =keys, mode=mode,
+                    cfg_name = sel_cfg_name,
                     progress_queue=self._result_queue,
                     **extra_kwargs)
+
+
 
         self._worker_thread = threading.Thread(
             target=self.DE_general, kwargs=args, daemon=True)
@@ -1076,17 +1417,20 @@ class OptimizationTab:
         Reconstruit la table des paramètres (checkbox + bornes) en fonction
         de la **configuration unique** actuellement cochée.
         """
-        # Config cochée
-        sels = [
-            c
-            for c in self.sim.all_configs
-            if self.sim.config_checkboxes[c["config_name"]].value
+        # ――― Sélectionne seulement les configs dont la check-box existe ―――
+        selected_cfgs = [
+            cfg for cfg in self.sim.all_configs
+            if cfg["config_name"] in self.opt_cfg_check          # évite KeyError
+            and self.opt_cfg_check[cfg["config_name"]].value     # case cochée
         ]
-        if len(sels) != 1:
-            self.bounds_box.children = []
+
+        if len(selected_cfgs) != 1:
+            self.bounds_box.children = []   # 0 ou >1 config sélectionnée → on vide
             return
 
-        geom = sels[0]["geometry"]["geometry"]
+        cfg_chosen = selected_cfgs[0]
+        geom = cfg_chosen["geometry"]["geometry"]
+        
         rows: List[widgets.HBox] = []
         self.param_widgets: Dict[str, Dict[str, widgets.Widget]] = {}
 
@@ -1153,6 +1497,7 @@ class OptimizationTab:
         lowers: np.ndarray,
         uppers: np.ndarray,
         keys: List[str],
+        cfg_name:str,
         mode: str = "dip",
         fixed_vals: dict[str,float] | None = None,
         n_jobs: int = -1,
@@ -1178,6 +1523,7 @@ class OptimizationTab:
             Référence au dict job pour annulation externe.
         """
 
+
         # Initialisation RNG & population
         rng = np.random.default_rng(seed)
         if budget < Npop:
@@ -1185,12 +1531,18 @@ class OptimizationTab:
         Ngen = budget // Npop
         n_params = len(keys)
         pop = lowers + (uppers - lowers) * rng.random((Npop, n_params))
+        
+        # calcule une seule fois le nombre de modes demandé par l’onglet Opti
+        n_modes = self._opt_get_n_modes_for(cfg_name)
 
+        # ------------------------------------------------------------------
         # Pool de process (vrai parallélisme CPU), attaché au cancel_flag
+        # ------------------------------------------------------------------
         global _WORKER_SIM
-        _WORKER_SIM = self.sim                              # objet partagé en COW
+        _WORKER_SIM = self.sim     
         ctx  = mp.get_context("fork" if sys.platform!="win32" else "spawn")
         pool = ctx.Pool()   # un Pool par appel
+        
         if cancel_flag is not None:
             cancel_flag["pool"] = pool
 
@@ -1203,10 +1555,29 @@ class OptimizationTab:
         if fixed_vals is None:
             fixed_vals = {}
 
+        # ------------------------------------------------------------------
+        # Choisit si le mode a besoin d'un Δn (>0) (Dip & Half seulement)
+        # ------------------------------------------------------------------
+        need_dn = mode in ("dip", "half")        # True ⟹ on utilisera delta_n_val
+
+        if need_dn:
+            delta_n_val = self.delta_n_widget.value
+            if not self.opt_dn_check[cfg_name].value or delta_n_val <= 0:
+                raise ValueError("Δn doit être défini (>0) pour les modes 'dip' et 'half'.")
+        else:
+            delta_n_val = None                  # explicite : on n’enverra rien
+
+
+
+
         try:
             # ─────────────────  Évaluation initiale  ──────────────────
+            sel_layers_val = (list(self.layer_selector.value)
+                            if isinstance(self.layer_selector.value, (list, tuple))
+                            else [int(self.layer_selector.value)])
             args0 = [
-                (i, pop[i], keys, mode, mode_kw, fixed_vals)   # ← idx d’abord
+                (i, pop[i], keys, cfg_name, mode, mode_kw, fixed_vals,
+                n_modes, delta_n_val, sel_layers_val)
                 for i in range(Npop)
             ]
 
@@ -1250,8 +1621,13 @@ class OptimizationTab:
                     z_list.append((p, z))          # ← on garde l’index du parent
 
                 # ───────────── évaluation parallèle des enfants ───────────
+                sel_layers_val = (list(self.layer_selector.value)
+                                if isinstance(self.layer_selector.value, (list, tuple))
+                                else [int(self.layer_selector.value)])
+
                 args_child = [
-                    (i, z, keys, mode, mode_kw, fixed_vals)         # ← même paquet 6‑tuple
+                    (i, z, keys, cfg_name, mode, mode_kw, fixed_vals,
+                    n_modes, delta_n_val, sel_layers_val)
                     for (i, z) in z_list
                 ]
 
@@ -1281,8 +1657,13 @@ class OptimizationTab:
                             
 
             # Ré-évaluation finale
+            sel_layers_val = (list(self.layer_selector.value)
+                            if isinstance(self.layer_selector.value, (list, tuple))
+                            else [int(self.layer_selector.value)])
+
             argsf = [
-                (i, pop[i], keys, mode, mode_kw, fixed_vals)
+                (i, pop[i], keys, cfg_name, mode, mode_kw, fixed_vals,
+                n_modes, delta_n_val, sel_layers_val)
                 for i in range(Npop)
             ]
 
@@ -1301,8 +1682,10 @@ class OptimizationTab:
                               self.sim.sim_lambda_max.value,
                               self.sim.sim_n_points.value)
             
+            # on reprend la même config que celle passée au worker
             orig_cfg = next(c for c in self.sim.all_configs
-                            if self.sim.config_checkboxes[c["config_name"]].value)
+                            if c["config_name"] == cfg_name)
+            
             cfg = deepcopy(orig_cfg)          # copie isolée, propre à CE thread            
 
             # calcul via cost() (même pipeline que dans la pool)
@@ -1322,9 +1705,6 @@ class OptimizationTab:
 
     
             wave  = {"angle": 0, "polarization": 1}
-
-            # reprenez exactement le même n_modes que dans cost()
-            n_modes = self.sim._get_n_modes_for(cfg["config_name"])
 
             Rup, Rdown, _ = run_simulation_one_combo(lam, wave, n_modes, cfg, self.json_combined_path)
 
@@ -1352,7 +1732,7 @@ class OptimizationTab:
             Rup   = np.asarray(Rup, float)
             Rdown = np.asarray(Rdown, float)
 
-            config_name = next(n for n,cb in self.sim.config_checkboxes.items() if cb.value)
+            config_name = cfg_name      # cohérent avec le reste du run            
             fam = 'gap_plasmon_resonator' if mode in ('dip','half') else 'multi_layer'
 
             fixed_lambda_val = mode_kw.get("fixed_lambda", None)
@@ -1564,7 +1944,7 @@ class OptimizationTab:
             ax3.text(lam0, R0, f"  R(λ₀) = {R0:.3f}", va="bottom", color="red")
 
         # ------------------------------------------------------------------
-        # valeurs interpolées pour le bloc debug_html
+        # debug_html  ✨  nouveau rendu modernisé
         # ------------------------------------------------------------------
         if lam0 is not None and lam is not None and np.isfinite(lam0):
             r_up   = float(np.interp(lam0, lam, Rup))
@@ -1572,22 +1952,65 @@ class OptimizationTab:
         else:
             r_up = r_down = float("nan")
 
+        geom_items = list(data.get("geometry", {}).items())          # pile simulée
+        kv_pairs   = list(zip(data["keys"], data["best_final"]))     # paramètres opti
 
-
-
-        # --- debug info dans l'Output widget ---
         debug_html = f"""
-        <pre style="font-size:12px;">
-        run_key         : {run_key}
-        best_cost       : {data['best_cost']:.6f}
-        1 - best_cost   : {1 - data['best_cost']:.6f}
-        grille λ        : {lam[0]:.1f} – {lam[-1]:.1f}  ({len(lam)} pts)
-        fixed_lambda    : {lam0}
-        # Interpolations directes :
-        R_up(λ₀)         : {r_up:.6f}
-        R_down(λ₀)      : {r_down:.6f}
-        </pre>
+        <style>
+        .debug-box {{
+        font-family: Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.3;
+        }}
+        .debug-box h4            {{margin:4px 0 2px; font-size:13px; color:#1565C0;}}
+        .debug-box table         {{border-collapse:collapse; width:100%;}}
+        .debug-box th, .debug-box td {{
+        border:1px solid #ddd; padding:2px 4px; text-align:left; white-space:nowrap;
+        }}
+        .debug-box tbody tr:nth-child(odd) {{background:#fafafa;}}
+        </style>
+
+        <div class="debug-box">
+
+        <h4>Run summary</h4>
+        <table>
+        <tr><th>run_key</th>          <td>{run_key}</td></tr>
+        <tr><th>best_cost</th>        <td>{data['best_cost']:.6f}</td></tr>
+        <tr><th>1 - best_cost</th>    <td>{1-data['best_cost']:.6f}</td></tr>
+        <tr><th>λ range (nm)</th>     <td>{lam[0]:.1f} – {lam[-1]:.1f} ({len(lam)})</td></tr>
+        <tr><th>λ₀</th>               <td>{lam0}</td></tr>
+        <tr><th>R_up(λ₀)</th>         <td>{r_up:.6f}</td></tr>
+        <tr><th>R_down(λ₀)</th>       <td>{r_down:.6f}</td></tr>
+        </table>
+
+        <details open>
+        <summary><b>Stack sent to RCWA ({len(geom_items)} layers)</b></summary>
+        <div style="overflow-x:auto;">
+            <table>
+            <thead><tr><th>Layer</th><th>Thickness (nm)</th></tr></thead>
+            <tbody>
+                {''.join(f'<tr><td>{k}</td><td>{v:.3f}</td></tr>' for k,v in geom_items)}
+            </tbody>
+            </table>
+        </div>
+        </details>
+
+        <details>
+        <summary><b>Optimised parameters ({len(kv_pairs)})</b></summary>
+        <div style="overflow-x:auto;">
+            <table>
+            <thead><tr><th>Key</th><th>Optimised (nm)</th></tr></thead>
+            <tbody>
+                {''.join(f'<tr><td>{k}</td><td>{v:.3f}</td></tr>' for k,v in kv_pairs)}
+            </tbody>
+            </table>
+        </div>
+        </details>
+
+        </div>
         """
+
+
 
         # ------------------------------------------------------------------
         # Affichage
@@ -1605,23 +2028,31 @@ class OptimizationTab:
     #  Parametrization & Queue methods                                  #
     # ------------------------------------------------------------------#
     def _refresh_parametrization(self, change=None):
-        """Reconstruit les sous-onglets Parametrization, un par config cochée."""
-        selected = [name for name, cb in self.sim.config_checkboxes.items() if cb.value]
+        selected = [name for name, cb in self.opt_cfg_check.items() if cb.value]
         panels, titles = [], []
+
         for cfg_name in selected:
-            panel = self._make_param_panel(cfg_name)
-            panels.append(panel)
+            panels.append(self._make_param_panel(cfg_name))
             titles.append(cfg_name)
-        self.param_tabs.children = panels
+
+        # ── avant d’affecter les enfants, on invalide l’index courant
+        if not panels:
+            self.param_tabs.selected_index = None   # ← évite le TraitError
+
+
+        prev = self.param_tabs.selected_index
+        self.param_tabs.children = panels           # <-- met à jour les onglets
 
         if panels:
-            # choisissez l’onglet que vous voulez (ici le dernier)
-            self.param_tabs.selected_index = len(panels) - 1
-            # et mettez à jour les titres
+            # rétablit un index valide (le dernier onglet, par ex.)
+            new_idx = prev if prev is not None and prev < len(panels) else len(panels)-1
+            self.param_tabs.selected_index = new_idx            
+            
             for i, t in enumerate(titles):
                 self.param_tabs.set_title(i, t)
-        else:
-            pass
+            self.param_tabs.selected_index = new_idx
+
+
 
 
     def _add_copy_panel(self, cfg_name: str):
@@ -1639,16 +2070,35 @@ class OptimizationTab:
         self.param_tabs.set_title(len(existing) - 1, cfg_name)
 
 
-    def _remove_param_panel(self, panel: widgets.VBox):
+    def _remove_param_panel(self, panel: widgets.VBox) -> None:
         """Supprime un panel de parametrization existant."""
+        # 1) copie mutable de la liste actuelle
         children = list(self.param_tabs.children)
-        if panel in children:
-            idx = children.index(panel)
-            del children[idx]
-            # mettre à jour les titres
-            self.param_tabs.children = tuple(children)
-            for i, child in enumerate(children):
-                self.param_tabs.set_title(i, self.param_tabs.get_title(i))
+
+        if panel not in children:      # rien à faire
+            return
+
+        # 2) on enlève l'onglet demandé
+        idx_removed = children.index(panel)
+        del children[idx_removed]
+
+        # 3) on publie la nouvelle liste **avant** de régler selected_index
+        self.param_tabs.children = tuple(children)
+
+        # 4) corrige selected_index pour éviter le TraitError
+        if not children:                       # plus aucun onglet
+            self.param_tabs.selected_index = None
+        else:                                  # au moins un onglet
+            # on choisit l'onglet juste avant celui supprimé,
+            # ou le dernier si on a supprimé le dernier
+            new_idx = min(idx_removed, len(children) - 1)
+            self.param_tabs.selected_index = new_idx
+
+        # 5) (optionnel) remettre les titres si besoin
+        #    Ipywidgets conserve les titres existants ; la boucle ci-dessous
+        #    est seulement utile si vous voulez les recalculer.
+        # for i, child in enumerate(children):
+        #     self.param_tabs.set_title(i, self.param_tabs.get_title(i))
 
 
     
@@ -1883,6 +2333,9 @@ class OptimizationTab:
         if "fixed_vals" in job:
             extra_kwargs["fixed_vals"] = job["fixed_vals"]
 
+
+        cfg_name = job["config"]
+
         # 4) constitution du dict args
         args = dict(
             budget=job["budget"],
@@ -1891,6 +2344,7 @@ class OptimizationTab:
             uppers=uppers,
             keys=keys,
             mode=job["cf_mode"],
+            cfg_name = cfg_name,
             progress_queue=job_queue,
             cancel_flag=job,
             **extra_kwargs

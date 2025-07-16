@@ -6,7 +6,7 @@ Indépendant d’ipywidgets ➜ utilisable directement dans multiprocessing.
 """
 
 from __future__ import annotations
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Mapping
 import numpy as np
 from copy import deepcopy
 
@@ -16,22 +16,45 @@ from gap_plasmon_2d.analysis.characterization    import find_best_dip
 
 # ------------------------------------------------------------------ #
 def compute_cost(
-    sim_tab,                   # instance partagée de SimulationTab
-    x:       np.ndarray,       # vecteur optimisé
-    keys:    List[str],        # noms des variables optimisées
-    *,                          # kwargs nommés uniquement
-    mode:          str = "dip",
+    sim_tab,                       # instance SimulationTab
+    x:       np.ndarray,           # vecteur optimisé
+    keys:    List[str],            # variables optimisées
+    *,                              # kwargs nommés uniquement
+    mode:          str  = "dip",
     fixed_lambda:  float | None = None,
     range_lambda:  tuple[float, float] | None = None,
+    delta_n: float | None = None,
+    sel_layers: list[int] | None = None,
+    n_modes:       int   | None = None,          
+    selected_cfg:  Mapping | None = None,        
 ) -> float:
     """
     Renvoie la métrique à *minimiser* (1 – R ou 1 – ΔR/Δn, etc.).
     """
-    # 1) configuration active copiée pour ne pas salir l’originale
-    cfg = deepcopy(next(
-        c for c in sim_tab.all_configs
-        if sim_tab.config_checkboxes[c["config_name"]].value
-    ))
+
+    # 0) Δn : si l’appelant ne fournit rien → on prend le widget
+    if delta_n is None:
+        delta_n = sim_tab.delta_n_widget.value
+
+    if sel_layers is None:
+        sel_layers = list(sim_tab.layer_selector.value)        
+
+    if mode in ("dip", "half"):
+        if delta_n is None or delta_n <= 0:
+            raise ValueError("delta_n doit être >0 pour calculer la sensibilité.")
+    else:
+        # fixed_lambda ou range_lambda ⇒ on ignore delta_n
+        delta_n = 0.0
+
+
+    # 1) Choix de la configuration
+    if selected_cfg is None:       # ⇢ appel depuis l’onglet Simulation
+        cfg = deepcopy(next(
+            c for c in sim_tab.all_configs
+            if sim_tab.config_checkboxes[c["config_name"]].value
+        ))
+    else:                          # ⇢ appel depuis l’onglet Optimisation
+        cfg = deepcopy(selected_cfg)        # déjà la bonne structure
 
     # 2) injection des épaisseurs optimisées
     for xi, k in zip(x, keys):
@@ -42,9 +65,12 @@ def compute_cost(
                       sim_tab.sim_lambda_max.value,
                       sim_tab.sim_n_points.value)
     wave     = {"angle": 0, "polarization": 1}
-    n_modes  = sim_tab._get_n_modes_for(cfg["config_name"])
-    sel_layers = list(sim_tab.layer_selector.value)
-    delta_n    = max(sim_tab.delta_n_widget.value, 1e-6)
+    
+    # Nombre de modes RCWA contrôlé par l’appelant
+    if n_modes is None:
+        n_modes = sim_tab._get_n_modes_for(cfg["config_name"])
+    
+    
 
     # 4) spectre de base (Rup seulement)
     Rup0, _, _ = run_simulation_one_combo(
