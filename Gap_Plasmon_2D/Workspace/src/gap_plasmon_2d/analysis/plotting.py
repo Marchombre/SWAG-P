@@ -165,7 +165,7 @@ class PlotTab:
 
         # Verbose (HTML) – activé par défaut
         self.verbose_chk = widgets.Checkbox(
-            value=True, description="Verbose",
+            value=True, description="Verbose log",
             layout=Layout(width='100%'), indent=False,
             style={'description_width':'initial'}
         )

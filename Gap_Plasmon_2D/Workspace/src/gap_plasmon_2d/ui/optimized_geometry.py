@@ -19,32 +19,22 @@ def _adjust_sub_super(d_sub, d_sup, p, *, min_central_ratio=0.70):
 
 
 
-# --------------------------------------------------------------------------- 
-def plot_geometry_static_from_run(ax,
-                                  keys, best_vec,
-                                  fixed_vals=None,
-                                  *, default_geom: dict = geometry_config,
-                                  ax_offset=(0.0, 0.0)):
-
-    
-    # ---------- 1) reconstitution complète ----------------------------------
-    # 1) on part de l’ordre exact du JSON (default_geom)
-    base = {k: 0.0 for k in (default_geom or {}).keys()}   # ← ordre préservé
-
-    # 2) on complète avec les clés manquantes (celles de geometry_config)
-    for k in geometry_config:
-        base.setdefault(k, 0.0)    # n’ajoute que si absent → pas de casse d’ordre
-
-    
-    
-    for k, v in (fixed_vals or {}).items():
-        base[k] = float(v)
-    
+def plot_geometry_static_from_run(ax, keys, best_vec, fixed_vals=None, geo_ref=None, *, ax_offset=(0.0, 0.0)):
+    # 1. Ordre et complétude → geometry_config (toujours !)
+    base = {k: 0.0 for k in geometry_config.keys()}
+    # 2. Complète avec geo_ref (couches en plus, valeurs par défaut 0)
+    if geo_ref:
+        for k, v in geo_ref.items():
+            base[k] = float(v)
+    # 3. Écrase avec les valeurs fixes
+    if fixed_vals:
+        for k, v in fixed_vals.items():
+            base[k] = float(v)
+    # 4. Puis écrase avec best_vec/keys (optimisées)
     for k, v in zip(keys, best_vec):
         base[k] = float(v)
-
-    geom = base        # on travaille ensuite avec geom …
-
+    geom = base
+    
 
     for k, v in (fixed_vals or {}).items():
         geom[k] = float(v)

@@ -3,6 +3,7 @@ import ipywidgets as widgets
 from IPython.display import clear_output
 import os
 import json
+import threading
 
 from gap_plasmon_2d.utils.file_watchers import start_watcher
 
@@ -46,9 +47,24 @@ def create_geometry_material_widget():
     mat_data  = _load("material_config.json",          "ALL_CONFIGS")
 
     # petit watcher sur /CONFIG_DIR (hérite de ton util)
+    # ── on crée un timer de debounce à l’échelle de la closure ──
+    debounce_timer = None
+
+    def _on_fs_event(event):
+        if event.src_path.endswith("geom_mat_combinations.json"):
+            nonlocal debounce_timer
+            # si un timer existait, on l’annule
+            if debounce_timer is not None:
+                debounce_timer.cancel()
+            # on en crée un nouveau qui appellera _reload_options() après 100 ms
+            debounce_timer = threading.Timer(0.1, _reload_options)
+            debounce_timer.daemon = True
+            debounce_timer.start()
+
+    # watcher qui appelle _on_fs_event (et non plus directement _reload_options)
     _watcher = start_watcher(
         path=CONFIG_DIR,
-        callback=lambda *_: _reload_options(),
+        callback=_on_fs_event,
         extensions=[".json"],
         recursive=False,
     )
@@ -79,10 +95,17 @@ def create_geometry_material_widget():
         row = widgets.HBox([geom, mat, trash],
                            layout=widgets.Layout(gap="6px", align_items="center"))
         row_pool.append(row)
-        rows_box.children = row_pool
+        rows_box.children = tuple(row_pool)
 
-        trash.on_click(lambda *_: (row_pool.remove(row),
-                                   setattr(rows_box, "children", row_pool)))
+        def _on_delete(_btn, row=row):
+            # supprime exactement la ligne capturée
+            row_pool.remove(row)
+            # rows_box.children doit être un tuple, pas une liste
+            rows_box.children = tuple(row_pool)
+
+        trash.on_click(_on_delete)
+
+
 
     _add_row()                                                # première ligne
 
@@ -105,6 +128,7 @@ def create_geometry_material_widget():
                              layout=widgets.Layout(gap="6px"))
     acc_saved = widgets.Accordion(children=[saved_box])
     acc_saved.set_title(0, "📁  Saved combinations")
+
 
     # ╭─ 4 |  Helpers de rechargement  ──────────────────────────────────────╮
     def _reload_options():
@@ -132,6 +156,7 @@ def create_geometry_material_widget():
 
     _reload_options()                                         # init
 
+
     # ╭─ 5 |  Sauvegarde / suppression  ────────────────────────────────────╮
     def _save(_):
         combos = []
@@ -146,6 +171,7 @@ def create_geometry_material_widget():
         if not combos:
             status.value = "⚠️ Nothing to save."
             return
+
 
         # lit l’existant
         try:
@@ -186,9 +212,11 @@ def create_geometry_material_widget():
 
     btn_del_saved.on_click(_del_saved)
 
+
     # ╭─ 6 |  Status bar  ──────────────────────────────────────────────────╮
     status = widgets.HTML("")
     status.layout.margin = "4px 0 0 4px"
+
 
     # ╭─ 7 |  Mise en page globale  ────────────────────────────────────────╮
     header = widgets.HTML(
@@ -200,6 +228,7 @@ def create_geometry_material_widget():
         [btn_add, btn_save],
         layout=widgets.Layout(gap="8px", align_items="center")
     )
+
 
     # petit style global
     style = widgets.HTML("""

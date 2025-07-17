@@ -338,12 +338,6 @@ def simulate_delta_spectrum(
         else:
             lam_calc_dn = lam_right_list_dn[dip_index_dn]
 
-        #lam_calc, R_base_calc, R_dn_calc, lam_calc_dn = lambda_half_pt, R_half_base, R_half_dn, R_half_dn
-        #on cherche λ_dn tel que Rup_dn(λ_dn) = R_half_dn
-        #on suppose qu'on peut inverser Rup_dn→lam sur l'intervalle autour de lambda_half_pt
-        #on construit l'interpolateur inverse
-        #inv_interp = interp1d(Rup_dn, lam, kind='linear', bounds_error=False, fill_value='extrapolate')
-        #lam_calc_dn = float(inv_interp(R_half_dn)) # donne la longueur d’onde pour laquelle le spectre Rup_dn retourne exactement la demi-hauteur R_half_dn
                               
     else: # λ_ref = lam_dip
         lam_calc, R_base_calc, lam_calc_dn = lam_dip, R_dip, lam_dip_dn
@@ -541,7 +535,7 @@ def find_best_dip(
     lam_max_r = lam_max_r_list[best_idx]; R_max_r = R_max_r_list[best_idx]
     lam_sym   = lam_sym_list[best_idx];   R_sym   = R_sym_list[best_idx]
 
-    # 5) Montage du tuple de sortie comme avant
+    # 5) Montage du tuple de sortie si 
     out = (
         lam_left, lam_right,
         fwhm, depth,

@@ -593,6 +593,12 @@ def read_optimization_hdf5(
             "best_cost": float(grp.attrs["best_cost"]),
         }
 
+
+        # Récupère les lambdas caractéristiques si présents
+        for name in ("lambda0", "lambda0_dn", "lambda_fwhm", "lambda_fwhm_dn", "fwhm", "fwhm_dn"):
+            out[name] = float(grp.attrs[name]) if name in grp.attrs else None
+
+
         # -- fixe : renvoie None si absent ----------------------
 
         out["fixed_lambda"] = float(grp.attrs["fixed_lambda"]) \
@@ -633,16 +639,17 @@ def read_optimization_hdf5(
                 spectra["Rdown"] = spec["Rdown"][:]
             else:
                 spectra["Rdown"] = None
+            # Ajout : Rup_dn et Rdown_dn si présents
+            if "Rup_dn" in spec:
+                spectra["Rup_dn"] = spec["Rup_dn"][:]
+            else:
+                spectra["Rup_dn"] = None
+            if "Rdown_dn" in spec:
+                spectra["Rdown_dn"] = spec["Rdown_dn"][:]
+            else:
+                spectra["Rdown_dn"] = None
             out["spectra"] = spectra
 
-        # 8) fixed parameters 
-        if "fixed" in grp:
-            fx = grp["fixed"]
-            keys = [k.decode() for k in fx["keys"][:]]
-            vals = fx["values"][:]
-            out["fixed"] = dict(zip(keys, vals))
-        else:
-            out["fixed"] = {}
 
 
         # 9) geometry  

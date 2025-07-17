@@ -101,8 +101,28 @@ def compute_cost(
         verbose=False, cfg_name=cfg["config_name"],
         mode=('half' if mode == "half" else 'dip')
     )
-    if best_out is None:           # aucun dip valide
+    if best_out is None:
         return 1.0
 
-    idx = 13 if mode == "dip" else 15        # index de ΔR/Δn ou ΔR_half
-    return 1.0 - float(best_out[idx])
+    # Unpack explicite de best_out, dans l'ordre défini par find_best_dip
+    (
+       lam_left, lam_right,
+       fwhm, depth,
+       lam_dip, R_dip, ylev,
+       lam_max_l, R_max_l,
+       lam_max_r, R_max_r,
+       lam_sym, R_sym,
+       best_dR,    # ← ΔR/Δn au point de mesure (dip ou half)
+       best_Slam,  # ← Δλ/Δn
+       best_dR_half,
+       dip_idx_list,
+       dR_over_dn_list,
+       dLam_over_dn_list
+    ) = best_out
+
+    # On utilise toujours best_dR, qui vaut :
+    #  - en mode "dip"  → ΔR(λ₀) / Δn
+    #  - en mode "half" → (R_half_dn - R_half_base) / Δn
+    sens = best_dR
+
+    return 1.0 - sens

@@ -20,7 +20,6 @@ import sys
 
 import warnings
 import threading
-import h5py
 from copy import deepcopy
 import json
 
@@ -34,6 +33,7 @@ import traceback, queue as q
 
 from gap_plasmon_2d import paths
 
+from gap_plasmon_2d.analysis.characterization import find_best_dip
 from gap_plasmon_2d.optimisation.cost_function import compute_cost
 from gap_plasmon_2d.ui.geometry_settings import geometry_limits
 from gap_plasmon_2d.ui.optimized_geometry import plot_geometry_static_from_run
@@ -92,8 +92,7 @@ json_combined_path = data_dir / "combined_materials.json"
 
 # dossier des fichiers « configs »
 configurations_dir = Path(paths.CONFIGS_DIR)  
-CONFIG_LIST_JSON = configurations_dir / "geom_mat_combinations.json"
-
+CONFIG_LIST_JSON = Path(configurations_dir) / "geom_mat_combinations.json"
 
 # ------------------------------------------------------------------ #
 # Fichier de combinaisons géométrie/matériaux : deux formats possibles
@@ -137,9 +136,12 @@ def _load_available_configs() -> list[str]:
                 if "config_name" in cfg
             )
 
-        return []                               # format inattendu
-    except Exception:
-        return []                               # fichier illisible ? → vide
+        return []  
+                                 # format inattendu
+    except Exception as e:
+        warnings.warn(f"Erreur de lecture de '{CONFIG_LIST_JSON}': {e}")
+        return []
+                                # fichier illisible ? → vide
 
     
 
@@ -359,49 +361,67 @@ class OptimizationFileArboWidget:
 
     def _refresh_configs(self, change=None):
         old = self.name_dd.value
-        base = self.base_dir / self.family_dd.value / self.cost_mode_dd.value
-        opts = self._list_subdirs(base) if base.is_dir() else []
+        fam = self.family_dd.value
+        cost = self.cost_mode_dd.value
+        if fam and cost:
+            base = self.base_dir / fam / cost
+            opts = self._list_subdirs(base) if base.is_dir() else []
+        else:
+            opts = []
         self.name_dd.options = opts
         self.name_dd.value   = old if old in opts else (opts[0] if opts else None)
         self._refresh_budget_pops()
 
+
     def _refresh_budget_pops(self, change=None):
         old = self.budget_pop_dd.value
-        base = self.base_dir / self.family_dd.value / self.cost_mode_dd.value / self.name_dd.value
-        opts = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("budget")) if base.is_dir() else []
+        fam = self.family_dd.value
+        cost = self.cost_mode_dd.value
+        name = self.name_dd.value
+        if fam and cost and name:
+            base = self.base_dir / fam / cost / name
+            opts = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("budget")) if base.is_dir() else []
+        else:
+            opts = []
         self.budget_pop_dd.options = opts
         self.budget_pop_dd.value   = old if old in opts else (opts[0] if opts else None)
         self._refresh_wavelengths()
 
+
     def _refresh_wavelengths(self, change=None):
         old = self.wave_dd.value
-        base = (
-            self.base_dir /
-            self.family_dd.value /
-            self.cost_mode_dd.value /
-            self.name_dd.value /
-            self.budget_pop_dd.value
-        )
-        opts = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("wavelength_range_")) if base.is_dir() else []
+        fam = self.family_dd.value
+        cost = self.cost_mode_dd.value
+        name = self.name_dd.value
+        budget = self.budget_pop_dd.value
+        if fam and cost and name and budget:
+            base = self.base_dir / fam / cost / name / budget
+            opts = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("wavelength_range_")) if base.is_dir() else []
+        else:
+            opts = []
         self.wave_dd.options = opts
         self.wave_dd.value   = old if old in opts else (opts[0] if opts else None)
         self._refresh_files()
 
+
     def _refresh_files(self, change=None):
         old = self.file_dd.value
-        base = (
-            self.base_dir /
-            self.family_dd.value /
-            self.cost_mode_dd.value /
-            self.name_dd.value /
-            self.budget_pop_dd.value /
-            self.wave_dd.value
-        )
-        opts = self._list_h5(base) if base.is_dir() else []
-        paths = [p for (_, p) in opts]
+        fam = self.family_dd.value
+        cost = self.cost_mode_dd.value
+        name = self.name_dd.value
+        budget = self.budget_pop_dd.value
+        wave = self.wave_dd.value
+        if fam and cost and name and budget and wave:
+            base = self.base_dir / fam / cost / name / budget / wave
+            opts = self._list_h5(base) if base.is_dir() else []
+            paths = [p for (_, p) in opts]
+        else:
+            opts = []
+            paths = []
         self.file_dd.options = opts
         self.file_dd.value   = old if old in paths else (paths[0] if paths else None)
         self._refresh_runs()
+
 
     def _refresh_runs(self, change=None):
         old = self.run_dd.value
@@ -518,17 +538,17 @@ class OptimizationTab:
         )
         self.opt_toggle_btn.observe(self._toggle_config_list, names="value")
 
-        # --- “Tout sélectionner” ---
-        self.opt_select_all_cfg_btn = widgets.Button(
-            description="Tout sélectionner Configs", button_style="info",
-            layout=widgets.Layout(margin="0 5px 5px 0")
-        )
-        self.opt_select_all_dn_btn  = widgets.Button(
-            description="Tout sélectionner Δn",     button_style="info",
-            layout=widgets.Layout(margin="0 0 5px 0")
-        )
-        self.opt_select_all_cfg_btn.on_click(self._toggle_all_cfg)
-        self.opt_select_all_dn_btn.on_click(self._toggle_all_dn)
+        # # --- “Tout sélectionner” ---
+        # self.opt_select_all_cfg_btn = widgets.Button(
+        #     description="Tout sélectionner Configs", button_style="info",
+        #     layout=widgets.Layout(margin="0 5px 5px 0")
+        # )
+        # self.opt_select_all_dn_btn  = widgets.Button(
+        #     description="Tout sélectionner Δn",     button_style="info",
+        #     layout=widgets.Layout(margin="0 0 5px 0")
+        # )
+        # self.opt_select_all_cfg_btn.on_click(self._toggle_all_cfg)
+        # self.opt_select_all_dn_btn.on_click(self._toggle_all_dn)
 
         # --- lignes Config / Δn ---
         rows = []
@@ -551,9 +571,7 @@ class OptimizationTab:
         # conteneur scrollable
         visible = min(len(rows), 10)      # 10 lignes max avant scroll
         self.opt_config_list = widgets.VBox(
-            [widgets.HBox([self.opt_select_all_cfg_btn, self.opt_select_all_dn_btn],
-                          layout=widgets.Layout(gap="10px")),
-             *rows],
+             rows,
             layout=widgets.Layout(
                 width="500px",
                 height=f"{30 + visible*30}px",
@@ -577,23 +595,49 @@ class OptimizationTab:
 
 
     def _rebuild_opt_config_selector(self, *_):
-        """Recharge la liste des configurations puis reconstruit les check-boxes
-        en conservant les cases déjà cochées quand c’est possible."""
-        prev_sel = {n: cb.value  for n, cb in self.opt_cfg_check.items()}
-        prev_dn  = {n: cb.value  for n, cb in self.opt_dn_check.items()}
-        self._build_opt_config_selector()              # recrée tout
+        # 1) extraire l’ancien état
+        # mémorise l’état du toggle pour le réappliquer après rebuild
+        was_open = self.opt_toggle_btn.value
 
-        # restaure l’état (quand les noms existent toujours)
-        for name, cb in self.opt_cfg_check.items():
-            cb.value = prev_sel.get(name, False)
-        for name, cb in self.opt_dn_check.items():
-            cb.value = prev_dn.get(name, True)
+        # 1) extraire l’ancien état de sélection
+        prev_sel = {n: cb.value for n, cb in self.opt_cfg_check.items()}
+        prev_dn  = {n: cb.value for n, cb in self.opt_dn_check.items()}
 
-        # met à jour les panneaux dépendants
+        # 2) reconstruire la liste des lignes (mais pas le VBox parent)
+        new_rows = []
+        self.opt_cfg_check.clear()
+        self.opt_dn_check.clear()
+        for cfg_name in _load_available_configs():
+            chk_cfg = widgets.Checkbox(value=prev_sel.get(cfg_name, False),
+                                    description=cfg_name, indent=False)
+            chk_dn  = widgets.Checkbox(value=prev_dn.get(cfg_name, False),
+                                    description="Δn", indent=False,
+                                    layout=widgets.Layout(width="46px"))
+            # rattacher callbacks
+            chk_cfg.observe(self._refresh_parametrization,    names="value")
+            chk_cfg.observe(self._opt_refresh_custom_modes,   names="value")
+            chk_dn.observe(self._update_dn_widgets_state,     names="value")
+
+            self.opt_cfg_check[cfg_name] = chk_cfg
+            self.opt_dn_check[cfg_name]  = chk_dn
+            new_rows.append(widgets.HBox([chk_cfg, chk_dn],
+                                        layout=widgets.Layout(gap="5px")))
+        # 3) injecter dans l’ancien VBox
+        visible = min(len(new_rows), 10)
+        self.opt_config_list.layout.height = f"{30 + visible*30}px"
+        self.opt_config_list.children =  new_rows
+
+        # 4) mettre à jour l’affichage tout de suite
         self._refresh_parametrization()
         self._opt_refresh_custom_modes()
+        # 5) rétablis l’état ouvert/fermé
+        self.opt_toggle_btn.value = was_open
 
 
+
+    def _on_cfg_fs_event(self, *args):
+        # on dé-bounce si besoin, ou directement :
+        self._rebuild_opt_config_selector()
 
 
 
@@ -601,6 +645,9 @@ class OptimizationTab:
     #  Construction / UI                                                 #
     # ------------------------------------------------------------------#
     def __init__(self, sim_obj: SimulationTab) -> None:
+        
+        self._cfg_debounce_timer = None
+
         # ─────────────────────────  saved references  ──────────────────────────
         self.sim                = sim_obj
         self.json_combined_path = str(json_combined_path)
@@ -689,12 +736,15 @@ class OptimizationTab:
         self._build_opt_config_selector()
         self._toggle_config_list({'new': True})
 
-        self._cfg_watcher = start_watcher(
+
+        self._cfg_watcher, self._cfg_handler = start_watcher(
             path=str(CONFIG_LIST_JSON),
-            callback=lambda *_: self._rebuild_opt_config_selector(),
+            callback=self._on_cfg_fs_event,
             extensions=[".json"],
             recursive=False,
+            debounce_interval=0.2,
         )
+
 
         # ─── RCWA modes (Optimisation) ──────────────────────────────────────────
         self.opt_mode_selection = widgets.RadioButtons(
@@ -1077,15 +1127,15 @@ class OptimizationTab:
         self.opt_config_list.layout.display = show
         self.opt_toggle_btn.icon = "caret-up" if change["new"] else "caret-down"
 
-    def _toggle_all_cfg(self, _=None):
-        all_on = all(cb.value for cb in self.opt_cfg_check.values())
-        for cb in self.opt_cfg_check.values():
-            cb.value = not all_on     # inverse l’état
+    # def _toggle_all_cfg(self, _=None):
+    #     all_on = all(cb.value for cb in self.opt_cfg_check.values())
+    #     for cb in self.opt_cfg_check.values():
+    #         cb.value = not all_on     # inverse l’état
 
-    def _toggle_all_dn(self, _=None):
-        all_on = all(cb.value for cb in self.opt_dn_check.values())
-        for cb in self.opt_dn_check.values():
-            cb.value = not all_on
+    # def _toggle_all_dn(self, _=None):
+    #     all_on = all(cb.value for cb in self.opt_dn_check.values())
+    #     for cb in self.opt_dn_check.values():
+    #         cb.value = not all_on
 
 
 
@@ -1155,14 +1205,16 @@ class OptimizationTab:
 
         self.opt_custom_modes_box.children = tuple(inputs)
 
-        
     
-    
-    def _on_configs_refreshed(self, _=None):
-        """Appelé quand SimulationTab a rechargé les configs."""
-        self._rebuild_opt_config_selector()
-
-
+    def _on_configs_refreshed(self, _):
+        # 1) on déleste les anciens observers
+        self._attach_config_observers()
+        # 2) on vide et reconstruit les bornes / panels
+        self.bounds_box.children = []
+        self.param_widgets = {}
+        self._refresh_parametrization()
+        # 3) on rafraîchit l’arborescence HDF5
+        self.opt_file_arbo._refresh_families()
 
 
     def _attach_config_observers(self):
@@ -1187,19 +1239,29 @@ class OptimizationTab:
 
         self._update_dn_widgets_state()
 
-    def close(self) -> None:
-        """Explicitly release resources held by the observer."""
-        if hasattr(self, "_cfg_watcher") and self._cfg_watcher is not None:
-            try:
-                self._cfg_watcher.stop()
-                self._cfg_watcher.join()
-            finally:
-                self._cfg_watcher = None
+    def close(self):
+        if hasattr(self, "_cfg_watcher"):
+            obs, handler = self._cfg_watcher, self._cfg_handler
+            obs.stop()
+            obs.join()
+            handler.stop()
+            del self._cfg_watcher, self._cfg_handler
 
+        # Arrêt du watcher des fichiers HDF5
+        if hasattr(self, "_observer"):
+            self._observer.stop()
+            self._observer.join()
+            del self._observer
 
+        # Arrêt du watcher du JSON matériau
+        if hasattr(self, "_json_watcher"):
+            self._json_watcher.stop()
+            self._json_watcher.join()
+            del self._json_watcher
 
-    def __del__(self) -> None:
-        self.close()
+        def __del__(self) -> None:
+            self.close()
+
 
 
     def _update_run_button_state(self, *_):
@@ -1486,6 +1548,8 @@ class OptimizationTab:
         self._update_run_button_state()                     # recalcul immédiat
         self.out.clear_output()
 
+
+
     # ------------------------------------------------------------------#
     #  Differential Evolution core                                      #
     # ------------------------------------------------------------------#
@@ -1726,11 +1790,67 @@ class OptimizationTab:
             #         print(f"   {k} = {cfg['geometry']['geometry'][k]}")
 
 
-            Rup, Rdown, _ = run_simulation_one_combo(
-                lam, wave, n_modes, cfg, self.json_combined_path
-            )
-            Rup   = np.asarray(Rup, float)
-            Rdown = np.asarray(Rdown, float)
+            # -----------------------------------------------------
+            # 1. Calcule le spectre modifié : Rup_dn (avec Δn appliqué)
+            # -----------------------------------------------------
+
+            # Simule la structure AVEC Δn si le mode le demande
+            Rup_dn, Rdown_dn = None, None
+            if need_dn:
+                # Crée une copie propre de la config modifiée pour +Δn
+                cfg_dn = deepcopy(cfg)
+                
+            # sel_layers_val doit contenir les clés matériaux (ex: "perm_diel", "perm_gap")
+            for layer_key in sel_layers_val:
+                found = False
+                for mat in cfg_dn["material"]["MATERIALS_CONFIG"]:
+                    if mat["key"] == layer_key:
+                        # Ici, on modifie l'expression d'indice
+                        mat_expr = mat["material"].get("expression", None)
+                        if mat_expr is not None:
+                            # On convertit l'expression (ex: "1.45**2") en float, ajoute delta_n, puis reconvertit en string
+                            n_base = np.sqrt(eval(mat_expr))
+                            n_new  = n_base + delta_n_val
+                            mat["material"]["expression"] = f"({n_new})**2"
+                            found = True
+                        else:
+                            raise ValueError(f"Le matériau '{layer_key}' n'a pas de champ 'expression' modifiable.")
+                        break
+                if not found:
+                    raise KeyError(f"Matériau '{layer_key}' introuvable dans la config matériaux !")
+
+                
+                
+            Rup_dn, Rdown_dn, _ = run_simulation_one_combo(lam, wave, n_modes, cfg_dn, self.json_combined_path)
+
+
+
+            Rup_dn   = np.asarray(Rup_dn, float)
+            Rdown_dn = np.asarray(Rdown_dn, float)
+
+            # -----------------------------------------------------
+            # 2. Extraction des points caractéristiques
+            # -----------------------------------------------------
+            out_base, _, idx_dip = find_best_dip(cfg, lam, Rup, wave, n_modes, [], 0, self.json_combined_path,
+                                                0, 0, 1e-2, 1, 1, False, cfg_name, mode)
+            out_dn = None
+            if need_dn and Rup_dn is not None:
+                out_dn, _, idx_dip_dn = find_best_dip(cfg, lam, Rup_dn, wave, n_modes, [], 0, self.json_combined_path,
+                                                    0, 0, 1e-2, 1, 1, False, cfg_name, mode)
+            # Si aucun dip détecté : protection
+            (lambda_left, lambda_right, fwhm, depth,
+            lambda0, R_dip, ylev, lam_max_l, R_max_l,
+            lam_max_r, R_max_r, lam_sym, R_sym, *_ ) = out_base if out_base is not None else (None,)*13
+
+            if out_dn is not None:
+                (lambda_left_dn, lambda_right_dn, fwhm_dn, depth_dn,
+                lambda0_dn, R_dip_dn, ylev_dn, lam_max_l_dn, R_max_l_dn,
+                lam_max_r_dn, R_max_r_dn, lam_sym_dn, R_sym_dn, *_ ) = out_dn
+            else:
+                lambda0_dn = fwhm_dn = None
+
+
+
 
             config_name = cfg_name      # cohérent avec le reste du run            
             fam = 'gap_plasmon_resonator' if mode in ('dip','half') else 'multi_layer'
@@ -1744,7 +1864,14 @@ class OptimizationTab:
                 cost_mode=mode,                       # dip / half / fixed_lambda / range_lambda
                 # — méta-données pour filtrage futur —
                 config_name=config_name,            # Structure optimisée (pour comparer uniquement les runs compatibles)
-
+               
+                lambda0=lambda0,
+                lambda0_dn=lambda0_dn,
+                lambda_fwhm=lambda_right if lambda_right is not None else None,
+                lambda_fwhm_dn=lambda_right_dn if out_dn is not None else None,
+                fwhm=fwhm,
+                fwhm_dn=fwhm_dn if out_dn is not None else None,
+                
                 # — paramètres DE —
                 budget=budget,                      # Budget d’évaluations
                 Npop=Npop,                          # Taille de population
@@ -1778,6 +1905,8 @@ class OptimizationTab:
                 lam=lam,                            # Grille λ
                 Rup=Rup,                            # Spectre R_up
                 Rdown=Rdown,                        # Spectre R_down
+                Rup_dn=Rup_dn, 
+                Rdown_dn=Rdown_dn,
                 geometry=cfg["geometry"]["geometry"],
             )
 
@@ -1901,30 +2030,65 @@ class OptimizationTab:
         ax_geom = ax2     # par exemple le 3ᵉ subplot
         
         geo_ref = data.get("geometry", {})
+        
         plot_geometry_static_from_run(
             ax_geom,
             keys,
             best_vec,
             fixed_vals,
-            default_geom=geo_ref,
+            geo_ref=geo_ref,
             ax_offset=(-0.18, -0.1)   
         )
 
 
 
         # 4) Spectrum
-        lam, Rup, Rdown = None, None, None
+        lam, Rup, Rdown, Rup_dn, Rdown_dn = None, None, None, None, None
+
         if "spectra" in data:
             lam = data["spectra"]["wavelength"]
             Rup = data["spectra"]["Rup"]
             Rdown = data["spectra"]["Rdown"]
+            Rup_dn = data["spectra"].get("Rup_dn", None)
+            Rdown_dn = data["spectra"].get("Rdown_dn", None)
 
         if lam is not None:
             ax3.plot(lam, Rup, label="Rup")
-            lam0 = data.get("fixed_lambda", np.nan)
-
             if Rdown is not None:
                 ax3.plot(lam, Rdown, linestyle='--', label="Rdown")
+
+            # Ajoute Rup+dn et Rdown+dn si présents
+            if Rup_dn is not None:
+                ax3.plot(lam, Rup_dn, label="Rup + Δn", color="tab:green", alpha=0.8)
+            if Rdown_dn is not None:
+                ax3.plot(lam, Rdown_dn, linestyle='--', label="Rdown + Δn", color="tab:olive", alpha=0.7)
+
+            # Points caractéristiques sur Rup
+            lambda0 = data.get("lambda0", None)
+            lambda_fwhm = data.get("lambda_fwhm", None)
+            if lambda0 is not None:
+                R0 = float(np.interp(lambda0, lam, Rup))
+                ax3.scatter([lambda0], [R0], s=70, marker='o', color='tab:blue', zorder=5, label='λ₀ (Rup)')
+                ax3.axvline(lambda0, ls=":", lw=1, color='tab:blue')
+            if lambda_fwhm is not None:
+                Rfwhm = float(np.interp(lambda_fwhm, lam, Rup))
+                ax3.scatter([lambda_fwhm], [Rfwhm], s=50, marker='x', color='tab:blue', zorder=5, label='λ_fwhm (Rup)')
+                ax3.axvline(lambda_fwhm, ls="--", lw=1, color='tab:blue')
+
+            # Points caractéristiques sur Rup+dn
+            if Rup_dn is not None:
+                lambda0_dn = data.get("lambda0_dn", None)
+                lambda_fwhm_dn = data.get("lambda_fwhm_dn", None)
+                if lambda0_dn is not None:
+                    R0_dn = float(np.interp(lambda0_dn, lam, Rup_dn))
+                    ax3.scatter([lambda0_dn], [R0_dn], s=70, marker='o', color='tab:green', zorder=5, label='λ₀ (Rup+Δn)')
+                    ax3.axvline(lambda0_dn, ls=":", lw=1, color='tab:green')
+                if lambda_fwhm_dn is not None:
+                    Rfwhm_dn = float(np.interp(lambda_fwhm_dn, lam, Rup_dn))
+                    ax3.scatter([lambda_fwhm_dn], [Rfwhm_dn], s=50, marker='x', color='tab:green', zorder=5, label='λ_fwhm (Rup+Δn)')
+                    ax3.axvline(lambda_fwhm_dn, ls="--", lw=1, color='tab:green')
+
+        
         ax3.set_title("Best config spectrum")
         ax3.set_xlabel("λ (nm)")
         ax3.set_ylabel("Reflectance")

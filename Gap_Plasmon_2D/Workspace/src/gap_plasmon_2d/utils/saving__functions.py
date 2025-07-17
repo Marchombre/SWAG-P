@@ -208,6 +208,12 @@ def save_optimization_hdf5(
     family: str,                # multi_layer | gap_plasmon_resonator | …
     cost_mode: str,             # lambda_fix | lambda_range | lambda_dip | lambda_fwhm
     config_name: str,
+    lambda0: float | None = None,
+    lambda0_dn: float | None = None,
+    lambda_fwhm: float | None = None,
+    lambda_fwhm_dn: float | None = None,
+    fwhm: float | None = None,
+    fwhm_dn: float | None = None,
     budget: int,
     Npop: int,
     wavelength_range: tuple[float, float],   # (lam_min, lam_max)
@@ -228,6 +234,8 @@ def save_optimization_hdf5(
     lam: np.ndarray | None = None,
     Rup: np.ndarray | None = None,
     Rdown: np.ndarray | None = None,
+    Rup_dn: np.ndarray | None = None,
+    Rdown_dn: np.ndarray | None = None,
     geometry: dict[str, float] | None = None,
 ) -> str:
     """
@@ -329,6 +337,11 @@ def save_optimization_hdf5(
             spec.create_dataset("Rup",        data=Rup, compression="gzip")
             if Rdown is not None:
                 spec.create_dataset("Rdown",  data=Rdown, compression="gzip")
+            # Ajoute Rup_dn/Rdown_dn si présents
+            if "Rup_dn" in locals() and Rup_dn is not None:
+                spec.create_dataset("Rup_dn", data=Rup_dn, compression="gzip")
+            if "Rdown_dn" in locals() and Rdown_dn is not None:
+                spec.create_dataset("Rdown_dn", data=Rdown_dn, compression="gzip")
 
 
         # ─── Géométrie finale (ordre respecté) ─────────────────────────────
@@ -343,6 +356,12 @@ def save_optimization_hdf5(
             g.create_dataset("keys",   data=keys,   compression="gzip")
             g.create_dataset("values", data=values, compression="gzip")
 
+
+        # Sauvegarde des lambdas caractéristiques si présents
+        for name in ("lambda0", "lambda0_dn", "lambda_fwhm", "lambda_fwhm_dn", "fwhm", "fwhm_dn"):
+            val = locals().get(name, None)
+            if val is not None:
+                grp.attrs[name] = float(val)
 
 
 

@@ -1,48 +1,52 @@
 # file_watchers.py
 import threading
+import re
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from IPython import get_ipython
 
-class RefreshEventHandler(FileSystemEventHandler):
+class DebouncedEventHandler(FileSystemEventHandler):
     """
-    Handler générique : appelle self.callback() dès qu’un fichier .h5
-    est créé, modifié, supprimé ou déplacé dans le dossier observé.
+    FileSystemEventHandler qui regroupe les événements par lot
+    et n'appelle la callback qu'une seule fois après `debounce_interval`.
+    Peut filtrer par extensions ou par patterns regex.
     """
-    def __init__(self, callback, extensions=None):
+    def __init__(self, callback, *, debounce_interval=0.1, extensions=None, patterns=None):
         """
-        callback   : fonction sans argument à appeler lors d'un event
-        extensions : liste d’extensions à filtrer (e.g. ['.h5']), ou None pour tout
+        callback          : fonction callable sans arguments.
+        debounce_interval : délai (en s) après le dernier événement avant d'appeler callback.
+        extensions        : liste de suffixes ('.json', '.h5', ...) à filtrer.
+        patterns          : liste de regex (string ou compiled) pour matcher le path.
+                            Si spécifié, c'est OR sur toutes les regex.
         """
         super().__init__()
         self.callback = callback
+        self.debounce_interval = debounce_interval
         self.extensions = extensions
+        self.patterns = [re.compile(p) for p in patterns] if patterns else None
+        self._lock = threading.Lock()
+        self._timer = None
 
-    def _should_handle(self, path):
-        if not self.extensions:
-            return True
-        return any(path.endswith(ext) for ext in self.extensions)
+    def _match(self, path: str) -> bool:
+        if self.extensions and not any(path.endswith(ext) for ext in self.extensions):
+            return False
+        if self.patterns and not any(p.search(path) for p in self.patterns):
+            return False
+        return True
 
-    # On gère tous les types d’événements
-    def on_created(self, event):
-        if not event.is_directory and self._should_handle(event.src_path):
-            self._schedule_update()
+    def _schedule(self):
+        with self._lock:
+            # annule l'ancien timer s'il existe
+            if self._timer is not None:
+                self._timer.cancel()
+            # crée un nouveau timer
+            self._timer = threading.Timer(self.debounce_interval, self._run_callback)
+            self._timer.daemon = True
+            self._timer.start()
 
-    def on_deleted(self, event):
-        if not event.is_directory and self._should_handle(event.src_path):
-            self._schedule_update()
-
-    def on_modified(self, event):
-        if not event.is_directory and self._should_handle(event.src_path):
-            self._schedule_update()
-
-    def on_moved(self, event):
-        # moved: on regarde le path de destination
-        if not event.is_directory and self._should_handle(event.dest_path):
-            self._schedule_update()
-
-    def _schedule_update(self):
-        # Pour exécuter la callback dans le thread principal IPython
+    def _run_callback(self):
+        with self._lock:
+            self._timer = None
         def _cb():
             try:
                 self.callback()
@@ -50,14 +54,43 @@ class RefreshEventHandler(FileSystemEventHandler):
                 print(f"[watcher] erreur dans callback : {e}")
         get_ipython().kernel.io_loop.add_callback(_cb)
 
-def start_watcher(path, callback, extensions=None, recursive=False):
+    # On traite tous les événements de fichiers
+    def on_created(self, event): self._handle(event)
+    def on_deleted(self, event): self._handle(event)
+    def on_modified(self, event): self._handle(event)
+    def on_moved(self, event):   self._handle(event, dest=True)
+
+    def _handle(self, event, dest=False):
+        path = event.dest_path if dest else event.src_path
+        if event.is_directory:
+            return
+        if self._match(path):
+            self._schedule()
+
+    def stop(self):
+        """Annule le timer si nécessaire."""
+        with self._lock:
+            if self._timer:
+                self._timer.cancel()
+                self._timer = None
+
+def start_watcher(path, callback, *,
+                  debounce_interval=0.1,
+                  extensions=None,
+                  patterns=None,
+                  recursive=False):
     """
-    Démarre un Observer sur `path`, avec un RefreshEventHandler.
-    Retourne l’Observer, pour pouvoir l’arrêter plus tard (obs.stop()).
+    Démarre un Observer sur `path` avec un DebouncedEventHandler.
+    Retourne (observer, handler) pour permettre un arrêt propre.
     """
-    handler = RefreshEventHandler(callback, extensions=extensions)
+    handler = DebouncedEventHandler(
+        callback,
+        debounce_interval=debounce_interval,
+        extensions=extensions,
+        patterns=patterns
+    )
     obs = Observer()
     obs.schedule(handler, path=path, recursive=recursive)
     obs.daemon = True
     obs.start()
-    return obs
+    return obs, handler
