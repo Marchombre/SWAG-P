@@ -173,15 +173,25 @@ def cost_worker(
         Dict[str, float],     # fixed_vals
         int,
         float,                          # delta_n à utiliser
-        list[int]
+        list[int],
+        bool                            # <--- square_ratio ajouté ici
     ]
 ) -> Tuple[int, float]:
-    idx, x, keys, cfg_name, mode, mode_kw, fixed, n_modes, delta_n, sel_layers = args
+    idx, x, keys, cfg_name, mode, mode_kw, fixed, n_modes, delta_n, sel_layers, square_ratio = args
 
     # 1) récupère la config voulue dans _WORKER_SIM
     cfg = next(c for c in _WORKER_SIM.all_configs
                if c["config_name"] == cfg_name)
 
+    # Force l’asservissement si square_ratio actif
+    if square_ratio and ('thick_reso' in keys or 'width_reso' in keys):
+        # On suppose que si le carré est activé, thick_reso est dans keys
+        # On impose la même valeur aux deux (valeur de x[0])
+        val = float(x[0])
+        if 'thick_reso' in cfg["geometry"]["geometry"]:
+            cfg["geometry"]["geometry"]['thick_reso'] = val
+        if 'width_reso' in cfg["geometry"]["geometry"]:
+            cfg["geometry"]["geometry"]['width_reso'] = val
 
 
     # 3) injection des valeurs fixes
@@ -201,6 +211,7 @@ def cost_worker(
                 selected_cfg=cfg,
                 delta_n=delta_n,
                 sel_layers=sel_layers,
+                square_ratio=square_ratio,
                 **mode_kw
             )
         if not np.isfinite(cost_val):
@@ -1360,6 +1371,15 @@ class OptimizationTab:
                     progress_queue=self._result_queue,
                     **extra_kwargs)
 
+        # Cherche si le panel contient square_ratio (coche sur panel unique !)
+        is_square = False
+        try:
+            panel = self.param_tabs.children[self.param_tabs.selected_index]
+            if hasattr(panel, "square_checkbox"):
+                is_square = panel.square_checkbox.value
+        except Exception:
+            pass
+        args["square_ratio"] = is_square
 
 
         self._worker_thread = threading.Thread(
@@ -1568,6 +1588,7 @@ class OptimizationTab:
         seed: int | None = None,    # Répétabilité
         progress_queue: mp.Queue | None = None,
         cancel_flag: dict | None = None,
+        square_ratio: bool = False,
         **mode_kw: Any,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         """
@@ -1641,7 +1662,7 @@ class OptimizationTab:
                             else [int(self.layer_selector.value)])
             args0 = [
                 (i, pop[i], keys, cfg_name, mode, mode_kw, fixed_vals,
-                n_modes, delta_n_val, sel_layers_val)
+                n_modes, delta_n_val, sel_layers_val, square_ratio)
                 for i in range(Npop)
             ]
 
@@ -1691,7 +1712,7 @@ class OptimizationTab:
 
                 args_child = [
                     (i, z, keys, cfg_name, mode, mode_kw, fixed_vals,
-                    n_modes, delta_n_val, sel_layers_val)
+                    n_modes, delta_n_val, sel_layers_val, square_ratio)
                     for (i, z) in z_list
                 ]
 
@@ -1727,7 +1748,7 @@ class OptimizationTab:
 
             argsf = [
                 (i, pop[i], keys, cfg_name, mode, mode_kw, fixed_vals,
-                n_modes, delta_n_val, sel_layers_val)
+                n_modes, delta_n_val, sel_layers_val, square_ratio)
                 for i in range(Npop)
             ]
 
@@ -2064,31 +2085,42 @@ class OptimizationTab:
                 ax3.plot(lam, Rdown_dn, linestyle='--', label="Rdown + Δn", color="tab:olive", alpha=0.7)
 
             # Points caractéristiques sur Rup
-            lambda0 = data.get("lambda0", None)
-            lambda_fwhm = data.get("lambda_fwhm", None)
-            if lambda0 is not None:
-                R0 = float(np.interp(lambda0, lam, Rup))
-                ax3.scatter([lambda0], [R0], s=70, marker='o', color='tab:blue', zorder=5, label='λ₀ (Rup)')
-                ax3.axvline(lambda0, ls=":", lw=1, color='tab:blue')
-            if lambda_fwhm is not None:
-                Rfwhm = float(np.interp(lambda_fwhm, lam, Rup))
-                ax3.scatter([lambda_fwhm], [Rfwhm], s=50, marker='x', color='tab:blue', zorder=5, label='λ_fwhm (Rup)')
-                ax3.axvline(lambda_fwhm, ls="--", lw=1, color='tab:blue')
+            # Bloc qui trace UNIQUEMENT les marqueurs du mode actif
+            current_mode = data.get("mode", "")
 
-            # Points caractéristiques sur Rup+dn
-            if Rup_dn is not None:
-                lambda0_dn = data.get("lambda0_dn", None)
-                lambda_fwhm_dn = data.get("lambda_fwhm_dn", None)
-                if lambda0_dn is not None:
-                    R0_dn = float(np.interp(lambda0_dn, lam, Rup_dn))
-                    ax3.scatter([lambda0_dn], [R0_dn], s=70, marker='o', color='tab:green', zorder=5, label='λ₀ (Rup+Δn)')
-                    ax3.axvline(lambda0_dn, ls=":", lw=1, color='tab:green')
-                if lambda_fwhm_dn is not None:
-                    Rfwhm_dn = float(np.interp(lambda_fwhm_dn, lam, Rup_dn))
-                    ax3.scatter([lambda_fwhm_dn], [Rfwhm_dn], s=50, marker='x', color='tab:green', zorder=5, label='λ_fwhm (Rup+Δn)')
-                    ax3.axvline(lambda_fwhm_dn, ls="--", lw=1, color='tab:green')
+            if current_mode == "dip":
+                # Affiche λ₀ (Rup)
+                lambda0 = data.get("lambda0", None)
+                if lambda0 is not None:
+                    R0 = float(np.interp(lambda0, lam, Rup))
+                    ax3.scatter([lambda0], [R0], s=70, marker='o', color='tab:blue', zorder=5, label='λ₀ (Rup)')
+                    ax3.axvline(lambda0, ls=":", lw=1, color='tab:blue')
+                # Affiche λ₀ (Rup+Δn) si dispo
+                if Rup_dn is not None:
+                    lambda0_dn = data.get("lambda0_dn", None)
+                    if lambda0_dn is not None:
+                        R0_dn = float(np.interp(lambda0_dn, lam, Rup_dn))
+                        ax3.scatter([lambda0_dn], [R0_dn], s=70, marker='o', color='tab:green', zorder=5, label='λ₀ (Rup+Δn)')
+                        ax3.axvline(lambda0_dn, ls=":", lw=1, color='tab:green')
 
-        
+            elif current_mode == "half":
+                # Affiche λ_FWHM (Rup)
+                lambda_fwhm = data.get("lambda_fwhm", None)
+                if lambda_fwhm is not None:
+                    Rfwhm = float(np.interp(lambda_fwhm, lam, Rup))
+                    ax3.scatter([lambda_fwhm], [Rfwhm], s=50, marker='x', color='tab:blue', zorder=5, label='λ_FWHM (Rup)')
+                    ax3.axvline(lambda_fwhm, ls="--", lw=1, color='tab:blue')
+                # Affiche λ_FWHM (Rup+Δn) si dispo
+                if Rup_dn is not None:
+                    lambda_fwhm_dn = data.get("lambda_fwhm_dn", None)
+                    if lambda_fwhm_dn is not None:
+                        Rfwhm_dn = float(np.interp(lambda_fwhm_dn, lam, Rup_dn))
+                        ax3.scatter([lambda_fwhm_dn], [Rfwhm_dn], s=50, marker='x', color='tab:green', zorder=5, label='λ_FWHM (Rup+Δn)')
+                        ax3.axvline(lambda_fwhm_dn, ls="--", lw=1, color='tab:green')
+
+            # → Aucun marker n’est tracé en fixed_lambda ni range_lambda
+
+
         ax3.set_title("Best config spectrum")
         ax3.set_xlabel("λ (nm)")
         ax3.set_ylabel("Reflectance")
@@ -2107,8 +2139,50 @@ class OptimizationTab:
             ax3.axvline(lam0, ls=":", lw=1, color="red")
             ax3.text(lam0, R0, f"  R(λ₀) = {R0:.3f}", va="bottom", color="red")
 
+
+
+        # --- Bloc verbose adapté au mode ---
+        current_mode = data.get("mode", "")
+
+        if current_mode == "dip":
+            lambda_label   = "λ₀"
+            lambda_value   = data.get("lambda0", None)
+            Rup_val        = float(np.interp(lambda_value, lam, Rup)) if (lambda_value is not None and lam is not None) else float('nan')
+            Rdown_val      = float(np.interp(lambda_value, lam, Rdown)) if (lambda_value is not None and lam is not None and Rdown is not None) else float('nan')
+            verbose_rows = f"""
+                <tr><th>λ₀</th>               <td>{lambda_value if lambda_value is not None else ""}</td></tr>
+                <tr><th>R_up(λ₀)</th>         <td>{Rup_val:.6f}</td></tr>
+                <tr><th>R_down(λ₀)</th>       <td>{Rdown_val:.6f}</td></tr>
+            """
+        elif current_mode == "half":
+            lambda_label   = "λ_FWHM"
+            lambda_value   = data.get("lambda_fwhm", None)
+            Rup_val        = float(np.interp(lambda_value, lam, Rup)) if (lambda_value is not None and lam is not None) else float('nan')
+            Rdown_val      = float(np.interp(lambda_value, lam, Rdown)) if (lambda_value is not None and lam is not None and Rdown is not None) else float('nan')
+            verbose_rows = f"""
+                <tr><th>λ_FWHM</th>           <td>{lambda_value if lambda_value is not None else ""}</td></tr>
+                <tr><th>R_up(λ_FWHM)</th>     <td>{Rup_val:.6f}</td></tr>
+                <tr><th>R_down(λ_FWHM)</th>   <td>{Rdown_val:.6f}</td></tr>
+            """
+        elif current_mode == "fixed_lambda":
+            lambda_value   = data.get("fixed_lambda", None)
+            Rup_val        = float(np.interp(lambda_value, lam, Rup)) if (lambda_value is not None and lam is not None) else float('nan')
+            Rdown_val      = float(np.interp(lambda_value, lam, Rdown)) if (lambda_value is not None and lam is not None and Rdown is not None) else float('nan')
+            verbose_rows = f"""
+                <tr><th>λ₀</th>               <td>{lambda_value if lambda_value is not None else ""}</td></tr>
+                <tr><th>R_up(λ₀)</th>         <td>{Rup_val:.6f}</td></tr>
+                <tr><th>R_down(λ₀)</th>       <td>{Rdown_val:.6f}</td></tr>
+            """
+        else:
+            # Pour range_lambda, on peut afficher la moyenne ou rien
+            verbose_rows = "<tr><td colspan=2>–</td></tr>"
+
+
+
+
+
         # ------------------------------------------------------------------
-        # debug_html  ✨  nouveau rendu modernisé
+        # debug_html 
         # ------------------------------------------------------------------
         if lam0 is not None and lam is not None and np.isfinite(lam0):
             r_up   = float(np.interp(lam0, lam, Rup))
@@ -2142,9 +2216,7 @@ class OptimizationTab:
         <tr><th>best_cost</th>        <td>{data['best_cost']:.6f}</td></tr>
         <tr><th>1 - best_cost</th>    <td>{1-data['best_cost']:.6f}</td></tr>
         <tr><th>λ range (nm)</th>     <td>{lam[0]:.1f} – {lam[-1]:.1f} ({len(lam)})</td></tr>
-        <tr><th>λ₀</th>               <td>{lam0}</td></tr>
-        <tr><th>R_up(λ₀)</th>         <td>{r_up:.6f}</td></tr>
-        <tr><th>R_down(λ₀)</th>       <td>{r_down:.6f}</td></tr>
+        {verbose_rows}
         </table>
 
         <details open>
@@ -2278,6 +2350,28 @@ class OptimizationTab:
         # Individual bounds
         rows = []
 
+
+        def iter_param_rows(rows):
+            """Yield chaque ligne (Checkbox, Label, min, max, fixed), même dans le bloc Square."""
+            for r in rows:
+                # Cas d’un bloc thick/width groupé (<Square ratio>)
+                if isinstance(r, widgets.HBox) and len(r.children) == 3 \
+                    and isinstance(r.children[2], widgets.VBox):
+                    # r.children[2] = VBox(thick, width)
+                    for subline in r.children[2].children:
+                        yield subline
+                else:
+                    yield r
+
+        # Crée la liste ordonnée des clés
+        param_keys = list(geom.keys())
+
+
+        thick_row, width_row = None, None
+        thick_w, width_w = None, None
+        thick_idx, width_idx = None, None
+
+
         for k, val in geom.items():
             lo_val, hi_val = geometry_limits.get(k, (0.0, 0.0))
             chk     = widgets.Checkbox(value=True, description="", indent=False, layout={"width":"30px"})
@@ -2285,6 +2379,9 @@ class OptimizationTab:
             low_w   = widgets.FloatText(value=lo_val, description="min:", layout={"width":"120px"}, style={"description_width":"40px"})
             up_w    = widgets.FloatText(value=hi_val, description="max:", layout={"width":"120px"}, style={"description_width":"40px"})
             fixed_w = widgets.FloatText(value=val, description="fixed:", layout={"width":"120px"}, style={"description_width":"40px"})
+            
+
+            
             # callback pour basculer Low/Up ↔ Fixed
             def _toggle(change, lo=low_w, up=up_w, fix=fixed_w):
                 if change["new"]:
@@ -2295,21 +2392,113 @@ class OptimizationTab:
                     fix.layout.display  = ""
             chk.observe(_toggle, names="value")
             _toggle({"new": chk.value})
+            
+            
             rows.append(widgets.HBox(
                 [chk, lbl, low_w, up_w, fixed_w],
                 layout=widgets.Layout(align_items="center", gap="10px")
             ))
 
 
+            if k == "thick_reso":
+                thick_row = rows[-1]
+                thick_w = fixed_w
+                thick_idx = len(rows) - 1
+            if k == "width_reso":
+                width_row = rows[-1]
+                width_w = fixed_w
+                width_idx = len(rows) - 1
+
+
+        # Mappe chaque clé à la ligne widget correspondante
+        param_rows_map = {
+            k: row for k, row in zip(param_keys, iter_param_rows(rows))
+        }
+
+        # ————————————————
+        # Ajout accolade + checkbox “<Square ratio>” à gauche de thick_reso/width_reso
+        # ————————————————
+        if thick_idx is not None and width_idx is not None:
+            # Checkbox + label côte à côte (dans une HBox pour être sur la même ligne)
+            square_checkbox = widgets.Checkbox(
+                value=False, description="Square ratio", indent=False, layout=widgets.Layout(width="140px")
+            )
+            case_and_label = widgets.HBox(
+                [square_checkbox],
+                layout=widgets.Layout(align_items="center", min_width="140px", justify_content="flex-end")
+            )
+
+            # Accolade très grande, centrée verticalement
+            accolade = widgets.HTML(value="""
+                <div style="display:flex;align-items:center;justify-content:center;height:60px;">
+                    <span style="font-size:4.4em;line-height:0.7;">&#x7B;</span>
+                </div>
+            """, layout=widgets.Layout(width="32px", min_width="32px"))
+
+            _syncing = {"thick": False, "width": False}
+
+            def sync_from_thick(change):
+                if not _syncing["width"] and square_checkbox.value:
+                    _syncing["thick"] = True
+                    width_w.value = thick_w.value
+                    _syncing["thick"] = False
+
+            def sync_from_width(change):
+                if not _syncing["thick"] and square_checkbox.value:
+                    _syncing["width"] = True
+                    thick_w.value = width_w.value
+                    _syncing["width"] = False
+
+            
+            def on_square_check(change):
+                # Toujours désabonner avant de réabonner
+                try:
+                    thick_w.unobserve(sync_from_thick, names="value")
+                except Exception:
+                    pass
+                try:
+                    width_w.unobserve(sync_from_width, names="value")
+                except Exception:
+                    pass
+                if change["new"]:
+                    width_w.value = thick_w.value
+                    thick_w.observe(sync_from_thick, names="value")
+                    width_w.observe(sync_from_width, names="value")
+
+            
+            square_checkbox.observe(on_square_check, names="value")
+
+            # Les deux lignes thick et width dans une VBox, gap minimal
+            vertical_lines = widgets.VBox(
+                [rows[thick_idx], rows[width_idx]],
+                layout=widgets.Layout(gap="0px")
+            )
+
+            # Bloc horizontal final : case/label centrée | accolade géante | les deux lignes
+            square_line = widgets.HBox(
+                [
+                    case_and_label,
+                    accolade,
+                    vertical_lines
+                ],
+                layout=widgets.Layout(gap="2px", align_items="center", min_height="64px")
+            )
+
+            # Supprime les anciennes lignes, insère le bloc
+            to_remove = sorted([thick_idx, width_idx], reverse=True)
+            for idx in to_remove:
+                rows.pop(idx)
+            rows.insert(min(thick_idx, width_idx), square_line)
+
+
         bounds_box = widgets.VBox(rows, layout=widgets.Layout(border="1px solid #ddd", padding="5px"))
         
         
         def _apply_all(_):
-            for row in rows:
-                # row.children[2] est le FloatText “min”
-                row.children[2].value = common_low.value
-                # row.children[3] est le FloatText “max”
-                row.children[3].value = common_up.value
+            for k, row in param_rows_map.items():
+                row.children[2].value = common_low.value   # min
+                row.children[3].value = common_up.value    # max
+
 
         
         apply_cb.on_click(_apply_all)
@@ -2337,31 +2526,66 @@ class OptimizationTab:
         add_copy = widgets.Button(description="Add copy", button_style="info", layout=widgets.Layout(width="100%"))
         del_btn  = widgets.Button(description="Delete panel", button_style="danger", layout=widgets.Layout(width="100%"))
 
+
         # callback pour supprimer ce panel
         def _on_delete_panel(_):
             self._remove_param_panel(panel)
         del_btn.on_click(_on_delete_panel)
 
+
+
         def _on_add(_):
-            param_keys = list(geom.keys())
-            # 1) sélection des paramètres à optimiser
-            keys = [
-                param_keys[i]
-                for i, r in enumerate(rows)
-                if r.children[0].value  # checkbox cochée
-            ]
-            # 2) bornes correspondantes
-            bounds = [
-                (r.children[2].value, r.children[3].value)
-                for r in rows
-                if r.children[0].value
-            ]
-            # 3) paramètres laissés fixes
-            fixed_vals = {
-                param_keys[i]: r.children[4].value
-                for i, r in enumerate(rows)
-                if not r.children[0].value
-            }
+            # Synchronisation si <Square ratio> actif
+            if thick_idx is not None and width_idx is not None and square_checkbox.value:
+                # Synchronise fixed
+                width_w.value = thick_w.value
+                # Synchronise min/max
+                width_row.children[2].value = thick_row.children[2].value
+                width_row.children[3].value = thick_row.children[3].value
+
+            # ----------- PATCH SQUARE RATIO -----------
+            is_square = thick_idx is not None and width_idx is not None and square_checkbox.value
+
+            if is_square:
+                # Si le carré est coché, on n’optimise qu’une variable (thick_reso)
+                keys = []
+                bounds = []
+                fixed_vals = {}
+
+                # On optimise thick_reso UNIQUEMENT si coché
+                if thick_row.children[0].value:
+                    keys = ['thick_reso']
+                    bounds = [
+                        (thick_row.children[2].value, thick_row.children[3].value)
+                    ]
+                else:
+                    fixed_vals['thick_reso'] = thick_row.children[4].value
+
+                # width_reso n’est JAMAIS optimisé directement, mais peut être fixé si décoché
+                if not width_row.children[0].value:
+                    fixed_vals['width_reso'] = width_row.children[4].value
+
+                # Mais si width_reso est coché, il sera asservi à thick_reso (imposé plus tard)
+                # --> Pas besoin de l’ajouter dans keys
+            else:
+                # Comportement standard (2 variables indépendantes si 2 cochées)
+                keys = [
+                    k for k, row in param_rows_map.items()
+                    if row.children[0].value
+                ]
+                bounds = [
+                    (row.children[2].value, row.children[3].value)
+                    for k, row in param_rows_map.items()
+                    if row.children[0].value
+                ]
+                fixed_vals = {
+                    k: row.children[4].value
+                    for k, row in param_rows_map.items()
+                    if not row.children[0].value
+                }
+            # ----------- FIN PATCH SQUARE RATIO -----------
+
+
             job = {
                 "config": cfg_name,
                 "keys": keys,                           
@@ -2376,14 +2600,17 @@ class OptimizationTab:
                 "progress": widgets.FloatProgress(
                     value=0, min=0, max=1, description="",
                     bar_style="info", layout=widgets.Layout(width="90%", height="10px", display="none")
-                )
+                ),
+                "square_ratio": is_square,
             }
             self.job_queue.append(job)
             self._refresh_queue()
-            
+
+
         add_q.on_click(_on_add)
         add_copy.on_click(lambda _: self._add_copy_panel(cfg_name))
-        # Assemble panel
+        
+
         panel = widgets.VBox([
             widgets.HTML(f"<b>Bounds for {cfg_name}</b>"),
             cb_controls, bounds_box,
@@ -2391,7 +2618,10 @@ class OptimizationTab:
             widgets.HTML("<b>DE parameters</b>"),
             widgets.HBox([budget_w, pop_w, add_q, add_copy, del_btn], layout=widgets.Layout(gap="10px"))
         ], layout=widgets.Layout(padding="10px", border="1px solid #bbb", margin="5px"))
+        panel.square_checkbox = square_checkbox  # Ajout ici
+        
         return panel
+
 
 
     # ------------------------------------------------------------------
@@ -2513,6 +2743,14 @@ class OptimizationTab:
             cancel_flag=job,
             **extra_kwargs
         )
+
+        # Passe le flag square_ratio dans mode_kw pour qu’il soit vu de cost_worker/compute_cost
+        if job.get("square_ratio", False):
+            args["square_ratio"] = True
+        else:
+            args["square_ratio"] = False
+
+
 
         # 5) lancement du thread
         t = threading.Thread(target=self.DE_general, kwargs=args, daemon=True)

@@ -26,7 +26,8 @@ def compute_cost(
     delta_n: float | None = None,
     sel_layers: list[int] | None = None,
     n_modes:       int   | None = None,          
-    selected_cfg:  Mapping | None = None,        
+    selected_cfg:  Mapping | None = None,   
+    square_ratio: bool = False,     
 ) -> float:
     """
     Renvoie la métrique à *minimiser* (1 – R ou 1 – ΔR/Δn, etc.).
@@ -59,6 +60,17 @@ def compute_cost(
     # 2) injection des épaisseurs optimisées
     for xi, k in zip(x, keys):
         cfg["geometry"]["geometry"][k] = float(xi)
+
+
+    if square_ratio and ('thick_reso' in keys or 'width_reso' in cfg["geometry"]["geometry"]):
+        # Si le carré est activé, x[0] est la valeur commune à appliquer
+        val = float(x[0])
+        if 'thick_reso' in cfg["geometry"]["geometry"]:
+            cfg["geometry"]["geometry"]['thick_reso'] = val
+        if 'width_reso' in cfg["geometry"]["geometry"]:
+            cfg["geometry"]["geometry"]['width_reso'] = val
+
+
 
     # 3) réglages généraux
     lam = np.linspace(sim_tab.sim_lambda_min.value,
