@@ -4,8 +4,12 @@ cost_function.py  –  moteur d’évaluation du coût
 ========================================================
 Indépendant d’ipywidgets ➜ utilisable directement dans multiprocessing.
 """
-
 from __future__ import annotations
+
+import logging
+logger = logging.getLogger(__name__)
+
+
 from typing import List, Dict, Any, Mapping
 import numpy as np
 from copy import deepcopy
@@ -61,7 +65,7 @@ def compute_cost(
     for xi, k in zip(x, keys):
         cfg["geometry"]["geometry"][k] = float(xi)
 
-
+    # En mode square, on n’applique qu’une seule valeur, issue de x[0].
     if square_ratio and ('thick_reso' in keys or 'width_reso' in cfg["geometry"]["geometry"]):
         # Si le carré est activé, x[0] est la valeur commune à appliquer
         val = float(x[0])

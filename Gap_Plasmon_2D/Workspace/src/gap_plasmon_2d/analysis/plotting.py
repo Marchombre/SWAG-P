@@ -30,6 +30,7 @@ from scipy.signal import savgol_filter
 from gap_plasmon_2d.utils.data_readers       import get_all_spectra_and_summaries
 from gap_plasmon_2d.simulation.simulate_and_plot  import ordered_params
 from gap_plasmon_2d.analysis.characterization   import _find_dip_core, compute_half_point
+from gap_plasmon_2d.utils.file_watchers import start_watcher
 
 
 # ------------------------------------------------------------------ #
@@ -354,10 +355,35 @@ class PlotTab:
         self._update_spectra()
 
 
+        # ────────────────────────────────────────────────────────────
+        # 9) File watcher pour mettre à jour la liste automatiquement
+        # ────────────────────────────────────────────────────────────
+        # Sur le dossier de simulation
+        self._sim_watcher = start_watcher(
+            path=summary_dir,
+            callback=lambda *_: self._update_spectra(),
+            extensions=['.npz', '.json'],
+            recursive=False
+        )
+        # Et, si tu veux la même chose pour les données expérimentales :
+        self._exp_watcher = start_watcher(
+            path=exp_data_dir,
+            callback=lambda *_: self._update_spectra(),
+            extensions=['.npz', '.json'],
+            recursive=False
+        )
+
+
+
+
+
+
+
 
     # ====================================================================
     #                         Méthodes internes                           #
     # ====================================================================
+    
     # la nouvelle fonction garde simplement l’affichage masqué/visible
     def _toggle_dbg(self, change):
         self.verbose_html.layout.display = 'block' if change['new'] else 'none'

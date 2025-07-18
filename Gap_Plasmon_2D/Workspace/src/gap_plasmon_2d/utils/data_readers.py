@@ -522,8 +522,6 @@ def get_all_spectra_and_summaries(summary_dir, exp_data_dir, ordered_params):
 # --------------------------------------------------------------------------- #
 #             Lecture d’un fichier HDF5 produit par save_optimization_hdf5   #
 # --------------------------------------------------------------------------- #
-
-
 def read_optimization_hdf5(
     h5path: str,
     run_key: Optional[str] = None
@@ -593,10 +591,28 @@ def read_optimization_hdf5(
             "best_cost": float(grp.attrs["best_cost"]),
         }
 
+        # ———————————————————————————————————————————————
+        # range_lambda
+        if 'range_lambda_min' in grp.attrs and 'range_lambda_max' in grp.attrs:
+            out['range_lambda'] = (
+                float(grp.attrs['range_lambda_min']),
+                float(grp.attrs['range_lambda_max'])
+            )
+        else:
+            out['range_lambda'] = None
+
 
         # Récupère les lambdas caractéristiques si présents
         for name in ("lambda0", "lambda0_dn", "lambda_fwhm", "lambda_fwhm_dn", "fwhm", "fwhm_dn"):
             out[name] = float(grp.attrs[name]) if name in grp.attrs else None
+
+
+        # # ─── indices des dips ────────────────────────────────
+        # out["idx_dip"] = int(grp.attrs["idx_dip"]) if "idx_dip" in grp.attrs else None
+        # out["idx_dip_dn"] = int(grp.attrs["idx_dip_dn"]) if "idx_dip_dn" in grp.attrs else None
+        # # ─── indices FWHM ─────────────────────────────────────
+        # out["idx_fwhm"]    = int(grp.attrs["idx_fwhm"])    if "idx_fwhm"    in grp.attrs else None
+        # out["idx_fwhm_dn"] = int(grp.attrs["idx_fwhm_dn"]) if "idx_fwhm_dn" in grp.attrs else None
 
 
         # -- fixe : renvoie None si absent ----------------------
@@ -606,6 +622,19 @@ def read_optimization_hdf5(
 
         out["n_modes"] = int(grp.attrs["n_modes"]) if "n_modes" in grp.attrs else None
 
+        # square_ratio
+        out["square_ratio"] = bool(grp.attrs.get('square_ratio', 0))
+    
+
+
+        # 3bis) lecture du groupe fixed (si présent)
+        fixed: Dict[str, float] = {}
+        if "fixed" in grp:
+            fx = grp["fixed"]
+            fixed_keys   = [_decode(k) for k in fx["keys"][:]]
+            fixed_values = fx["values"][:]
+            fixed = dict(zip(fixed_keys, fixed_values))
+        out["fixed"] = fixed
 
         # 4) paramètres de l’espace de recherche
         params_grp = grp["parameters"]

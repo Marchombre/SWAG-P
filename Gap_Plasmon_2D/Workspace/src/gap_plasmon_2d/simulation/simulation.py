@@ -8,6 +8,10 @@ exactement la logique de create_simulation_tab() originale.
 # --------------------------------------------------------------------- #
 #                                imports                                #
 # --------------------------------------------------------------------- #
+import logging
+logger = logging.getLogger(__name__)
+
+
 from gap_plasmon_2d import paths
 from pathlib import Path
 
@@ -18,6 +22,7 @@ import os, io, base64, json, textwrap, sys
 from copy import deepcopy
 from datetime import datetime
 
+import warnings
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -82,7 +87,7 @@ experimental_data_dir = results_dir / "Experimental_Data"       # datas expérim
 # 4) Fichiers clés
 json_combined_path = os.path.join(data_dir, "combined_materials.json")
 
-geom_mat_combos_path  = configurations_dir / "geom_mat_combinations.json"
+CONFIG_LIST_JSON = Path(configurations_dir) / "geom_mat_combinations.json"
 h5_path               = Path(paths.H5_RESULTS_DIR) / "simulation_results.h5"
 
 # 5) Création automatique des dossiers si nécessaire
@@ -191,6 +196,31 @@ def _simulate_worker(args):
 
 
 
+
+def _load_available_configs() -> list[str]:
+    """
+    Lit CONFIG_LIST_JSON et retourne la liste triée des config_name disponibles.
+    Gère à la fois l’ancien format “configs” et le format “ALL_COMBINED_CONFIGS”.
+    """
+    try:
+        data = json.loads(CONFIG_LIST_JSON.read_text(encoding="utf-8"))
+        if "configs" in data:
+            return sorted(data["configs"].keys())
+        if "ALL_COMBINED_CONFIGS" in data:
+            return sorted(
+                cfg["config_name"]
+                for cfg in data["ALL_COMBINED_CONFIGS"]
+                if "config_name" in cfg
+            )
+    except Exception as e:
+        warnings.warn(f"Impossible de lire '{CONFIG_LIST_JSON}': {e}")
+    return []
+
+
+
+
+
+
 # --------------------------------------------------------------------- #
 #                             main class                                #
 # --------------------------------------------------------------------- #
@@ -211,7 +241,7 @@ class SimulationTab:
         self._load_configs()
         # 3) création des widgets (sans layout)
         self._init_common_widgets()
-        # 
+        
         self._init_metrics_overlays()
 
 
@@ -254,6 +284,39 @@ class SimulationTab:
         self._assemble_layout()
         # 6) liaison des signaux (on_click, observe)
         self._connect_signals()
+        # 7) watcher automatique sur le dossier summary_sim_dir
+        #    à chaque nouveau .json on reconstruit l’affichage
+        start_watcher(
+            path=summary_sim_dir,
+            callback=lambda event: self._on_new_summary(event),
+            extensions=[".json"]
+        )
+
+        # watcher sur le dossier de configs, pas sur le fichier lui-même
+        self._cfg_watcher, self._cfg_handler = start_watcher(
+            path=str(CONFIG_LIST_JSON),         # ← on regarde LE fichier
+            callback=self._on_cfg_fs_event,     # ← on appelle cette méthode
+            extensions=[".json"],
+            recursive=False,
+            debounce_interval=0.2,
+        )
+
+
+
+
+    def _on_new_summary(self, event):
+        """
+        Callback watchdog : lorsqu’un nouveau fichier summary_sim
+        apparaît, on l’affiche automatiquement.
+        """
+        # recharge la liste des fichiers et sélectionne le dernier ajouté
+        files = list_sim_summary_files(summary_sim_dir)
+        if files:
+            self.sim_files_dropdown.options = files
+            self.sim_files_dropdown.value   = files[-1]
+            # génère un nouveau download link
+            self._download_file(None)
+        
         # 7) état initial des widgets Δn
         self._toggle_delta_widgets()
 
@@ -365,11 +428,7 @@ class SimulationTab:
         self.mode_calc_radio.observe(self._toggle_lambda0, names='value')
         self._toggle_lambda0({'new': self.mode_calc_radio.value})
 
-        # ─── Run / Cancel + status ───────────────────────────────────────────
-        self.sim_run_button    = widgets.Button(
-            description="Run simulation", button_style="success",
-            tooltip="Start simulation"
-        )
+        # ─── Cancel + status ───────────────────────────────────────────
         self.sim_cancel_button = widgets.Button(
             description="Cancel", button_style="warning",
             tooltip="Cancel running simulation", disabled=True
@@ -409,9 +468,18 @@ class SimulationTab:
             layout=widgets.Layout(width='500px'),
             style={'description_width':'initial'}
         )
+
         self.sim_download_button = widgets.Button(
             description="Download", button_style="danger"
         )
+
+        # ─── Bouton Run ──────────────────────────────────────────────────
+        self.sim_run_button = widgets.Button(
+            description="Run",
+            button_style="success",
+            tooltip="Lancer la simulation"
+        )
+
 
         # ─── Nom de simulation ───────────────────────────────────────────────
         self.sim_name_widget     = widgets.Text(
@@ -429,10 +497,15 @@ class SimulationTab:
             chk = widgets.Checkbox(value=False, description=name, indent=False)
             dn  = widgets.Checkbox(value=False, description='Δn', indent=False,
                     layout=widgets.Layout(width='46px'))
+            
+            chk.observe(self._update_sim_run_button, names='value')
+            
             self.config_checkboxes[name] = chk
             self.dn_checkboxes[name]     = dn
             rows.append(widgets.HBox([chk, dn],
                     layout=widgets.Layout(gap='5px')))
+        
+        
         self.select_all_cfg_btn = widgets.Button(
             description="Tout sélectionner Configs",
             button_style="info",
@@ -457,6 +530,9 @@ class SimulationTab:
                 display='none'
             )
         )
+
+        self._update_sim_run_button()
+        
         self.toggle_btn = widgets.ToggleButton(
             description="Select Configs & Δn",
             value=True,                     # ← ouvert par défaut
@@ -464,13 +540,12 @@ class SimulationTab:
             layout=widgets.Layout(width='520px'),
             button_style='warning'
         )
-        self._toggle_config_list({'new': True})
 
-        self.config_refresh_btn = widgets.Button(
-            description="Refresh Configs",
-            button_style="info",
-            layout=widgets.Layout(margin='0 5px 5px 0')
-        )
+        self._rebuild_sim_config_selector()
+
+        self._toggle_config_list({'new': self.toggle_btn.value})
+
+
         self.config_selector    = widgets.VBox(
             [self.toggle_btn, self.config_list],
             layout=widgets.Layout(padding='5px')
@@ -482,7 +557,8 @@ class SimulationTab:
             options=layer_keys,
             description="Couches Δn:",
             layout=widgets.Layout(width='300px', height='100px'),
-            style={'description_width':'initial'}
+            style={'description_width':'initial'},
+            disabled=True
         )
         self.delta_n_widget     = widgets.FloatText(
             value=1e-2, description="Δn:",
@@ -530,7 +606,6 @@ class SimulationTab:
                     [self.sim_lambda_min, self.sim_lambda_max, self.sim_n_points],
                     layout=widgets.Layout(gap='10px')
                 ),
-                self.config_refresh_btn,
                 self.config_selector,
                 widgets.HTML("<b>RCWA modes</b>"),
                 widgets.HBox(
@@ -581,11 +656,11 @@ class SimulationTab:
 
         # Création des Checkbox
         self.metric_checks = {
-            lbl: widgets.Checkbox(value=defaults[lbl], description=lbl, indent=False)
+            lbl: widgets.Checkbox(value=True, description=lbl, indent=False)
             for lbl in metric_labels
         }
         self.overlay_checks = {
-            lbl: widgets.Checkbox(value=False, description=lbl, indent=False)
+            lbl: widgets.Checkbox(value=True, description=lbl, indent=False)
             for lbl in overlay_labels
         }
 
@@ -692,23 +767,30 @@ class SimulationTab:
 
         verbose     = self.verbose_toggle.value
 
-        # Sélection des configurations
-        selected_cfgs = [
-            cfg for cfg in self.all_configs
-            if self.config_checkboxes[cfg['config_name']].value
+
+        # 1) on lit d'abord les noms cochés, toujours à jour avec le widget
+        selected_names = [
+            name for name, chk in self.config_checkboxes.items()
+            if chk.value
         ]
-        if not selected_cfgs:
+        if not selected_names:
             self._status_html.value = "⚠️ Please select at least one configuration."
             self._is_running = False
             self.sim_cancel_button.disabled = True
             return
+
+        # Sélection des configurations
+        selected_cfgs = [
+            cfg for cfg in self.all_configs
+            if cfg['config_name'] in selected_names
+        ]
+
         
-        # 2.bis  Configurations pour lesquelles on veut Δn
+        # 2.bis) mêmes pour Δn
         self._cfgs_with_delta = {
-            cfg['config_name']
-            for cfg in self.all_configs
-            if self.dn_checkboxes[cfg['config_name']].value          # ← case Δn cochée
-}
+            name for name, chk in self.dn_checkboxes.items()
+            if chk.value
+        }
 
 
         # ----------------------------------------------------------------
@@ -1112,6 +1194,11 @@ class SimulationTab:
                         dip_index=best_dip_index,
                         mode=('half' if use_half else 'dip')
                     )
+                    
+                    # ─── injecte Rup_dn dans le dictionnaire details ───────────
+                    details["Rup_dn"] = np.asarray(Rup_dn)   # save_simulation_summary lira ce champ
+                    
+                    
                     if Rup_dn is not None and flags['show_Rup_dn']:
                         self.ax_plot.plot(lam_range, Rup_dn, '--', color=color,
                                     linewidth=2, alpha=0.7, zorder=100,
@@ -1475,46 +1562,65 @@ class SimulationTab:
         self.delta_n_widget.disabled = not sel_any_dn
 
 
+    def _update_sim_run_button(self, *_):
+        """Active le bouton Run si au moins une config est cochée."""
+        any_selected = any(cb.value for cb in self.config_checkboxes.values())
+        self.sim_run_button.disabled = not any_selected
+
+
+
     def _toggle_config_list(self, change):
         show = 'block' if change['new'] else 'none'
         self.config_list.layout.display = show
         self.toggle_btn.icon = 'caret-up' if change['new'] else 'caret-down'
 
 
-    def _refresh_configs(self, _):
-            # 1) Recharge le JSON
-            cfg_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
-            if os.path.exists(cfg_file):
-                with open(cfg_file, encoding="utf-8") as f:
-                    self.all_configs = json.load(f)["ALL_COMBINED_CONFIGS"]
-            else:
-                self.all_configs = []
+    def _rebuild_sim_config_selector(self, *_):
+        # 1) on mémorise l’état ouvert/fermé
+        was_open = self.toggle_btn.value
+        # 2) on garde d’anciennes sélections
+        prev_cfg = {n: cb.value for n, cb in self.config_checkboxes.items()}
+        prev_dn  = {n: cb.value for n, cb in self.dn_checkboxes.items()}
 
-            # 2) Reconstruit les cases à cocher
-            self.config_checkboxes.clear()
-            self.dn_checkboxes.clear()
-            config_rows = []
-            for cfg in self.all_configs:
-                name = cfg["config_name"]
-                chk = widgets.Checkbox(value=False, description=name, indent=False)
-                dn  = widgets.Checkbox(value=False, description='Δn', indent=False,
-                                    layout=Layout(width='46px'))
-                self.config_checkboxes[name] = chk
-                self.dn_checkboxes[name] = dn
-                config_rows.append(HBox([chk, dn], layout=Layout(grid_gap='5px')))
+        # 3) on reconstruit les widgets ligne par ligne
+        rows = []
+        self.config_checkboxes.clear()
+        self.dn_checkboxes.clear()
+        for name in _load_available_configs():
+            chk_cfg = widgets.Checkbox(
+                value=prev_cfg.get(name, False),
+                description=name, indent=False
+            )
+            chk_dn = widgets.Checkbox(
+                value=prev_dn.get(name, False),
+                description="Δn", indent=False,
+                layout=widgets.Layout(width="46px")
+            )
+            # on rattache les observateurs existants
+            chk_dn.observe(self._toggle_delta_widgets, names='value')
+            chk_cfg.observe(self._update_sim_run_button, names='value')
 
-                #  observer la case config 
-                chk.observe(self._refresh_custom_modes, names='value')
+            self.config_checkboxes[name] = chk_cfg
+            self.dn_checkboxes[name]     = chk_dn
+            rows.append(widgets.HBox([chk_cfg, chk_dn],
+                          layout=widgets.Layout(gap='5px')))
+        # 4) on réinjecte dans le VBox
+        visible = min(len(rows), 10)
+        self.config_list.layout.height = f"{30 + visible*30}px"
+        # on veut juste les HBox, pas le header ni les boutons
+        header = widgets.HBox([self.select_all_cfg_btn, self.select_all_dn_btn],
+                               layout=widgets.Layout(gap='10px'))
+        self.config_list.children = [header, *rows]
 
-            # 3) Met à jour le conteneur avec le header et les boutons
-            header = HTML("<b>Configurations et Δn</b>")
-            buttons = HBox([self.select_all_cfg_btn, self.select_all_dn_btn],
-                        layout=Layout(grid_gap='10px'))
-            self.config_list.children = [header, buttons, *config_rows]
+        # 5) on réapplique l’état ouvert/fermé et on refresh custom modes
+        self.toggle_btn.value = was_open
+        self._refresh_custom_modes()
+        self._update_sim_run_button()
 
-            # 4) Conserve l’état ouvert/fermé et rafraîchit les modes custom
-            self._toggle_config_list({'new': self.toggle_btn.value})
-            self._refresh_custom_modes()
+
+    def _on_cfg_fs_event(self, *args):
+        """Callback du watcher : on reconstruit la liste dès que JSON change."""
+        self._rebuild_sim_config_selector()
 
 
 
@@ -1614,7 +1720,6 @@ class SimulationTab:
         self.sim_run_button.on_click(self._on_run)
         self.sim_cancel_button.on_click(self._on_cancel)
         self.sim_download_button.on_click(self._download_file)
-        self.config_refresh_btn.on_click(self._refresh_configs)
         self.select_all_cfg_btn.on_click(self._toggle_all_cfg)
         self.select_all_dn_btn.on_click(self._toggle_all_dn)
         self.toggle_btn.observe(self._toggle_config_list, names='value')

@@ -1,16 +1,26 @@
+# characterization.py
+
+
+import logging
+logger = logging.getLogger(__name__)
+
 import numpy as np
 from scipy.signal import savgol_filter, find_peaks, peak_widths
 from scipy.interpolate import interp1d
 from copy import deepcopy
+
 from gap_plasmon_2d.simulation.simulate_and_plot import run_simulation_one_combo
 from gap_plasmon_2d.utils.data_readers import get_baseline_n
+
+
+
 
 def _find_dip_core(
     wavelength, reflectance,
     smooth_win, polyorder,
     dip_prom, dip_dist,
     peak_dist,
-    verbose=False, cfg_name=None
+    verbose=True, cfg_name=None
 ):
 
     lam = np.asarray(wavelength)
@@ -29,7 +39,7 @@ def _find_dip_core(
     # cas "pas de dip"
     if dips.size == 0:
         if verbose:
-            print(f"[find_core] Aucun dip détecté pour « {cfg_name} »")
+            logger.warning("Aucun dip détecté pour %s", cfg_name)
         empty = []
         return (
             empty, empty, empty,  # dip_idx_list, lam_dip_list, R_dip_list
@@ -207,7 +217,10 @@ def simulate_delta_spectrum(
     construit R(n+Δn), identifie son dip principal via _core,
     et calcule S_lambda, S_R, dR_half.
     """
+
+    logger.debug(f"→ simulate_delta_spectrum: sel_layers={sel_layers}, Δn={delta_n}")
     
+
     # 1) baseline n0 pour chaque layer
     # on crée un dictionnaire nommé n0s
     n0s = {
@@ -229,14 +242,25 @@ def simulate_delta_spectrum(
     #   ...
     # }
 
+    logger.debug(f"   baselines n0s = {n0s!r}")
 
     # 2) deep copy & custom ε=(n0+Δn)**2
     cfg2 = deepcopy(cfg)  # duplique la configuration pour ne pas modifier l’original
-    for e in cfg2["material"]["MATERIALS_CONFIG"]:  # parcourt chaque entrée matériau
-        if e["key"] in sel_layers:  # si la clé du matériau est dans les couches ciblées
-            e["material"]["type"]       = "Custom"  # passe ce matériau en type personnalisé
-            e["material"]["expression"] = f"({n0s[e['key']]+delta_n})**2"  
+    for mat in cfg2["material"]["MATERIALS_CONFIG"]:  # parcourt chaque entrée matériau
+        key = mat["key"]
+        if key in sel_layers:  # si la clé du matériau est dans les couches ciblées
+            old_expr = mat["material"].get("expression", "<none>")
+            new_n    = n0s[key] + delta_n
+            new_expr = f"({new_n})**2"
+            logger.debug(f"   layer `{key}`: old ε = {old_expr!r}")
+
+            mat["material"]["type"]       = "Custom"  # passe ce matériau en type personnalisé
+            mat["material"]["expression"] = new_expr  
             # définit ε = (n0 + Δn)² pour ce matériau
+            logger.debug(f"   layer `{key}`: new ε = {new_expr!r}")
+
+
+
 
     # 3) Simulation RCWA pour R(n+Δn)
     Rup_dn, _, _ = run_simulation_one_combo(lam, wave, n_modes, cfg2, json_combined_path)
@@ -258,7 +282,7 @@ def simulate_delta_spectrum(
         dip_prom=1e-2,
         dip_dist=1,
         peak_dist=1,
-        verbose=False,
+        verbose=True,
         cfg_name=cfg.get("config_name")
     )
 
@@ -364,7 +388,7 @@ def find_best_dip(
     smooth_win, polyorder,
     dip_prom, dip_dist,
     peak_dist,
-    verbose=False, cfg_name=None,  mode: str = "dip"
+    verbose=True, cfg_name=None,  mode: str = "dip"
 ):
     """
     Wrapper public :

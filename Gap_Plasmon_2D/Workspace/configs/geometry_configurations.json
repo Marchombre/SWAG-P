@@ -448,6 +448,42 @@
         "thick_sub": 200.0,
         "period": 100.2153
       }
+    },
+    {
+      "config_name": "Test_result_opti",
+      "compartment": "D\u00e9faut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 10.0,
+        "width_reso": 10.0,
+        "thick_gap": 2.5,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 3.9,
+        "thick_metalliclayer": 5.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "test_result_opti_80",
+      "compartment": "D\u00e9faut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 80.0,
+        "width_reso": 80.0,
+        "thick_gap": 5.9,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 17.7,
+        "thick_metalliclayer": 11.9,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
     }
   ]
 }

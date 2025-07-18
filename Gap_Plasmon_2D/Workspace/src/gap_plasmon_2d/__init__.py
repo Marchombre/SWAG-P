@@ -1,1 +1,2 @@
-
+from gap_plasmon_2d.utils.logging_setup import setup_subpackage_loggers
+setup_subpackage_loggers()

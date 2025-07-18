@@ -11,12 +11,19 @@ Optimisation.py
 """
 from __future__ import annotations
 
+
+import logging
+logger = logging.getLogger(__name__)
+
+
 import multiprocessing as mp
 import multiprocessing.pool
 
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 import sys
+import io
+import os
 
 import warnings
 import threading
@@ -25,7 +32,7 @@ import json
 
 import numpy as np
 import matplotlib.pyplot as plt
-from IPython.display import display
+from IPython.display import display, FileLink
 from IPython import get_ipython
 import ipywidgets as widgets
 #from tqdm.notebook import trange
@@ -183,15 +190,6 @@ def cost_worker(
     cfg = next(c for c in _WORKER_SIM.all_configs
                if c["config_name"] == cfg_name)
 
-    # Force l’asservissement si square_ratio actif
-    if square_ratio and ('thick_reso' in keys or 'width_reso' in keys):
-        # On suppose que si le carré est activé, thick_reso est dans keys
-        # On impose la même valeur aux deux (valeur de x[0])
-        val = float(x[0])
-        if 'thick_reso' in cfg["geometry"]["geometry"]:
-            cfg["geometry"]["geometry"]['thick_reso'] = val
-        if 'width_reso' in cfg["geometry"]["geometry"]:
-            cfg["geometry"]["geometry"]['width_reso'] = val
 
 
     # 3) injection des valeurs fixes
@@ -439,11 +437,8 @@ class OptimizationFileArboWidget:
         runs = list_runs_in_h5(self.file_dd.value) if self.file_dd.value else []
         self.run_dd.options = runs
         # -- ne touche pas à .value si l’utilisateur vient d’agir --
-        if not self._user_selecting:
-            self.run_dd.value = (
-                old if old in runs else (runs[-1] if runs else None)
-            )
-
+        if self.run_dd.value not in runs:
+            self.run_dd.value = runs[0] if runs else None
 
     def get_selected_file(self) -> str | None:
         return self.file_dd.value
@@ -1112,7 +1107,62 @@ class OptimizationTab:
     #  UI helpers                                                       #
     # ------------------------------------------------------------------#
     
-    
+    def _export_subplot(self, ax, default_name):
+        """
+        Exporte un subplot matplotlib (axe unique) en PNG dans le dossier courant,
+        et propose un lien de téléchargement interactif dans Jupyter.
+        """
+        # Nom de fichier unique pour éviter les collisions
+        import tempfile
+        import time
+        fname = f"{default_name}_{int(time.time()*1000)}.png"
+        # Crée une nouvelle figure temporaire
+        fig_temp, ax_temp = plt.subplots(figsize=(6,4), dpi=200)
+        # Recopie les courbes/éléments du subplot source vers la figure temporaire
+        for line in ax.get_lines():
+            ax_temp.plot(line.get_xdata(), line.get_ydata(),
+                        label=line.get_label(),
+                        linestyle=line.get_linestyle(),
+                        color=line.get_color(),
+                        marker=line.get_marker(),
+                        alpha=line.get_alpha() if line.get_alpha() is not None else 1.0,
+            )
+        # Copie titres et labels
+        ax_temp.set_title(ax.get_title())
+        ax_temp.set_xlabel(ax.get_xlabel())
+        ax_temp.set_ylabel(ax.get_ylabel())
+        # Copie la légende si elle existe
+        handles, labels = ax.get_legend_handles_labels()
+        if handles and labels:
+            ax_temp.legend(handles, labels)
+        # Copie les grilles
+        ax_temp.grid(ax._axisbelow)
+        # Recopie les scatter (points)
+        for coll in ax.collections:
+            if hasattr(coll, 'get_offsets'):
+                offsets = coll.get_offsets()
+                if len(offsets) > 0:
+                    ax_temp.scatter(offsets[:,0], offsets[:,1],
+                                    s=coll.get_sizes(), c=coll.get_facecolor(),
+                                    marker=coll.get_paths()[0] if hasattr(coll, 'get_paths') and coll.get_paths() else 'o',
+                                    alpha=coll.get_alpha() if coll.get_alpha() is not None else 1.0,
+                    )
+        # Recopie les vertical lines (axvline)
+        for l in ax.lines:
+            if l.get_linestyle() in [':', '--', '-.', '-']:
+                xdata = l.get_xdata()
+                if len(xdata) == 2 and xdata[0] == xdata[1]:
+                    ax_temp.axvline(xdata[0], ls=l.get_linestyle(), lw=l.get_linewidth(), color=l.get_color(), alpha=l.get_alpha())
+        # Sauvegarde la figure temporaire
+        fig_temp.tight_layout()
+        fig_temp.savefig(fname, bbox_inches='tight')
+        plt.close(fig_temp)
+        # Affiche le lien de téléchargement
+        display(FileLink(fname, result_html_prefix=f'<a style="font-weight:bold;font-size:13px;color:#1a237e;" download href='))
+
+
+
+
     def _update_dn_widgets_state(self, *_):
         """
         Active (ou grise) les widgets Δn et layer_selector.
@@ -1615,9 +1665,31 @@ class OptimizationTab:
             raise ValueError("Le budget doit être ≥ à la taille de la population.")
         Ngen = budget // Npop
         n_params = len(keys)
+
+        # récupère les positions de thick_reso et width_reso dans le vecteur x
+        # On repère les indices de thick_reso et width_reso DANS “keys”
+        # try:
+        # ne gère square_ratio QUE si on a coché square_ratio ET les deux paramètres dans keys
+        can_square = bool(square_ratio and "thick_reso" in keys and "width_reso" in keys)
+        if can_square:
+            i_th = keys.index("thick_reso")
+            i_wd = keys.index("width_reso")
+        # except ValueError:
+        #     # si l’un des deux n’existe pas → pas de carré possible
+        #     square_ratio = False
+        # ===============
+
+
         pop = lowers + (uppers - lowers) * rng.random((Npop, n_params))
         
-        # calcule une seule fois le nombre de modes demandé par l’onglet Opti
+        # === NOUVEAU : projeté sur la diagonale thick_reso=width_reso
+        # Si on force square_ratio, on projette d’emblée toute la population
+        if can_square:
+            avg = 0.5 * (pop[:, i_th] + pop[:, i_wd])
+            pop[:, i_th] = pop[:, i_wd] = avg
+        # ===============        
+        
+        #calcule une seule fois le nombre de modes demandé par l’onglet Opti
         n_modes = self._opt_get_n_modes_for(cfg_name)
 
         # ------------------------------------------------------------------
@@ -1703,6 +1775,14 @@ class OptimizationTab:
                         mask[rng.integers(n_params)] = True
                     z = np.where(mask, y, pop[p])
                     z = np.clip(z, lowers, uppers)
+                    
+                    # === NOUVEAU : projection sur diagonale
+                    # Si on force square_ratio, on colle aussi chaque mutant sur la diagonale
+                    if can_square:
+                        a2 = 0.5 * (z[i_th] + z[i_wd])
+                        z[i_th] = z[i_wd] = a2
+                    # ===============
+
                     z_list.append((p, z))          # ← on garde l’index du parent
 
                 # ───────────── évaluation parallèle des enfants ───────────
@@ -1787,8 +1867,12 @@ class OptimizationTab:
             for xi, k in zip(best_final, keys):
                 cfg["geometry"]["geometry"][k] = float(xi)
 
-
-    
+            # —–––––––– Si square_ratio, on propage thick_reso → width_reso
+            if square_ratio:
+                val = cfg["geometry"]["geometry"].get("thick_reso")
+                if val is not None:
+                    cfg["geometry"]["geometry"]["width_reso"] = float(val)
+        
             wave  = {"angle": 0, "polarization": 1}
 
             Rup, Rdown, _ = run_simulation_one_combo(lam, wave, n_modes, cfg, self.json_combined_path)
@@ -1815,79 +1899,97 @@ class OptimizationTab:
             # 1. Calcule le spectre modifié : Rup_dn (avec Δn appliqué)
             # -----------------------------------------------------
 
-            # Simule la structure AVEC Δn si le mode le demande
             Rup_dn, Rdown_dn = None, None
             if need_dn:
                 # Crée une copie propre de la config modifiée pour +Δn
                 cfg_dn = deepcopy(cfg)
-                
-            # sel_layers_val doit contenir les clés matériaux (ex: "perm_diel", "perm_gap")
-            for layer_key in sel_layers_val:
-                found = False
-                for mat in cfg_dn["material"]["MATERIALS_CONFIG"]:
-                    if mat["key"] == layer_key:
-                        # Ici, on modifie l'expression d'indice
-                        mat_expr = mat["material"].get("expression", None)
-                        if mat_expr is not None:
-                            # On convertit l'expression (ex: "1.45**2") en float, ajoute delta_n, puis reconvertit en string
-                            n_base = np.sqrt(eval(mat_expr))
-                            n_new  = n_base + delta_n_val
-                            mat["material"]["expression"] = f"({n_new})**2"
-                            found = True
-                        else:
-                            raise ValueError(f"Le matériau '{layer_key}' n'a pas de champ 'expression' modifiable.")
-                        break
-                if not found:
-                    raise KeyError(f"Matériau '{layer_key}' introuvable dans la config matériaux !")
 
-                
-                
-            Rup_dn, Rdown_dn, _ = run_simulation_one_combo(lam, wave, n_modes, cfg_dn, self.json_combined_path)
+                # sel_layers_val doit contenir les clés matériaux (ex: "perm_diel", "perm_gap")
+                for layer_key in sel_layers_val:
+                    found = False
+                    for mat in cfg_dn["material"]["MATERIALS_CONFIG"]:
+                        if mat["key"] == layer_key:
+                            # Ici, on modifie l'expression d'indice
+                            mat_expr = mat["material"].get("expression", None)
+                            if mat_expr is not None:
+                                # On convertit l'expression (ex: "1.45**2") en float, ajoute delta_n, puis reconvertit en string
+                                n_base = np.sqrt(eval(mat_expr))
+                                n_new  = n_base + delta_n_val
+                                mat["material"]["expression"] = f"({n_new})**2"
+                                found = True
+                            else:
+                                raise ValueError(f"Le matériau '{layer_key}' n'a pas de champ 'expression' modifiable.")
+                            break
+                    if not found:
+                        raise KeyError(f"Matériau '{layer_key}' introuvable dans la config matériaux !")
 
-
-
-            Rup_dn   = np.asarray(Rup_dn, float)
-            Rdown_dn = np.asarray(Rdown_dn, float)
+                Rup_dn, Rdown_dn, _ = run_simulation_one_combo(lam, wave, n_modes, cfg_dn, self.json_combined_path)
+                Rup_dn   = np.asarray(Rup_dn, float)
+                Rdown_dn = np.asarray(Rdown_dn, float)
+            else:
+                Rup_dn   = None
+                Rdown_dn = None
 
             # -----------------------------------------------------
             # 2. Extraction des points caractéristiques
             # -----------------------------------------------------
-            out_base, _, idx_dip = find_best_dip(cfg, lam, Rup, wave, n_modes, [], 0, self.json_combined_path,
-                                                0, 0, 1e-2, 1, 1, False, cfg_name, mode)
+            out_base, _, idx_dip = find_best_dip(
+                cfg, lam, Rup, wave, n_modes,
+                sel_layers_val, delta_n_val,
+                self.json_combined_path,
+                smooth_win=0, polyorder=0,
+                dip_prom=1e-2, dip_dist=1, peak_dist=1,
+                verbose=False,
+                cfg_name=cfg_name, mode=mode
+            )
+
             out_dn = None
             if need_dn and Rup_dn is not None:
-                out_dn, _, idx_dip_dn = find_best_dip(cfg, lam, Rup_dn, wave, n_modes, [], 0, self.json_combined_path,
-                                                    0, 0, 1e-2, 1, 1, False, cfg_name, mode)
-            # Si aucun dip détecté : protection
-            (lambda_left, lambda_right, fwhm, depth,
-            lambda0, R_dip, ylev, lam_max_l, R_max_l,
-            lam_max_r, R_max_r, lam_sym, R_sym, *_ ) = out_base if out_base is not None else (None,)*13
+                out_dn, _, idx_dip_dn = find_best_dip(
+                    cfg_dn, lam, Rup_dn, wave, n_modes,
+                    sel_layers_val, delta_n_val,
+                    self.json_combined_path,
+                    smooth_win=0, polyorder=0,
+                    dip_prom=1e-2, dip_dist=1, peak_dist=1,
+                    verbose=False,
+                    cfg_name=cfg_name, mode=mode
+                )
 
+            lambda_left_dn = lambda_right_dn = None
+            fwhm_dn        = None
+            lambda0_dn     = None
+
+            # Si aucun dip détecté : protection
+            if out_base is not None:
+                (lambda_left, lambda_right, fwhm, depth,
+                lambda0, R_dip, ylev, lam_max_l, R_max_l,
+                lam_max_r, R_max_r, lam_sym, R_sym, *_ ) = out_base
             if out_dn is not None:
                 (lambda_left_dn, lambda_right_dn, fwhm_dn, depth_dn,
                 lambda0_dn, R_dip_dn, ylev_dn, lam_max_l_dn, R_max_l_dn,
                 lam_max_r_dn, R_max_r_dn, lam_sym_dn, R_sym_dn, *_ ) = out_dn
-            else:
-                lambda0_dn = fwhm_dn = None
-
-
-
 
             config_name = cfg_name      # cohérent avec le reste du run            
             fam = 'gap_plasmon_resonator' if mode in ('dip','half') else 'multi_layer'
 
             fixed_lambda_val = mode_kw.get("fixed_lambda", None)
+            range_lambda_val = mode_kw.get("range_lambda", None)
 
             # Sauvegarde complète du run d’optimisation dans un fichier HDF5
             save_optimization_hdf5(
+                square_ratio=square_ratio,
                 notebook_dir=str(BASE_NOTEBOOKS),   # Dossier racine où créer le .h5
                 family=fam,                       # on force ici la bonne famille
                 cost_mode=mode,                       # dip / half / fixed_lambda / range_lambda
                 # — méta-données pour filtrage futur —
                 config_name=config_name,            # Structure optimisée (pour comparer uniquement les runs compatibles)
-               
+            
                 lambda0=lambda0,
                 lambda0_dn=lambda0_dn,
+                # idx_dip=idx_dip,
+                # idx_dip_dn=idx_dip_dn,
+                # idx_fwhm=idx_fwhm,
+                # idx_fwhm_dn=idx_fwhm_dn,
                 lambda_fwhm=lambda_right if lambda_right is not None else None,
                 lambda_fwhm_dn=lambda_right_dn if out_dn is not None else None,
                 fwhm=fwhm,
@@ -1917,6 +2019,7 @@ class OptimizationTab:
                 best_final=best_final,              # Meilleur après rééval finale
                 best_cost=best_cost,                # Coût de best_final
                 fixed_lambda=fixed_lambda_val,
+                range_lambda=range_lambda_val,
                 best_after_eval=np.asarray(best_after_eval),  # Snapshot du best à t instant
 
                 # — contexte de la métrique —
@@ -1933,10 +2036,10 @@ class OptimizationTab:
 
             # on rafraîchit la liste des runs disponibles
             get_ipython().kernel.io_loop.add_callback(self.opt_file_arbo._refresh_runs)
-            
+
             if progress_queue is not None:
-                    progress_queue.put(("DONE",
-                                        conv_best, conv_evals, best_final, best_cost))
+                progress_queue.put(("DONE",
+                                    conv_best, conv_evals, best_final, best_cost))
             return conv_best, conv_evals, best_final, best_cost
 
 
@@ -1944,6 +2047,7 @@ class OptimizationTab:
             # ferme uniquement CE pool
             pool.close()
             pool.join()
+
 
     # ------------------------------------------------------------------#
     #  Plot HDF5 results                                                #
@@ -2089,34 +2193,44 @@ class OptimizationTab:
             current_mode = data.get("mode", "")
 
             if current_mode == "dip":
-                # Affiche λ₀ (Rup)
                 lambda0 = data.get("lambda0", None)
                 if lambda0 is not None:
                     R0 = float(np.interp(lambda0, lam, Rup))
                     ax3.scatter([lambda0], [R0], s=70, marker='o', color='tab:blue', zorder=5, label='λ₀ (Rup)')
                     ax3.axvline(lambda0, ls=":", lw=1, color='tab:blue')
-                # Affiche λ₀ (Rup+Δn) si dispo
-                if Rup_dn is not None:
-                    lambda0_dn = data.get("lambda0_dn", None)
-                    if lambda0_dn is not None:
-                        R0_dn = float(np.interp(lambda0_dn, lam, Rup_dn))
-                        ax3.scatter([lambda0_dn], [R0_dn], s=70, marker='o', color='tab:green', zorder=5, label='λ₀ (Rup+Δn)')
-                        ax3.axvline(lambda0_dn, ls=":", lw=1, color='tab:green')
+                lambda0_dn = data.get("lambda0_dn", None)
+                if Rup_dn is not None and lambda0_dn is not None:
+                    R0_dn = float(np.interp(lambda0_dn, lam, Rup_dn))
+                    ax3.scatter([lambda0_dn], [R0_dn], s=70, marker='o', color='tab:green', zorder=5, label='λ₀ (Rup+Δn)')
+                    ax3.axvline(lambda0_dn, ls=":", lw=1, color='tab:green')
+
 
             elif current_mode == "half":
-                # Affiche λ_FWHM (Rup)
+                # Affiche λ_FWHM (Rup) exactement à la valeur détectée (et pas à un index !)
                 lambda_fwhm = data.get("lambda_fwhm", None)
-                if lambda_fwhm is not None:
+                if lambda_fwhm is not None and lam is not None and Rup is not None:
                     Rfwhm = float(np.interp(lambda_fwhm, lam, Rup))
-                    ax3.scatter([lambda_fwhm], [Rfwhm], s=50, marker='x', color='tab:blue', zorder=5, label='λ_FWHM (Rup)')
-                    ax3.axvline(lambda_fwhm, ls="--", lw=1, color='tab:blue')
-                # Affiche λ_FWHM (Rup+Δn) si dispo
-                if Rup_dn is not None:
-                    lambda_fwhm_dn = data.get("lambda_fwhm_dn", None)
-                    if lambda_fwhm_dn is not None:
-                        Rfwhm_dn = float(np.interp(lambda_fwhm_dn, lam, Rup_dn))
-                        ax3.scatter([lambda_fwhm_dn], [Rfwhm_dn], s=50, marker='x', color='tab:green', zorder=5, label='λ_FWHM (Rup+Δn)')
-                        ax3.axvline(lambda_fwhm_dn, ls="--", lw=1, color='tab:green')
+                    ax3.scatter(
+                        [lambda_fwhm], [Rfwhm],
+                        s=50, marker='x', color='tab:blue',
+                        zorder=5, label='λ_FWHM (Rup)'
+                    )
+                    ax3.axvline(
+                        lambda_fwhm, ls="--", lw=1, color='tab:blue'
+                    )
+                # Affiche λ_FWHM (Rup+Δn) si disponible, à la bonne valeur
+                lambda_fwhm_dn = data.get("lambda_fwhm_dn", None)
+                if lambda_fwhm_dn is not None and lam is not None and Rup_dn is not None:
+                    Rfwhm_dn = float(np.interp(lambda_fwhm_dn, lam, Rup_dn))
+                    ax3.scatter(
+                        [lambda_fwhm_dn], [Rfwhm_dn],
+                        s=50, marker='x', color='tab:green',
+                        zorder=5, label='λ_FWHM (Rup+Δn)'
+                    )
+                    ax3.axvline(
+                        lambda_fwhm_dn, ls="--", lw=1, color='tab:green'
+                    )
+
 
             # → Aucun marker n’est tracé en fixed_lambda ni range_lambda
 
@@ -2251,11 +2365,32 @@ class OptimizationTab:
         # ------------------------------------------------------------------
         # Affichage
         # ------------------------------------------------------------------
+        # ------------------------------------------------------------------
+        # Affichage + Boutons de téléchargement
+        # ------------------------------------------------------------------
         with self.out:
             self.out.clear_output(wait=True)
+            # Affiche la figure groupée
             display(fig)
+            # Ligne de boutons (un sous chaque subplot, donc 2x2)
+            dl_conv = widgets.Button(description="Télécharger Convergence", icon="download", layout=widgets.Layout(width="200px"))
+            dl_cons = widgets.Button(description="Télécharger Consistency", icon="download", layout=widgets.Layout(width="200px"))
+            dl_geom = widgets.Button(description="Télécharger Géométrie", icon="download", layout=widgets.Layout(width="200px"))
+            dl_spec = widgets.Button(description="Télécharger Spectre", icon="download", layout=widgets.Layout(width="200px"))
+            # Callback : exporte l’axe voulu
+            dl_conv.on_click(lambda _: self._export_subplot(ax0, "convergence"))
+            dl_cons.on_click(lambda _: self._export_subplot(ax1, "consistency"))
+            dl_geom.on_click(lambda _: self._export_subplot(ax2, "geometry"))
+            dl_spec.on_click(lambda _: self._export_subplot(ax3, "spectrum"))
+            # Affiche les boutons en 2 lignes sous chaque plot, 2x2
+            boutons_ligne1 = widgets.HBox([dl_conv, dl_cons], layout=widgets.Layout(justify_content="flex-start", gap="40px", margin="0 0 12px 0"))
+            boutons_ligne2 = widgets.HBox([dl_geom, dl_spec], layout=widgets.Layout(justify_content="flex-start", gap="40px"))
+            # Affiche la table debug HTML
+            display(boutons_ligne1)
+            display(boutons_ligne2)
             display(widgets.HTML(debug_html))
         plt.close(fig)
+
 
 
 
@@ -2466,7 +2601,68 @@ class OptimizationTab:
                     width_w.observe(sync_from_width, names="value")
 
             
+
+            # on repère les FloatText de min/max pour thick et width
+            thick_min = thick_row.children[2]
+            thick_max = thick_row.children[3]
+            width_min = width_row.children[2]
+            width_max = width_row.children[3]
+
+            # flags pour éviter la récursion
+            syncing = {"thick_low": False, "thick_up": False, "width_low": False, "width_up": False}
+
+            def sync_thick_low(change):
+                if square_checkbox.value and not syncing["width_low"]:
+                    syncing["thick_low"] = True
+                    width_min.value = change["new"]
+                    syncing["thick_low"] = False
+
+            def sync_width_low(change):
+                if square_checkbox.value and not syncing["thick_low"]:
+                    syncing["width_low"] = True
+                    thick_min.value = change["new"]
+                    syncing["width_low"] = False
+
+            def sync_thick_up(change):
+                if square_checkbox.value and not syncing["width_up"]:
+                    syncing["thick_up"] = True
+                    width_max.value = change["new"]
+                    syncing["thick_up"] = False
+
+            def sync_width_up(change):
+                if square_checkbox.value and not syncing["thick_up"]:
+                    syncing["width_up"] = True
+                    thick_max.value = change["new"]
+                    syncing["width_up"] = False
+
+            def on_square_check(change):
+                # on retire d'abord les anciens observers pour éviter les duplications
+                for w, fn in (
+                    (thick_min, sync_thick_low),
+                    (width_min, sync_width_low),
+                    (thick_max, sync_thick_up),
+                    (width_max, sync_width_up),
+                ):
+                    try:
+                        w.unobserve(fn, names="value")
+                    except:
+                        pass
+
+                if change["new"]:
+                    # première synchronisation
+                    width_min.value = thick_min.value
+                    width_max.value = thick_max.value
+                    # on branche les callbacks
+                    thick_min.observe(sync_thick_low, names="value")
+                    width_min.observe(sync_width_low, names="value")
+                    thick_max.observe(sync_thick_up, names="value")
+                    width_max.observe(sync_width_up, names="value")
+
+            # on complète l'observateur existant
             square_checkbox.observe(on_square_check, names="value")
+
+
+
 
             # Les deux lignes thick et width dans une VBox, gap minimal
             vertical_lines = widgets.VBox(
@@ -2496,6 +2692,9 @@ class OptimizationTab:
         
         def _apply_all(_):
             for k, row in param_rows_map.items():
+                # Si square_ratio est coché, on saute thick_reso et width_reso
+                if square_checkbox.value and k in ("thick_reso", "width_reso"):
+                    continue
                 row.children[2].value = common_low.value   # min
                 row.children[3].value = common_up.value    # max
 
@@ -2546,43 +2745,33 @@ class OptimizationTab:
             # ----------- PATCH SQUARE RATIO -----------
             is_square = thick_idx is not None and width_idx is not None and square_checkbox.value
 
-            if is_square:
-                # Si le carré est coché, on n’optimise qu’une variable (thick_reso)
-                keys = []
-                bounds = []
-                fixed_vals = {}
+            # on commence par collecter tous les paramètres cochés normalement
+            keys = [
+                k for k, row in param_rows_map.items()
+                if row.children[0].value
+            ]
+            bounds = [
+                (row.children[2].value, row.children[3].value)
+                for k, row in param_rows_map.items()
+                if row.children[0].value
+            ]
+            fixed_vals = {
+                k: row.children[4].value
+                for k, row in param_rows_map.items()
+                if not row.children[0].value
+            }
 
-                # On optimise thick_reso UNIQUEMENT si coché
-                if thick_row.children[0].value:
-                    keys = ['thick_reso']
-                    bounds = [
-                        (thick_row.children[2].value, thick_row.children[3].value)
-                    ]
-                else:
-                    fixed_vals['thick_reso'] = thick_row.children[4].value
+            # Si square_ratio, on ne retire **aucune** clé, on aligne simplement thick_reso/width_reso
+            if is_square and "thick_reso" in keys and "width_reso" in keys:
+                # trouve leurs indices dans keys/bounds
+                i_th = keys.index("thick_reso")
+                i_wd = keys.index("width_reso")
+                lo, _ = bounds[i_th]
+                _, hi = bounds[i_th]
+                # sur la diagonale, on met la même borne basse et haute
+                bounds[i_wd] = (lo, hi)
+                bounds[i_th] = (lo, hi)
 
-                # width_reso n’est JAMAIS optimisé directement, mais peut être fixé si décoché
-                if not width_row.children[0].value:
-                    fixed_vals['width_reso'] = width_row.children[4].value
-
-                # Mais si width_reso est coché, il sera asservi à thick_reso (imposé plus tard)
-                # --> Pas besoin de l’ajouter dans keys
-            else:
-                # Comportement standard (2 variables indépendantes si 2 cochées)
-                keys = [
-                    k for k, row in param_rows_map.items()
-                    if row.children[0].value
-                ]
-                bounds = [
-                    (row.children[2].value, row.children[3].value)
-                    for k, row in param_rows_map.items()
-                    if row.children[0].value
-                ]
-                fixed_vals = {
-                    k: row.children[4].value
-                    for k, row in param_rows_map.items()
-                    if not row.children[0].value
-                }
             # ----------- FIN PATCH SQUARE RATIO -----------
 
 

@@ -15,6 +15,8 @@ CONFIGS_DIR = ROOT_DIR / "configs"                    # paramètres JSON/YAML
 DATA_DIR    = ROOT_DIR / "data"                       # catalogues n,k et autres données
 RESULTS_DIR = ROOT_DIR / "results"                    # tout ce que l’on produit
 
+PACKAGE_DIR = Path(__file__).resolve().parent
+
 # ───────────────────────── Fichiers catalogues ───────────────────────
 CATALOG_NK = DATA_DIR / "catalog_nk.yml"
 CATALOG_N2 = DATA_DIR / "catalog-n2.yml"
@@ -35,3 +37,5 @@ SUMMARY_SIM_DIR  = RESULTS_DIR / "summary_simulation"      # minuscule unique
 SUMMARY_OPT_DIR  = RESULTS_DIR / "summary_optimisation"
 EXPERIMENTAL_DIR = RESULTS_DIR / "experimental"
 H5_RESULTS_DIR   = SUMMARY_SIM_DIR    
+
+

@@ -204,12 +204,17 @@ def build_optim_path(base_dir: Path,
 # --------------------------------------------------------------------------- #
 def save_optimization_hdf5(
     *,
+    square_ratio: bool,
     notebook_dir: str,          # = paths.RESULTS_DIR   (racine "results/")
     family: str,                # multi_layer | gap_plasmon_resonator | …
     cost_mode: str,             # lambda_fix | lambda_range | lambda_dip | lambda_fwhm
     config_name: str,
     lambda0: float | None = None,
     lambda0_dn: float | None = None,
+    # idx_dip: int | None = None,
+    # idx_dip_dn: int | None = None,
+    # idx_fwhm: int | None = None,
+    # idx_fwhm_dn: int | None = None,
     lambda_fwhm: float | None = None,
     lambda_fwhm_dn: float | None = None,
     fwhm: float | None = None,
@@ -230,6 +235,7 @@ def save_optimization_hdf5(
     best_cost: float,
     fixed_lambda: float | None = None,
     best_after_eval: np.ndarray | None = None,
+    range_lambda: tuple[float, float] | None = None,
     mode: str,
     lam: np.ndarray | None = None,
     Rup: np.ndarray | None = None,
@@ -291,6 +297,7 @@ def save_optimization_hdf5(
         grp.attrs['bounds_low']  = lowers.tolist()
         grp.attrs['bounds_up']   = uppers.tolist()
 
+        grp.attrs['square_ratio'] = int(square_ratio)
 
         grp.attrs.update(
             date=datetime.now().isoformat(),
@@ -362,6 +369,29 @@ def save_optimization_hdf5(
             val = locals().get(name, None)
             if val is not None:
                 grp.attrs[name] = float(val)
+
+
+        # # ─── indices des dips ────────────────────────────────
+        # if idx_dip is not None:
+        #     grp.attrs["idx_dip"] = int(idx_dip)
+        # if idx_dip_dn is not None:
+        #     grp.attrs["idx_dip_dn"] = int(idx_dip_dn)
+        # # ─── indices FWHM ─────────────────────────────────────
+        # if idx_fwhm is not None:
+        #     grp.attrs["idx_fwhm"] = int(idx_fwhm)
+        # if idx_fwhm_dn is not None:
+        #     grp.attrs["idx_fwhm_dn"] = int(idx_fwhm_dn)
+
+
+
+        # —————————————————————————————————————————————— 
+        # Sauvegarde des bornes range_lambda si utilisé
+        if range_lambda is not None:
+            grp.attrs['range_lambda_min'] = float(range_lambda[0])
+            grp.attrs['range_lambda_max'] = float(range_lambda[1])
+
+        # Flag square ratio
+        grp.attrs['square_ratio'] = int(square_ratio)       
 
 
 
