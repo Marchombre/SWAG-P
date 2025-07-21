@@ -1,3 +1,6 @@
+# material_selector.py
+
+
 from gap_plasmon_2d import paths
 import os
 import yaml
@@ -8,10 +11,11 @@ from IPython.display import display, clear_output
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from IPython import get_ipython
 
 
 from gap_plasmon_2d.ui.geometry_settings import geometry_widget, get_geometry_save_path
-
+from gap_plasmon_2d.utils.file_watchers import start_watcher
 
 # ============================================================================
 # Définition des chemins globaux
@@ -838,6 +842,19 @@ class MaterialSelectorTabbedNotebook:
         )
         self.geometry_dropdown.observe(self._on_geometry_change, names="value")
 
+
+        # ──────────────────────────────────────────────────────────────────────
+        # Watcher : rafraîchir la liste de géométries si le JSON change
+        # ──────────────────────────────────────────────────────────────────────
+        self._geom_watcher, self._geom_handler = start_watcher(
+            path=str(get_geometry_save_path()),   # le fichier à surveiller
+            callback=self._on_geom_fs_event,      # défini plus bas
+            extensions=[".json"],
+            recursive=False,
+            debounce_interval=0.2,                # évite les doublons d’événements
+        )
+
+
         self.CONFIGURATIONS_dir = CONFIGURATIONS_DIR
         self.library = load_catalog_full(CATALOG_PATH)
         self.standard_list = get_standard_materials(JSON_COMBINED_PATH, DATA_DIR)
@@ -982,6 +999,26 @@ class MaterialSelectorTabbedNotebook:
 
         # 4) Mémoriser la liste complète des rôles pour le futur
         self.current_roles = list(self.role_widgets.keys())
+
+
+
+
+    # ──────────────────────────────────────────────────────────────────────
+    #  Callbacks liés au watcher de géométrie
+    # ──────────────────────────────────────────────────────────────────────
+    def _refresh_geometry_dropdown(self):
+        """Relit la liste des géométries et garde la sélection si possible."""
+        current = self.geometry_dropdown.value
+        names   = [""] + _load_geometry_names()     # relit le JSON
+        self.geometry_dropdown.options = names
+        if current not in names:                    # l’ancienne sélection n’existe plus
+            self.geometry_dropdown.value = ""       # repasse à « aucune »
+
+    def _on_geom_fs_event(self, *args):
+        """Appelé par le watcher (thread séparé) → exécute dans le thread Jupyter."""
+        loop = get_ipython().kernel.io_loop
+        loop.add_callback(self._refresh_geometry_dropdown)
+
 
 
 

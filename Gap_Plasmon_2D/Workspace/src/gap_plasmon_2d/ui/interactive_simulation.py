@@ -14,7 +14,7 @@ import ipywidgets as widgets
 
 from gap_plasmon_2d.simulation.simulation import SimulationTab
 from gap_plasmon_2d.analysis.plotting import PlotTab
-from gap_plasmon_2d.analysis.difference import create_difference_tab
+from gap_plasmon_2d.analysis.accuracy_checking import create_difference_tab
 from gap_plasmon_2d.optimisation.optimisation import OptimizationTab  
 
 
@@ -99,7 +99,7 @@ def create_advanced_app():
     tabs.set_title(0, "Convergence")
     tabs.set_title(1, "Simulation")
     tabs.set_title(2, "Plot: Multi-spectra")
-    tabs.set_title(3, "Validation")
+    tabs.set_title(3, "Accuracy checking")
     tabs.set_title(4, "Optimisation")
     
 
@@ -112,7 +112,7 @@ def create_advanced_app():
         # 2 = Plot → on rafraîchit les spectres
         if idx == 2 and hasattr(plot_obj, "update_spectra"):
             plot_obj.update_spectra()
-        # 3 = Validation → on rafraîchit les options de différence
+        # 3 = accuracy_checking → on rafraîchit les options de différence
         elif idx == 3 and hasattr(diff_obj, "update_diff_options"):
             diff_obj.update_diff_options()
         # (et 4 = Optimisation, 0 = Convergence si besoin)

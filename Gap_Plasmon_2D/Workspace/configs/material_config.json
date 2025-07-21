@@ -2075,6 +2075,192 @@
         }
       ],
       "RI_OVERRIDES": {}
+    },
+    {
+      "config_name": "Bragg_12",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "Custom",
+            "expression": "1",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_homo_new_1",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_2",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_3",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_4",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_5",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_6",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_7",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_8",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_9",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_homo_new_10",
+          "material": {
+            "type": "Custom",
+            "expression": "1.4**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "Custom",
+            "expression": "1.8**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
+          }
+        }
+      ],
+      "RI_OVERRIDES": {}
     }
   ]
 }

@@ -261,8 +261,8 @@ class SimulationTab:
         )
         # … vos ajustements de layout …
         self.fig.subplots_adjust(
-            left=0.08, right=0.95,
-            top=0.98,  bottom=0.05,
+            left=0.15, right=0.98,
+            top=0.90,  bottom=0.10,
             hspace=0.2
         )
         self.ax_table.axis('off')

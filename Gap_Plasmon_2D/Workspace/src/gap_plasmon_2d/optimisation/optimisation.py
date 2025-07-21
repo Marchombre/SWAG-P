@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Optimisation.py
+Optimization.py
 ===============
 
-• Implémente l’onglet d’optimisation basé sur Differential Evolution (DE).
+• Implémente l’onglet d’Optimization basé sur Differential Evolution (DE).
 • Corrigé, commenté et fiabilisé : noms cohérents, gestion du mode de calcul,
   traçage, sauvegarde HDF5, etc.
 • Ne modifie **aucune** capacité fonctionnelle ; seules clarté, robustesse et
@@ -58,7 +58,7 @@ from gap_plasmon_2d.utils.file_watchers import start_watcher
 
 
 class OptimizationCancelled(Exception):
-    """Exception levée quand l'utilisateur annule l'optimisation."""
+    """Exception levée quand l'utilisateur annule l'Optimization."""
     pass
 
 
@@ -67,21 +67,21 @@ class OptimizationCancelled(Exception):
 #  PATHS & GLOBALS                                                             #
 # -----------------------------------------------------------------------------#
 # Ces variables globales définissent les chemins vers :
-#  - le dossier où l’on stocke les résultats des optimisations
+#  - le dossier où l’on stocke les résultats des Optimizations
 #  - le dossier des données (notamment le fichier JSON des propriétés optiques)
 
 # BASE_NOTEBOOKS : chemin absolu vers le dossier racine des résultats Jupyter
 # Numérique : 
 #   Path(__file__).resolve() → path absolu de ce fichier
-#   .parent.parent          → remonte de deux niveaux (src/.../optimisation.py → racine du package)
+#   .parent.parent          → remonte de deux niveaux (src/.../Optimization.py → racine du package)
 #   / str(paths.RESULTS_DIR)→ concatène le nom de dossier RESULTS_DIR (ex : "results")
 BASE_NOTEBOOKS = (
     Path(__file__).resolve().parent.parent  
     / str(paths.RESULTS_DIR)
 )
 
-# summary_opt_dir : sous-dossier pour les fichiers de synthèse d’optimisation
-# chaque run d’optimisation écrira ici son HDF5 résumé
+# summary_opt_dir : sous-dossier pour les fichiers de synthèse d’Optimization
+# chaque run d’Optimization écrira ici son HDF5 résumé
 summary_opt_dir = BASE_NOTEBOOKS / "summary_optimisation"
 
 # Création du dossier s’il n’existe pas (parents=True gère la création récursive)
@@ -519,12 +519,12 @@ class OptimizationFileArboWidget:
 # -----------------------------------------------------------------------------#
 class OptimizationTab:
     """
-    Onglet d’optimisation (widgets + logique de calcul).
+    Onglet d’Optimization (widgets + logique de calcul).
     """
 
 
     # ------------------------------------------------------------------#
-    #  Config selector dédié à l’onglet Optimisation                    #
+    #  Config selector dédié à l’onglet Optimization                    #
     # ------------------------------------------------------------------#
     # ------------------------------------------------------------------#
     #  Config selector (identique à Simulation, sans synchro)           #
@@ -667,7 +667,8 @@ class OptimizationTab:
         # background process / queue (may still be used by DE_general)
         ctx                 = mp.get_context("fork" if sys.platform != "win32" else "spawn")
         self._de_process    = None          # type: mp.Process | None
-        self._result_queue  = ctx.Queue()
+        self._result_queue  = ctx.Queue(maxsize=2) # 1 slot PROG + 1 slot DONE
+
 
         # ------------------------------------------------------------------ #
         #   STATIC UI — all widgets created **once** and kept forever
@@ -752,7 +753,7 @@ class OptimizationTab:
         )
 
 
-        # ─── RCWA modes (Optimisation) ──────────────────────────────────────────
+        # ─── RCWA modes (Optimization) ──────────────────────────────────────────
         self.opt_mode_selection = widgets.RadioButtons(
             options=[('Fixe', 'fixed'),
                     ('Custum', 'custom'),
@@ -874,12 +875,12 @@ class OptimizationTab:
             description="Run DE", button_style="primary"
         )
 
-        # bouton pour annuler l’optimisation
+        # bouton pour annuler l’Optimization
         self.cancel_btn = widgets.Button(
             description="Cancel",
             button_style="warning"
         )
-        self.cancel_btn.disabled = True  # désactivé tant qu'aucune optimisation en cours
+        self.cancel_btn.disabled = True  # désactivé tant qu'aucune Optimization en cours
         self.cancel_btn.on_click(self._on_cancel)
 
 
@@ -1022,7 +1023,7 @@ class OptimizationTab:
 
         ], layout=widgets.Layout(width='48%', padding='10px'))
 
-        # 2) Colonne de droite (Optimisation sous forme d’onglets)
+        # 2) Colonne de droite (Optimization sous forme d’onglets)
         self.main_tabs.layout = widgets.Layout(
             width='55%',
             padding='10px'
@@ -1213,7 +1214,7 @@ class OptimizationTab:
     def _opt_get_n_modes_for(self, cfg_name: str) -> int:
         """
         Nombre de modes RCWA à utiliser pour *cfg_name* selon le choix
-        de l’onglet Optimisation (fixed / custom / auto).
+        de l’onglet Optimization (fixed / custom / auto).
         Le mode 'auto' lit directement summary_convergence/convergence_results.json
         pour être indépendant de l’onglet Simulation.
         """
@@ -1356,9 +1357,13 @@ class OptimizationTab:
         by _check_process when the first result arrives.
         """
 
-
+        # --- keep polling until we’ve really seen DONE/ERROR -------------
         if self._is_running:        # guard against double-click
-            return
+            loop = get_ipython().kernel.io_loop
+            loop.add_timeout(loop.time() + 0.1, self._check_process)
+            
+            #return
+
         self._is_running = True
         self._cancelled  = False
         self.cancel_btn.disabled = False
@@ -1394,7 +1399,7 @@ class OptimizationTab:
 
         keys   = [k for k, w in self.param_widgets.items() if w["opt"].value]
         if not keys:
-            self._status_html.value = "⚠️ No parameter selected for optimisation."
+            self._status_html.value = "⚠️ No parameter selected for Optimization."
             self._is_running = False
             self.cancel_btn.disabled = True
             return
@@ -1412,7 +1417,7 @@ class OptimizationTab:
             return
 
         # ── queue de progression & thread lanceur ──────────
-        self._result_queue = q.Queue()
+        self._result_queue = q.Queue(maxsize=1)
         args = dict(budget=self.budget_w.value,
                     Npop   =self.pop_w.value,
                     lowers =lowers, uppers=uppers,
@@ -1433,7 +1438,11 @@ class OptimizationTab:
 
 
         self._worker_thread = threading.Thread(
-            target=self.DE_general, kwargs=args, daemon=True)
+            target=self._de_thread_wrapper, 
+            kwargs=args, 
+            daemon=True
+        )
+        
         self._worker_thread.start()
 
         self.cancel_btn.disabled = False
@@ -1493,8 +1502,9 @@ class OptimizationTab:
             self._is_running = False
             return
 
-        # --- keep polling while the thread lives ---
-        if self._worker_thread and self._worker_thread.is_alive():
+
+        # --- keep polling until we have explicitely seen DONE / ERROR -------
+        if self._is_running:          # ← plus simple et sans course critique    
             loop = get_ipython().kernel.io_loop
             loop.add_timeout(loop.time() + 0.1, self._check_process)
 
@@ -1514,6 +1524,12 @@ class OptimizationTab:
         self._progress_bar.value     = 1.0
         self._progress_bar.bar_style = "success"
         self.cancel_btn.disabled     = True
+        # rendre le message de statut à nouveau visible
+        self._status_html.layout.display = ""        # <-- ON AFFICHE
+        # finition propre de la barre
+        self._progress_bar.description = "100 %"
+        # (facultatif) masquer la barre si vous préférez
+        # self._progress_bar.layout.display = "none"
 
 
 
@@ -1668,16 +1684,12 @@ class OptimizationTab:
 
         # récupère les positions de thick_reso et width_reso dans le vecteur x
         # On repère les indices de thick_reso et width_reso DANS “keys”
-        # try:
         # ne gère square_ratio QUE si on a coché square_ratio ET les deux paramètres dans keys
         can_square = bool(square_ratio and "thick_reso" in keys and "width_reso" in keys)
         if can_square:
             i_th = keys.index("thick_reso")
             i_wd = keys.index("width_reso")
-        # except ValueError:
-        #     # si l’un des deux n’existe pas → pas de carré possible
-        #     square_ratio = False
-        # ===============
+
 
 
         pop = lowers + (uppers - lowers) * rng.random((Npop, n_params))
@@ -1732,6 +1744,7 @@ class OptimizationTab:
             sel_layers_val = (list(self.layer_selector.value)
                             if isinstance(self.layer_selector.value, (list, tuple))
                             else [int(self.layer_selector.value)])
+            
             args0 = [
                 (i, pop[i], keys, cfg_name, mode, mode_kw, fixed_vals,
                 n_modes, delta_n_val, sel_layers_val, square_ratio)
@@ -1746,14 +1759,17 @@ class OptimizationTab:
                 cf[idx] = val
 
 
-
             conv_best  = np.zeros(Ngen)
             conv_evals = np.arange(1, Ngen+1)*Npop
             best_after_eval: List[float] = []
-            F1, F2, cr = 0.9, 0.8, 0.8
+            F1, F2, cr = 0.9, 0.8, 0.5
+            
+            # ─── Nouvelle variable pour filtrer les messages PROG ───
+            prev_percent = -1          # 1ʳᵉ valeur impossible (−1 %) 
 
-            # 3) Boucle DE avec barre de progression et annulation
 
+
+            # 3)Boucle DE avec barre de progression et annulation
             for g in range(Ngen):
                 # si on a demandé l’annulation sur ce job, on stoppe tout de suite
                 if job is not None and job["cancel_flag"]:
@@ -1769,21 +1785,31 @@ class OptimizationTab:
                 for p in range(Npop):
                     a, b, c = pop[rng.choice(Npop, 3, replace=False)]
                     best_ind = pop[np.argmin(cf)]
+                    
                     y = c + F1 * (a - b) + F2 * (best_ind - c)
+                    
                     mask = rng.random(n_params) < cr
+                    
                     if not mask.any():
                         mask[rng.integers(n_params)] = True
                     z = np.where(mask, y, pop[p])
-                    z = np.clip(z, lowers, uppers)
                     
-                    # === NOUVEAU : projection sur diagonale
+                    #z = np.clip(z, lowers, uppers)
+                    # --- bornes : repli sur le parent ---
+                    out_low  = z < lowers           # booleen, même shape que z
+                    out_high = z > uppers
+                    need_fix = out_low | out_high   # True là où z est hors domaine
+                    z[need_fix] = pop[p][need_fix]  # on recopie la valeur du parent
+
+
+                    # === projection sur diagonale
                     # Si on force square_ratio, on colle aussi chaque mutant sur la diagonale
                     if can_square:
                         a2 = 0.5 * (z[i_th] + z[i_wd])
                         z[i_th] = z[i_wd] = a2
                     # ===============
 
-                    z_list.append((p, z))          # ← on garde l’index du parent
+                    z_list.append((p, z))          # on garde l’index du parent
 
                 # ───────────── évaluation parallèle des enfants ───────────
                 sel_layers_val = (list(self.layer_selector.value)
@@ -1815,11 +1841,23 @@ class OptimizationTab:
                 best_after_eval.append(cf.min())
                 conv_best[g] = cf.min()
 
-                if progress_queue is not None:
-                            progress_queue.put(("PROG",
-                                                (g + 1) / Ngen,      # fraction 0-1
-                                                float(cf.min())))     # meilleur coût courant
+                # if progress_queue is not None:
+                #             progress_queue.put(("PROG",
+                #                                 (g + 1) / Ngen,      # fraction 0-1
+                #                                 float(cf.min())))     # meilleur coût courant
                             
+                # g démarre à 0
+                percent = int(100 * (g + 1) / Ngen)
+
+                if progress_queue is not None and percent != prev_percent:
+                    try:
+                        progress_queue.put_nowait(("PROG", percent / 100.0))
+                        prev_percent = percent
+                    except q.Full:
+                        # La queue ne peut contenir qu’un PROG ; on écrase l’ancien
+                        progress_queue.get_nowait()            # vide l’unique slot
+                        progress_queue.put_nowait(("PROG", percent / 100.0))
+
 
             # Ré-évaluation finale
             sel_layers_val = (list(self.layer_selector.value)
@@ -1968,6 +2006,29 @@ class OptimizationTab:
                 (lambda_left_dn, lambda_right_dn, fwhm_dn, depth_dn,
                 lambda0_dn, R_dip_dn, ylev_dn, lam_max_l_dn, R_max_l_dn,
                 lam_max_r_dn, R_max_r_dn, lam_sym_dn, R_sym_dn, *_ ) = out_dn
+            
+            
+            # -------------------------------------------------------------
+            # 1) Vérifier qu’on a ce qu’il faut pour le mode choisi
+            # -------------------------------------------------------------
+            if mode == "dip":
+                if lambda0 is None:
+                    raise RuntimeError("Aucun dip détecté : impossible de calculer la métrique 'dip'.")
+            elif mode == "half":
+                if lambda_right is None or fwhm is None:
+                    raise RuntimeError("Impossible de calculer la FWHM : aucun dip détecté.")
+            # fixed_lambda et range_lambda n’ont rien à vérifier ici
+
+            # -------------------------------------------------------------
+            # 2) Préparer les variables à passer (celles qui ne servent pas
+            #    au mode actuel → None)
+            # -------------------------------------------------------------
+            lambda0_val        = lambda0        if mode == "dip"  else None
+            lambda0_dn_val     = lambda0_dn     if mode == "dip"  else None
+            lambda_fwhm_val    = lambda_right   if mode == "half" else None
+            lambda_fwhm_dn_val = lambda_right_dn if mode == "half" else None
+            fwhm_val           = fwhm           if mode == "half" else None
+            fwhm_dn_val        = fwhm_dn        if mode == "half" else None
 
             config_name = cfg_name      # cohérent avec le reste du run            
             fam = 'gap_plasmon_resonator' if mode in ('dip','half') else 'multi_layer'
@@ -1975,7 +2036,7 @@ class OptimizationTab:
             fixed_lambda_val = mode_kw.get("fixed_lambda", None)
             range_lambda_val = mode_kw.get("range_lambda", None)
 
-            # Sauvegarde complète du run d’optimisation dans un fichier HDF5
+            # Sauvegarde complète du run d’Optimization dans un fichier HDF5
             save_optimization_hdf5(
                 square_ratio=square_ratio,
                 notebook_dir=str(BASE_NOTEBOOKS),   # Dossier racine où créer le .h5
@@ -1984,16 +2045,12 @@ class OptimizationTab:
                 # — méta-données pour filtrage futur —
                 config_name=config_name,            # Structure optimisée (pour comparer uniquement les runs compatibles)
             
-                lambda0=lambda0,
-                lambda0_dn=lambda0_dn,
-                # idx_dip=idx_dip,
-                # idx_dip_dn=idx_dip_dn,
-                # idx_fwhm=idx_fwhm,
-                # idx_fwhm_dn=idx_fwhm_dn,
-                lambda_fwhm=lambda_right if lambda_right is not None else None,
-                lambda_fwhm_dn=lambda_right_dn if out_dn is not None else None,
-                fwhm=fwhm,
-                fwhm_dn=fwhm_dn if out_dn is not None else None,
+                lambda0        = lambda0_val,
+                lambda0_dn     = lambda0_dn_val,
+                lambda_fwhm    = lambda_fwhm_val,
+                lambda_fwhm_dn = lambda_fwhm_dn_val,
+                fwhm           = fwhm_val,
+                fwhm_dn        = fwhm_dn_val,
                 
                 # — paramètres DE —
                 budget=budget,                      # Budget d’évaluations
@@ -2038,8 +2095,17 @@ class OptimizationTab:
             get_ipython().kernel.io_loop.add_callback(self.opt_file_arbo._refresh_runs)
 
             if progress_queue is not None:
-                progress_queue.put(("DONE",
-                                    conv_best, conv_evals, best_final, best_cost))
+                # on vide l’éventuel PROG restant puis on poste DONE
+                try:
+                    progress_queue.get_nowait()
+                except q.Empty:
+                    pass
+                progress_queue.put_nowait(("DONE",
+                                        conv_best, conv_evals,
+                                        best_final, best_cost))
+
+            
+            
             return conv_best, conv_evals, best_final, best_cost
 
 
@@ -2333,7 +2399,7 @@ class OptimizationTab:
         {verbose_rows}
         </table>
 
-        <details open>
+        <details>
         <summary><b>Stack sent to RCWA ({len(geom_items)} layers)</b></summary>
         <div style="overflow-x:auto;">
             <table>
@@ -2553,11 +2619,17 @@ class OptimizationTab:
         # ————————————————
         # Ajout accolade + checkbox “<Square ratio>” à gauche de thick_reso/width_reso
         # ————————————————
-        if thick_idx is not None and width_idx is not None:
-            # Checkbox + label côte à côte (dans une HBox pour être sur la même ligne)
-            square_checkbox = widgets.Checkbox(
-                value=False, description="Square ratio", indent=False, layout=widgets.Layout(width="140px")
-            )
+        square_checkbox = widgets.Checkbox(
+            value=False, description="Square ratio",
+            indent=False, layout=widgets.Layout(width="140px")
+        )
+        
+        if thick_idx is None or width_idx is None:
+            # 2) Pas de couple thick/width → on la masque et on ne fait rien d’autre
+            square_checkbox.layout.display = "none"
+
+        
+        else:
             case_and_label = widgets.HBox(
                 [square_checkbox],
                 layout=widgets.Layout(align_items="center", min_width="140px", justify_content="flex-end")
@@ -2807,7 +2879,8 @@ class OptimizationTab:
             widgets.HTML("<b>DE parameters</b>"),
             widgets.HBox([budget_w, pop_w, add_q, add_copy, del_btn], layout=widgets.Layout(gap="10px"))
         ], layout=widgets.Layout(padding="10px", border="1px solid #bbb", margin="5px"))
-        panel.square_checkbox = square_checkbox  # Ajout ici
+        
+        panel.square_checkbox = square_checkbox 
         
         return panel
 
@@ -2816,6 +2889,19 @@ class OptimizationTab:
     # ------------------------------------------------------------------
     # Helper : dit s'il reste des jobs "running"
     # ------------------------------------------------------------------
+    
+    
+    def _de_thread_wrapper(self, progress_queue, **kwargs):
+        try:
+            self.DE_general(progress_queue=progress_queue, **kwargs)
+        except OptimizationCancelled:
+            # On ne logge rien : annulation attendue
+            pass
+        except Exception:
+            # Les vraies erreurs continuent à remonter vers l’UI
+            progress_queue.put(("ERROR", traceback.format_exc()))
+    
+    
     def _any_running(self) -> bool:
         return any(job["status"] == "running" for job in self.job_queue)
 
@@ -2884,6 +2970,19 @@ class OptimizationTab:
 
 
     def _run_job(self, idx: int, *, refresh_ui: bool = True):
+        
+        job = self.job_queue[idx]
+
+        # ─── RÉINITIALISATION ──────────────────────────────────────────────
+        job["cancel_flag"] = False          # on efface l’ancien signal
+        job["progress"].value = 0           # barre à zéro
+        job["progress"].bar_style = "info"  # couleur par défaut
+        job["progress"].layout.display = "none"   # cachée tant que pas de PROG
+        if "pool" in job:
+            job.pop("pool")                 # l’ancien Pool (fermé) ne sert plus
+        # ------------------------------------------------------------------
+            
+        
         job = self.job_queue[idx]
         job["status"] = "running"
 
@@ -2892,7 +2991,7 @@ class OptimizationTab:
             self._refresh_queue()
 
         # 1) création de la queue dédiée
-        job_queue = q.Queue()
+        job_queue = q.Queue(maxsize=1)
         job["progress_queue"] = job_queue
 
         # 2) extraction des bornes & clés depuis job["bounds"]
@@ -2942,7 +3041,9 @@ class OptimizationTab:
 
 
         # 5) lancement du thread
-        t = threading.Thread(target=self.DE_general, kwargs=args, daemon=True)
+        t = threading.Thread(target=self._de_thread_wrapper, kwargs=args, daemon=True)
+        
+        
         job["thread"] = t
         t.start()
 
@@ -2973,22 +3074,31 @@ class OptimizationTab:
                 loop = get_ipython().kernel.io_loop
                 loop.add_timeout(loop.time() + 0.1, _poll)
 
-        loop = get_ipython().kernel.io_loop
-        loop.add_timeout(loop.time() + 0.1, _poll)
+        # après avoir traité tag
+        if job["status"] == "running" or not job_queue.empty():
+            loop = get_ipython().kernel.io_loop
+            loop.add_timeout(loop.time() + 0.1, _poll)
 
 
-    def _cancel_job(self, idx: int):
+
+    def _cancel_job(self, idx: int, *, refresh_ui: bool = True):
         job = self.job_queue[idx]
-        job["cancel_flag"] = True            # ← signale l’annulation
-        # si le pool existe, on le tue immédiatement
-        if "pool" in job and job["pool"] is not None:
-            try:
-                job["pool"].terminate()
-                job["pool"].join()
-            except Exception:
-                pass
+        job["cancel_flag"] = True
+
+        # # tue le pool éventuel
+        # if "pool" in job and job["pool"] is not None:
+        #     try:
+        #         job["pool"].terminate()
+        #         job["pool"].join()
+        #     except Exception:
+        #         pass
+
         job["status"] = "error"
-        self._refresh_queue()
+
+        # ► rafraîchit l’UI seulement si demandé
+        if refresh_ui:
+            self._refresh_queue()
+
 
 
     def _delete_job(self, idx: int):
@@ -3016,8 +3126,14 @@ class OptimizationTab:
     def _cancel_all(self, _=None):
         if not self._any_running():
             return
-        for i in range(len(self.job_queue)):
-            self._cancel_job(i)
+
+        # on annule silencieusement chaque job
+        for idx in range(len(self.job_queue)):
+            self._cancel_job(idx, refresh_ui=False)
+
+        # un seul redraw après la boucle
+        self._refresh_queue()
+
 
 
     def _delete_all(self, _=None):
@@ -3032,5 +3148,6 @@ class OptimizationTab:
 #  Helper                                                                     #
 # -----------------------------------------------------------------------------#
 def create_optimization_tab(sim_obj: SimulationTab) -> OptimizationTab:
-    """Renvoie l’onglet d’optimisation (compatibilité)."""
+    """Renvoie l’onglet d’Optimization (compatibilité)."""
     return OptimizationTab(sim_obj)
+

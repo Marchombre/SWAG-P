@@ -37,6 +37,61 @@ def compute_cost(
     Renvoie la métrique à *minimiser* (1 – R ou 1 – ΔR/Δn, etc.).
     """
 
+    # 1) Choix de la configuration
+    if selected_cfg is None:       # ⇢ appel depuis l’onglet Simulation
+        cfg = deepcopy(next(
+            c for c in sim_tab.all_configs
+            if sim_tab.config_checkboxes[c["config_name"]].value
+        ))
+    else:                          # ⇢ appel depuis l’onglet Optimisation
+        cfg = deepcopy(selected_cfg)        # déjà la bonne structure
+
+
+    # RCWA modes choisis par l'appelant
+    if n_modes is None:
+        n_modes = sim_tab._get_n_modes_for(cfg["config_name"])
+
+    if n_modes is None:                                # toujours indéfini ?
+        raise ValueError("Please select a valid RCWA mode in the "
+                        "\"Optimisation\" tab before launching DE.")
+
+
+    # 2) injection des épaisseurs optimisées
+    for xi, k in zip(x, keys):
+        cfg["geometry"]["geometry"][k] = float(xi)
+
+    # 2) injection des épaisseurs optimisées
+    #    → on traite d’abord l’option square_ratio
+    if square_ratio and ("thick_reso" in keys and "width_reso" in keys):
+        # on force les deux composantes à avoir la même valeur
+        # (on prend la moyenne par sécurité)
+        v = float(0.5*(x[keys.index("thick_reso")] + x[keys.index("width_reso")]))
+        cfg["geometry"]["geometry"]["thick_reso"] = v
+        cfg["geometry"]["geometry"]["width_reso"]  = v
+    else:
+        # cas général : chaque k ← x_i
+        for xi, k in zip(x, keys):
+            cfg["geometry"]["geometry"][k] = float(xi)
+
+
+
+    wave = {"angle": 0, "polarization": 1}
+
+    # ------------------------------------------------------------------
+    # 1) MODE λ₀ FIXE  →  **UN SEUL** appel RCWA
+    # ------------------------------------------------------------------
+    if mode == "fixed_lambda":
+        if fixed_lambda is None:
+            fixed_lambda = sim_tab.lambda0_in.value
+
+        lam_single = np.asarray([fixed_lambda], dtype=float)   # ← tableau 1-valeur
+        Rup0, _, _ = run_simulation_one_combo(
+            lam_single, wave, n_modes, cfg, sim_tab.json_combined_path
+        )
+        R = float(Rup0[0])             # Reflectance à λ₀
+        return 1.0 - R                 # → coût = 1 – R(λ₀)
+    
+
     # 0) Δn : si l’appelant ne fournit rien → on prend le widget
     if delta_n is None:
         delta_n = sim_tab.delta_n_widget.value
@@ -52,39 +107,15 @@ def compute_cost(
         delta_n = 0.0
 
 
-    # 1) Choix de la configuration
-    if selected_cfg is None:       # ⇢ appel depuis l’onglet Simulation
-        cfg = deepcopy(next(
-            c for c in sim_tab.all_configs
-            if sim_tab.config_checkboxes[c["config_name"]].value
-        ))
-    else:                          # ⇢ appel depuis l’onglet Optimisation
-        cfg = deepcopy(selected_cfg)        # déjà la bonne structure
-
-    # 2) injection des épaisseurs optimisées
-    for xi, k in zip(x, keys):
-        cfg["geometry"]["geometry"][k] = float(xi)
-
-    # En mode square, on n’applique qu’une seule valeur, issue de x[0].
-    if square_ratio and ('thick_reso' in keys or 'width_reso' in cfg["geometry"]["geometry"]):
-        # Si le carré est activé, x[0] est la valeur commune à appliquer
-        val = float(x[0])
-        if 'thick_reso' in cfg["geometry"]["geometry"]:
-            cfg["geometry"]["geometry"]['thick_reso'] = val
-        if 'width_reso' in cfg["geometry"]["geometry"]:
-            cfg["geometry"]["geometry"]['width_reso'] = val
-
-
-
     # 3) réglages généraux
     lam = np.linspace(sim_tab.sim_lambda_min.value,
                       sim_tab.sim_lambda_max.value,
                       sim_tab.sim_n_points.value)
-    wave     = {"angle": 0, "polarization": 1}
+    #wave     = {"angle": 0, "polarization": 1}
     
     # Nombre de modes RCWA contrôlé par l’appelant
-    if n_modes is None:
-        n_modes = sim_tab._get_n_modes_for(cfg["config_name"])
+    # if n_modes is None:
+    #     n_modes = sim_tab._get_n_modes_for(cfg["config_name"])
     
     
 
@@ -95,10 +126,19 @@ def compute_cost(
     Rup0 = np.asarray(Rup0, float)
 
     # 5) métriques simples
-    fixed_lambda = fixed_lambda or sim_tab.lambda0_in.value
-    if mode == "fixed_lambda":
-        R = float(np.interp(fixed_lambda, lam, Rup0))
-        return 1.0 - R
+    #fixed_lambda = fixed_lambda or sim_tab.lambda0_in.value
+    # if mode == "fixed_lambda":
+    #     if fixed_lambda is None:
+    #         fixed_lambda = sim_tab.lambda0_in.value
+
+    #     # appel RCWA le plus léger possible
+    #     Rup0, _, _ = run_simulation_one_combo(
+    #         lam, wave, n_modes, cfg, sim_tab.json_combined_path
+    #     )
+    #     R = float(Rup0[0])
+
+    #     return 1.0 - R       
+
 
     if mode == "range_lambda":
         lam_min, lam_max = range_lambda

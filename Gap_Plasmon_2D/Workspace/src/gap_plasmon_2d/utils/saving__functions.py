@@ -6,6 +6,7 @@ Module : Saving_Functions.py
 
 Génération / écriture des résumés de simulation et sauvegarde des figures.
 """
+import logging
 
 import os, re
 from datetime import datetime
@@ -14,6 +15,7 @@ import h5py
 from pathlib import Path
 from gap_plasmon_2d.utils.data_readers import get_material_str_clean
 
+logger = logging.getLogger(__name__)
 
 def sanitize_filename(name):
     """Remplace les caractères non autorisés dans un nom de fichier par un underscore."""
@@ -394,8 +396,9 @@ def save_optimization_hdf5(
         grp.attrs['square_ratio'] = int(square_ratio)       
 
 
+    
+    logger.debugy(f"Optimization saved to {h5path}")
 
-    print(f"[Saving] Optimization saved to {h5path}")
     return str(h5path)
 
 
