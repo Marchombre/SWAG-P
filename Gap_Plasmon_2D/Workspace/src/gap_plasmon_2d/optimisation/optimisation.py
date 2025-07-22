@@ -267,7 +267,7 @@ class OptimizationFileArboWidget:
             self.budget_pop_dd, self.wave_dd,
             self.file_dd, self.run_dd
         ):
-            dd.layout = widgets.Layout(width="300px")
+            dd.layout = widgets.Layout(width="auto", flex="1 1 0%")
             # raccourcit un peu la zone de description
             dd.style = {"description_width": "initial"}
 
@@ -552,7 +552,7 @@ class OptimizationTab:
             value=True,                      # ouvert par défaut
             icon="caret-up",
             button_style="warning",
-            layout=widgets.Layout(width="520px")
+            layout=widgets.Layout(width="auto", flex="1 1 0%")
         )
         self.opt_toggle_btn.observe(self._toggle_config_list, names="value")
 
@@ -573,7 +573,7 @@ class OptimizationTab:
         for cfg_name in _load_available_configs():
             chk_cfg = widgets.Checkbox(value=False, description=cfg_name, indent=False)
             chk_dn  = widgets.Checkbox(value=False, description="Δn", indent=False,
-                                       layout=widgets.Layout(width="46px"))
+                                       layout=widgets.Layout(width="auto", flex="1 1 0%"))
 
             chk_dn.observe(self._update_dn_widgets_state, names="value")
 
@@ -591,7 +591,7 @@ class OptimizationTab:
         self.opt_config_list = widgets.VBox(
              rows,
             layout=widgets.Layout(
-                width="500px",
+                width="auto", flex="1 1 0%",
                 height=f"{30 + visible*30}px",
                 overflow_y="auto",
                 border="1px solid lightgray",
@@ -630,7 +630,7 @@ class OptimizationTab:
                                     description=cfg_name, indent=False)
             chk_dn  = widgets.Checkbox(value=prev_dn.get(cfg_name, False),
                                     description="Δn", indent=False,
-                                    layout=widgets.Layout(width="46px"))
+                                    layout=widgets.Layout(width="auto", flex="1 1 0%"))
             # rattacher callbacks
             chk_cfg.observe(self._refresh_parametrization,    names="value")
             chk_cfg.observe(self._opt_refresh_custom_modes,   names="value")
@@ -717,7 +717,7 @@ class OptimizationTab:
 
         self.common_bounds_controls = widgets.HBox(
             [
-                widgets.Label("Common bounds:", layout=widgets.Layout(width="200px")),
+                widgets.Label("Common bounds:", layout=widgets.Layout(width="auto", flex="1 1 0%")),
                 self.common_low_w,
                 self.common_up_w,
                 self.apply_bounds_btn
@@ -734,7 +734,7 @@ class OptimizationTab:
             options=['multi_layer', 'gap_plasmon_resonator'],
             value='multi_layer', description='Family:',
             style={'description_width': 'initial'},
-            layout=widgets.Layout(width='220px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
         )
 
 
@@ -751,7 +751,7 @@ class OptimizationTab:
             value='dip',
             
             style={'description_width': 'initial'},
-            layout=widgets.Layout(width='300px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
         )
 
         self._build_opt_config_selector()
@@ -775,21 +775,21 @@ class OptimizationTab:
             value='fixed',
             description='RCWA modes (opt)',
             style={'description_width': 'initial'},
-            layout=widgets.Layout(width='220px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
         )
 
         self.opt_fixed_n_mod = widgets.IntText(          # visible si 'fixed'
             value=5, min=1,
             description='n_mod',
             style={'description_width': 'initial'},
-            layout=widgets.Layout(width='120px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
         )
 
         self.opt_custom_modes_box = widgets.VBox(
             value=5, min=1,
             description='n_mod',
             style={'description_width': 'initial'},
-            layout=widgets.Layout(width='400px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
             )       
         
         self._opt_custom_n_mod_inputs: dict[str, widgets.IntText] = {}
@@ -811,17 +811,17 @@ class OptimizationTab:
 
         # Widgets spécifiques au mode 'fixed_lambda' ou 'range_lambda'
         self.lambda0_w = widgets.FloatText(
-            value=600, description="λ₀ (nm):", layout=widgets.Layout(width="400px")
+            value=600, description="λ₀ (nm):", layout=widgets.Layout(width="auto", flex="1 1 0%")
         )
         self.band_min_w = widgets.FloatText(
             value=650,
             description="λmin:",
-            layout=widgets.Layout(width="400px"),
+            layout=widgets.Layout(width="auto", flex="1 1 0%"),
         )
         self.band_max_w = widgets.FloatText(
             value=750,
             description="λmax:",
-            layout=widgets.Layout(width="400px"),
+            layout=widgets.Layout(width="auto", flex="1 1 0%"),
         )
         self.band_box = widgets.HBox(
             [self.band_min_w, self.band_max_w],
@@ -1274,7 +1274,7 @@ class OptimizationTab:
                     value=self.opt_fixed_n_mod.value,
                     description=name,
                     style={'description_width': 'initial'},
-                    layout=widgets.Layout(width='250px')
+                    layout=widgets.Layout(width='auto', flex='1 1 0%')
                 )
                 self._opt_custom_n_mod_inputs[name] = it
             inputs.append(it)
@@ -2463,10 +2463,10 @@ class OptimizationTab:
             # Affiche la figure groupée
             display(fig)
             # Ligne de boutons (un sous chaque subplot, donc 2x2)
-            dl_conv = widgets.Button(description="Télécharger Convergence", icon="download", layout=widgets.Layout(width="200px"))
-            dl_cons = widgets.Button(description="Télécharger Consistency", icon="download", layout=widgets.Layout(width="200px"))
-            dl_geom = widgets.Button(description="Télécharger Géométrie", icon="download", layout=widgets.Layout(width="200px"))
-            dl_spec = widgets.Button(description="Télécharger Spectre", icon="download", layout=widgets.Layout(width="200px"))
+            dl_conv = widgets.Button(description="Télécharger Convergence", icon="download", layout=widgets.Layout(width="auto", flex="1 1 0%"))
+            dl_cons = widgets.Button(description="Télécharger Consistency", icon="download", layout=widgets.Layout(width="auto", flex="1 1 0%"))
+            dl_geom = widgets.Button(description="Télécharger Géométrie", icon="download", layout=widgets.Layout(width="auto", flex="1 1 0%"))
+            dl_spec = widgets.Button(description="Télécharger Spectre", icon="download", layout=widgets.Layout(width="auto", flex="1 1 0%"))
             # Callback : exporte l’axe voulu
             dl_conv.on_click(lambda _: self._export_subplot(ax0, "convergence"))
             dl_cons.on_click(lambda _: self._export_subplot(ax1, "consistency"))
@@ -2699,7 +2699,7 @@ class OptimizationTab:
         # ————————————————
         square_checkbox = widgets.Checkbox(
             value=False, description="Square ratio",
-            indent=False, layout=widgets.Layout(width="140px")
+            indent=False, layout=widgets.Layout(width="auto", flex="1 1 0%")
         )
         
         if thick_idx is None or width_idx is None:
@@ -2710,7 +2710,7 @@ class OptimizationTab:
         else:
             case_and_label = widgets.HBox(
                 [square_checkbox],
-                layout=widgets.Layout(align_items="center", min_width="140px", justify_content="flex-end")
+                layout=widgets.Layout(align_items="center", min_width="auto", flex="1 1 0%", justify_content="flex-end")
             )
 
             # Accolade très grande, centrée verticalement
@@ -2718,7 +2718,7 @@ class OptimizationTab:
                 <div style="display:flex;align-items:center;justify-content:center;height:60px;">
                     <span style="font-size:4.4em;line-height:0.7;">&#x7B;</span>
                 </div>
-            """, layout=widgets.Layout(width="32px", min_width="32px"))
+            """, layout=widgets.Layout(width="auto", flex="1 1 0%", min_width="auto", flex="1 1 0%"))
 
             _syncing = {"thick": False, "width": False}
 
@@ -2890,7 +2890,7 @@ class OptimizationTab:
         ok_btn = widgets.Button(
             description="OK",
             button_style="info",
-            layout=widgets.Layout(width="60px", display="none")  # caché par défaut
+            layout=widgets.Layout(width="auto", flex="1 1 0%", display="none")  # caché par défaut
         )
 
         def _dismiss_warning(_):
@@ -3081,17 +3081,17 @@ class OptimizationTab:
             # 2) boutons
             run_b    = widgets.Button(
                 description="Run ▶",
-                layout=widgets.Layout(width="80px"),
+                layout=widgets.Layout(width="auto", flex="1 1 0%"),
                 disabled=(job["status"] == "running")
             )
             cancel_b = widgets.Button(
                 description="Cancel ⏹",
-                layout=widgets.Layout(width="80px"),
+                layout=widgets.Layout(width="auto", flex="1 1 0%"),
                 disabled=(job["status"] not in ("running",))
             )
             delete_b = widgets.Button(
                 description="Delete ❌",
-                layout=widgets.Layout(width="80px"),
+                layout=widgets.Layout(width="auto", flex="1 1 0%"),
                 disabled=(job["status"] == "running")
             )
             
@@ -3101,11 +3101,11 @@ class OptimizationTab:
 
             # 3) ligne d’infos
             info_row = widgets.HBox([
-                widgets.Label(str(i),                             layout=widgets.Layout(width="30px")),
-                widgets.Label(job["config"],                      layout=widgets.Layout(width="150px")),
-                widgets.Label(job["cf_mode"],                     layout=widgets.Layout(width="80px")),
-                widgets.Label(f"{job['budget']}/{job['pop']}",    layout=widgets.Layout(width="80px")),
-                widgets.Label(status_ico,                         layout=widgets.Layout(width="30px")),
+                widgets.Label(str(i),                             layout=widgets.Layout(width="auto", flex="1 1 0%")),
+                widgets.Label(job["config"],                      layout=widgets.Layout(width="auto", flex="1 1 0%")),
+                widgets.Label(job["cf_mode"],                     layout=widgets.Layout(width="auto", flex="1 1 0%")),
+                widgets.Label(f"{job['budget']}/{job['pop']}",    layout=widgets.Layout(width="auto", flex="1 1 0%")),
+                widgets.Label(status_ico,                         layout=widgets.Layout(width="auto", flex="1 1 0%")),
                 run_b, cancel_b, delete_b
             ], layout=widgets.Layout(gap="10px"))
 

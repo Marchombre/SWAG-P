@@ -401,22 +401,22 @@ class SimulationTab:
         # ─── Spectre & points────────────────────────────────────────────────
         self.sim_lambda_min = widgets.FloatText(
             value=450.0, description="λ min (nm):",
-            layout=widgets.Layout(width='150px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
         self.sim_lambda_max = widgets.FloatText(
             value=900.0, description="λ max (nm):",
-            layout=widgets.Layout(width='150px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
         self.sim_n_points = widgets.IntText(
             value=300, description="Points:",
-            layout=widgets.Layout(width='150px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
         self.sim_n_mod = widgets.IntText(
             value=5,
-            layout=widgets.Layout(width='150px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
         for w in (self.sim_lambda_min, self.sim_lambda_max, self.sim_n_points):
@@ -425,12 +425,12 @@ class SimulationTab:
         # ─── Métrique λ₀ / range ─────────────────────────────────────────────
         self.band_min_in = widgets.FloatText(
             value=650.0, description="λmin:",
-            layout=widgets.Layout(width='150px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
         self.band_max_in = widgets.FloatText(
             value=750.0, description="λmax:",
-            layout=widgets.Layout(width='150px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
         self.band_box_in = widgets.HBox(
@@ -446,11 +446,11 @@ class SimulationTab:
             value='dip',
             description='Compute R(λ):',
             style={'description_width':'initial'},
-            layout=widgets.Layout(width='220px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
         )
         self.lambda0_in = widgets.FloatText(
             value=700.0, description="λ₀ (nm):",
-            layout=widgets.Layout(width='130px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
         # toggle λ₀ via méthode de classe
@@ -479,13 +479,13 @@ class SimulationTab:
             value='fixed',
             description='RCWA modes',
             style={'description_width':'initial'},
-            layout=widgets.Layout(width='220px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
         )
         self.custom_modes_box = widgets.VBox(
             value=5, min=1,
             description='n_mod',
             style={'description_width': 'initial'},
-            layout=widgets.Layout(width='400px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
             )
         
         self.custom_n_mod_inputs = {}
@@ -494,7 +494,7 @@ class SimulationTab:
         self.sim_files_dropdown  = widgets.Dropdown(
             options=list_sim_summary_files(summary_sim_dir),
             description="Sim files:",
-            layout=widgets.Layout(width='500px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
 
@@ -514,7 +514,7 @@ class SimulationTab:
         self.sim_name_widget     = widgets.Text(
             placeholder="Choose simulation name (or auto if empty)",
             description="Simulation name:",
-            layout=widgets.Layout(width='500px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
 
@@ -525,7 +525,7 @@ class SimulationTab:
             name = cfg["config_name"]
             chk = widgets.Checkbox(value=False, description=name, indent=False)
             dn  = widgets.Checkbox(value=False, description='Δn', indent=False,
-                    layout=widgets.Layout(width='46px'))
+                    layout=widgets.Layout(width='auto', flex='1 1 0%'))
             
             chk.observe(self._update_sim_run_button, names='value')
             
@@ -551,7 +551,7 @@ class SimulationTab:
                         layout=widgets.Layout(gap='10px')),
             *rows],
             layout=widgets.Layout(
-                width='500px',
+                width='auto', flex='1 1 0%',
                 height=f'{30 + visible*30}px',
                 overflow_y='auto',
                 border='1px solid lightgray',
@@ -566,7 +566,7 @@ class SimulationTab:
             description="Select Configs & Δn",
             value=True,                     # ← ouvert par défaut
             icon='caret-up',                # ← icône cohérente
-            layout=widgets.Layout(width='520px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             button_style='warning'
         )
 
@@ -585,13 +585,13 @@ class SimulationTab:
         self.layer_selector     = widgets.SelectMultiple(
             options=layer_keys,
             description="Add Δn to layers:",
-            layout=widgets.Layout(width='300px', height='100px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%', height='100px'),
             style={'description_width':'initial'},
             disabled=True
         )
         self.delta_n_widget     = widgets.FloatText(
             value=1e-2, description="Δn:",
-            layout=widgets.Layout(width='150px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'initial'}
         )
         self.delta_n_widget.observe(_positive, names='value')
@@ -660,7 +660,7 @@ class SimulationTab:
             layout=widgets.Layout(
                 padding='10px',
                 border='1px solid lightgray',
-                min_width='320px'
+                min_width='auto', flex='1 1 0%'
             )
         )
 
@@ -1688,7 +1688,7 @@ class SimulationTab:
             chk_dn = widgets.Checkbox(
                 value=prev_dn.get(name, False),
                 description="Δn", indent=False,
-                layout=widgets.Layout(width="46px")
+                layout=widgets.Layout(width="auto", flex="1 1 0%")
             )
             # on rattache les observateurs existants
             chk_dn.observe(self._toggle_delta_widgets, names='value')
@@ -1731,7 +1731,7 @@ class SimulationTab:
             it = widgets.IntText(
                 value=self.sim_n_mod.value,
                 description=name,
-                layout=Layout(width='150px'),
+                layout=Layout(width='auto', flex='1 1 0%'),
                 style={'description_width':'initial'}
             )
             self.custom_n_mod_inputs[name] = it
