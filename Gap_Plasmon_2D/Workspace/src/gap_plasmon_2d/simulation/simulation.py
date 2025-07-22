@@ -512,8 +512,8 @@ class SimulationTab:
 
         # ─── Nom de simulation ───────────────────────────────────────────────
         self.sim_name_widget     = widgets.Text(
-            placeholder="Nom sim (auto si vide)",
-            description="Sim Name:",
+            placeholder="Choose simulation name (or auto if empty)",
+            description="Simulation name:",
             layout=widgets.Layout(width='500px'),
             style={'description_width':'initial'}
         )

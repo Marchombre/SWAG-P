@@ -328,7 +328,6 @@ class OptimizationFileArboWidget:
                 border="1px solid #ccc",
                 padding="8px",
                 margin="4px 0px",
-                min_height="60px",
                 gap="10px"
             )
         )
@@ -357,19 +356,8 @@ class OptimizationFileArboWidget:
     def _refresh_families(self, change=None):
         old = self.family_dd.value
         opts = self._list_subdirs(self.base_dir)
-        
-        # message quand la liste est vide
-        if not opts:                                  # ➋
-            # rien à afficher → on avertit l’utilisateur
-            self.family_dd.description = "No result yet"
-        else:
-            # au moins une famille trouvée → description normale
-            self.family_dd.description = "Family:"
-        
-        # on met à jour les options du Dropdown
         self.family_dd.options = opts
         self.family_dd.value   = old if old in opts else (opts[0] if opts else None)
-        
         self._refresh_cost_modes()
 
     def _refresh_cost_modes(self, change=None):
@@ -2868,7 +2856,6 @@ class OptimizationTab:
             lammin.layout.display  = "" if cf_radio.value=="range_lambda" else "none"
             lammax.layout.display  = "" if cf_radio.value=="range_lambda" else "none"
         cf_radio.observe(_toggle, names="value"); _toggle(None)
-        
         # DE parameters + actions
         budget_w = widgets.IntText(value=100, description="Budget",     layout={"width":"150px"})
         pop_w    = widgets.IntText(value=30,  description="Population", layout={"width":"150px"})
