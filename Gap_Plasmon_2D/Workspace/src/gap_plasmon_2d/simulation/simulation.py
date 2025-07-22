@@ -104,11 +104,16 @@ for d in (
     
 def _download_link(fig, fname="figure.png"):
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.05)
-    buf.seek(0)
-    b64 = base64.b64encode(buf.read()).decode()
-    return DHTML(f'<a download="{fname}" href="data:image/png;base64,{b64}" '
-                 f'target="_blank">Télécharger l’image</a>')
+    try:
+        fig.savefig(buf, format="png",
+                    bbox_inches='tight', pad_inches=0.05)
+        buf.seek(0)
+        b64 = base64.b64encode(buf.read()).decode()
+    finally:
+        buf.close()                 # <-- libère la mémoire immédiatement
+    return DHTML(
+        f'<a download="{fname}" href="data:image/png;base64,{b64}" '
+        f'target="_blank">Télécharger l’image</a>')
 
 
 
@@ -1104,10 +1109,32 @@ class SimulationTab:
 
         # ─── variables mises en cache au lancement ───────────────────────
         lam_range  = self._lam_range
+
+
+        # ------------------------------------------------------------------
+        # RESET COMPLET DE LA FIGURE POUR ÉVITER LA FUITE DE MÉMOIRE
+        # ------------------------------------------------------------------
+        import gc
+        # 1) on supprime *tous* les axes/artistes de la figure courante
+        self.fig.clf()                 # équivalent d'un plt.close() + nouveau fig
+        # 2) on recrée proprement nos deux axes
+        self.ax_plot  = self.fig.add_subplot(2, 1, 1)
+        self.ax_table = self.fig.add_subplot(2, 1, 2)
+        self.ax_table.axis('off')
+        self.fig.subplots_adjust(
+            left=0.15, right=0.98, top=0.90, bottom=0.10, hspace=0.2
+        )
+        # 3) on force le GC pour relâcher les artistes orphelins
+        gc.collect()
+
+
+
         flags      = self._flags
         sel_layers = self._sel_layers
         delta_n    = self._delta_n
         verbose    = self._verbose
+
+
 
         # 1) Efface les anciens tracés
         self.ax_plot.clear()
@@ -1371,6 +1398,10 @@ class SimulationTab:
                     Q_factor=[Q_fac[-1]],
                     best_S_R=[S_R_sum[-1]]
                 )
+
+                # Nettoie les artistes hors axes (légendes temporaires, etc.)
+                self.fig.artists.clear()
+
 
 
             # 4) Met à jour le lien de téléchargement

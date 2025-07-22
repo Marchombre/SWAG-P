@@ -1023,12 +1023,6 @@ class OptimizationTab:
                 layout=widgets.Layout(gap='10px')
             ),
 
-
-            widgets.HTML(value="<b>Immediate DE run</b>"),      
-            widgets.HBox([self.budget_w, self.pop_w],          
-                        layout=widgets.Layout(gap="10px")),    
-            self.run_btn,                                     
-
         ], layout=widgets.Layout(width='48%', padding='10px'))
 
         # 2) Colonne de droite (Optimization sous forme d’onglets)
