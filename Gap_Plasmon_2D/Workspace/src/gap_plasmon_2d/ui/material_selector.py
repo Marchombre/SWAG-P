@@ -838,7 +838,7 @@ class MaterialSelectorTabbedNotebook:
         self.geometry_dropdown = widgets.Dropdown(
             options=[""] + _load_geometry_names(),
             description="Geometry:",
-            layout=widgets.Layout(width="300px")
+            layout=widgets.Layout(width="auto", flex="1 1 0%")
         )
         self.geometry_dropdown.observe(self._on_geometry_change, names="value")
 

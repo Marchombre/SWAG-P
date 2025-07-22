@@ -181,10 +181,10 @@ def create_geometry_widget():
             value=default, min=min_val, max=max_val, step=0.1,
             description=description_str,
             continuous_update=False,
-            layout=widgets.Layout(width='350px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width': '180px'}
         )
-        float_text = widgets.FloatText(value=default, layout=widgets.Layout(width='100px'))
+        float_text = widgets.FloatText(value=default, layout=widgets.Layout(width='auto', flex='1 1 0%'))
         widgets.jslink((slider, 'value'), (float_text, 'value'))
         
         # Empêche les valeurs négatives
@@ -206,7 +206,7 @@ def create_geometry_widget():
     )
     button_add_layer = widgets.Button(
         description="Add layer", button_style='info',
-        layout=widgets.Layout(width='150px', margin='10px 0 0 0')
+        layout=widgets.Layout(width='auto', flex='1 1 0%', margin='10px 0 0 0')
     )
 
 
@@ -229,19 +229,19 @@ def create_geometry_widget():
         # Création du Text pour le nom de layer et du slider pour l'épaisseur
         name_w = widgets.Text(
             value=default_name, placeholder='Layer name',
-            layout=widgets.Layout(width='120px')
+            layout=widgets.Layout(width='auto', flex='1 1 0%')
         )
         sl = widgets.FloatSlider(
             value=1.0, min=0, max=50, step=0.1,
             description="thick (nm):", continuous_update=False,
-            layout=widgets.Layout(width='250px'),
+            layout=widgets.Layout(width='auto', flex='1 1 0%'),
             style={'description_width':'100px'}
         )
-        ft = widgets.FloatText(value=1.0, layout=widgets.Layout(width='80px'))
+        ft = widgets.FloatText(value=1.0, layout=widgets.Layout(width='auto', flex='1 1 0%'))
         widgets.jslink((sl, 'value'), (ft, 'value'))
 
         # Bouton de suppression
-        btn_del = widgets.Button(description="✕", layout=widgets.Layout(width='30px'))
+        btn_del = widgets.Button(description="✕", layout=widgets.Layout(width='auto', flex='1 1 0%'))
         container = widgets.HBox([name_w, sl, ft, btn_del])
 
 
@@ -307,26 +307,26 @@ def create_geometry_widget():
     # 4) Widgets de configuration existants (Add/Save/Load/Update/Delete) …
     config_name_text = widgets.Text(
         value='', placeholder='Configuration Name', description='Config Name :',
-        layout=widgets.Layout(width='350px'), style={'description_width':'180px'}
+        layout=widgets.Layout(width='auto', flex='1 1 0%'), style={'description_width':'180px'}
     )
     compartment_text = widgets.Text(
         value='', placeholder='Nom du compartiment', description='Compartiment :',
-        layout=widgets.Layout(width='350px'), style={'description_width':'180px'}
+        layout=widgets.Layout(width='auto', flex='1 1 0%'), style={'description_width':'180px'}
     )
-    button_add    = widgets.Button(description="Add Config",    layout=widgets.Layout(width='150px'))
+    button_add    = widgets.Button(description="Add Config",    layout=widgets.Layout(width='auto', flex='1 1 0%'))
     button_save   = widgets.Button(description="Save & Quit", button_style='success',
-                                  layout=widgets.Layout(width='200px'))
+                                  layout=widgets.Layout(width='auto', flex='1 1 0%'))
     config_dropdown = widgets.Dropdown(options=[], description="Saved Configs :",
-                                       layout=widgets.Layout(width='350px'),
+                                       layout=widgets.Layout(width='auto', flex='1 1 0%'),
                                        style={'description_width':'180px'})
-    button_load   = widgets.Button(description="Load",    layout=widgets.Layout(width='100px'))
-    button_update = widgets.Button(description="Update",  layout=widgets.Layout(width='120px'))
+    button_load   = widgets.Button(description="Load",    layout=widgets.Layout(width='auto', flex='1 1 0%'))
+    button_update = widgets.Button(description="Update",  layout=widgets.Layout(width='auto', flex='1 1 0%'))
     button_delete = widgets.Button(description="Delete",  button_style='danger',
-                                  layout=widgets.Layout(width='120px'))
+                                  layout=widgets.Layout(width='auto', flex='1 1 0%'))
 
     compartment_filter = widgets.Dropdown(
         options=["Tous"], value="Tous", description="Filtrer Compart.:",
-        layout=widgets.Layout(width='350px'),
+        layout=widgets.Layout(width='auto', flex='1 1 0%'),
         style={'description_width':'180px'}
     )
     output_area = widgets.Output(layout=widgets.Layout(padding='10px'))
@@ -708,7 +708,7 @@ def create_geometry_widget():
         output_area
     ])
     left_panel  = widgets.VBox(slider_widgets + [config_controls],
-                              layout=widgets.Layout(width='600px'))
+                              layout=widgets.Layout(width='auto', flex='1 1 0%'))
     right_panel = widgets.VBox([fig_output],
                               layout=widgets.Layout(flex='1'))
     main_ui = widgets.HBox([left_panel, right_panel],

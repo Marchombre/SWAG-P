@@ -114,7 +114,7 @@ def compute_convergence(lambda_fixed, n_mode_max, geometry, wave, df_config, jso
 stable_required_widget = widgets.IntText(
     value=3, 
     description="Stable required:", 
-    layout=widgets.Layout(width='150px')
+    layout=widgets.Layout(width='auto', flex='1 1 0%')
 )
 
 
@@ -132,7 +132,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     conv_config_selector = widgets.SelectMultiple(
         options=[(cfg["config_name"], cfg) for cfg in all_configs],
         description="Config convergence:",
-        layout=widgets.Layout(width='580px'),
+        layout=widgets.Layout(width='auto', flex='1 1 0%'),
         style={'description_width': 'initial'}
     )
     
@@ -169,22 +169,22 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     lambda_fixed_widget = widgets.FloatText(
         value=700.0, 
         description="λ fixe (nm):", 
-        layout=widgets.Layout(width='150px')
+        layout=widgets.Layout(width='auto', flex='1 1 0%')
     )
     n_mode_max_widget = widgets.IntText(
         value=100, 
         description="n_mode max:", 
-        layout=widgets.Layout(width='150px')
+        layout=widgets.Layout(width='auto', flex='1 1 0%')
     )
     n_mode_step_widget = widgets.IntText(
         value=1, 
         description="Step n_mode:", 
-        layout=widgets.Layout(width='150px')
+        layout=widgets.Layout(width='auto', flex='1 1 0%')
     )
     tolerance_widget = widgets.FloatText(
         value=1e-3, 
         description="Tolérance:", 
-        layout=widgets.Layout(width='150px')
+        layout=widgets.Layout(width='auto', flex='1 1 0%')
     )
     
     # Validation pour empêcher les valeurs négatives
@@ -214,7 +214,7 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
         min=0, 
         max=1,  # sera défini lors du déclenchement du calcul
         description='Progress:',
-        layout=widgets.Layout(width='400px')
+        layout=widgets.Layout(width='auto', flex='1 1 0%')
     )
     
     #spacer = widgets.HBox([], layout=widgets.Layout(flex='1 1 auto'))
@@ -228,14 +228,14 @@ def create_multi_convergence_widget(json_combined_path, all_configs):
     conv_output = widgets.Output(
         layout=widgets.Layout(
             border="1px solid lightgray",
-            width='630px',
+            width='auto', flex='1 1 0%',
             height='450px' 
         )
     )
     
     # Widget pour afficher les résultats dans un tableau
     results_table_output = widgets.Output(
-        layout=widgets.Layout(border="1px solid lightgray", width='630px', max_height='200px', overflow='auto')
+        layout=widgets.Layout(border="1px solid lightgray", width='auto', flex='1 1 0%', max_height='200px', overflow='auto')
     )
     
     # Lien HTML qui deviendra le bouton de téléchargement
