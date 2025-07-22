@@ -397,7 +397,7 @@ def save_optimization_hdf5(
 
 
     
-    logger.debugy(f"Optimization saved to {h5path}")
+    logger.debug(f"Optimization saved to {h5path}")
 
     return str(h5path)
 

@@ -441,7 +441,7 @@ class PlotTab:
             # Texte label principal
             txt_main = widgets.Text(
                 value=self.custom_labels_dict.get(lab, clean_config_label(lab)),
-                description="Label:", layout=Layout(width="180px")
+                description="Label:", layout=Layout(width="250px")
             )
             txt_main._orig_lab = lab
             txt_main._is_dn = False
@@ -454,7 +454,7 @@ class PlotTab:
                         lab,
                         clean_config_label(lab)+" (R + Δn)"
                     ),
-                    description="Label Δn:", layout=Layout(width="250px")
+                    description="Label Δn:", layout=Layout(width="350px")
                 )
                 txt_dn._orig_lab = lab
                 txt_dn._is_dn = True
@@ -468,7 +468,7 @@ class PlotTab:
                 )
                 txt_car = widgets.Text(
                     value=default,
-                    description=f"Carré {typ}:", layout=Layout(width="250px")
+                    description=f"Carré {typ}:", layout=Layout(width="350px")
                 )
                 txt_car._orig_lab = lab
                 txt_car._carre_type = typ
@@ -576,6 +576,7 @@ class PlotTab:
 
             # 4.4) Calcul métriques Δn ou raw_score
             dR_over_dn_list = []; dLam_over_dn_list = []
+            best_RS = None
             if Rup_dn_tuple and lab in self.delta_ns:
                 # On a des données Δn
                 lam_dn, Rup_dn_vals = Rup_dn_tuple
@@ -645,7 +646,8 @@ class PlotTab:
                                  (slope**(1.0-depth_j)) /
                                  (fwhm_j**beta + 1e-12))
 
-                    dR_over_dn_list.append(0.0)
+                    # on sauvegarde vraiment chaque raw_score
+                    dR_over_dn_list.append(raw_score)
                     dLam_over_dn_list.append(0.0)
 
                     if raw_score > best_raw_score:
@@ -655,6 +657,7 @@ class PlotTab:
                 best_idx      = best_idx_raw
                 best_SR       = None
                 best_S_lambda = None
+                best_RS       = best_raw_score
 
 
             # 4.5) Extraction métriques du dip retenu
@@ -833,31 +836,35 @@ class PlotTab:
                         )
 
 
-            SR_txt    = f"{best_SR:.3f}" if best_SR is not None else "–"
-            SL_txt    = f"{best_S_lambda:.3f}" if best_S_lambda is not None else "–"
-            
-            # 4.5) après avoir calculé lam_dip_list, fwhm_list, dR_over_dn_list, …
-            dips_all   = ", ".join(f"{l:.1f}"   for l in lam_dip_list)
-            fwhms_all  = ", ".join(f"{w:.1f}"   for w in fwhm_list)
-            sr_all     = ", ".join(f"{s:.3f}"   for s in dR_over_dn_list)
-            # valeur « retenue » (= best_idx) :
-            dips_sel   = f"{lam_dip:.1f} nm"
+            # ────────────────────────────────────────────────────────────────
+            # 4.8) Préparation textes pour la table & le verbose
+            # ────────────────────────────────────────────────────────────────
+            display_SR = best_SR if best_SR is not None else best_RS          # déjà correct
+            SR_txt     = f"{display_SR:.3f}" if display_SR is not None else "–"   # ← FIX
+            SL_txt     = f"{best_S_lambda:.3f}" if best_S_lambda is not None else "–"
+
+            # Construits les textes “all” et “selected”
+            dips_all   = ", ".join(f"{l:.1f}" for l in lam_dip_list)
+            fwhms_all  = ", ".join(f"{w:.1f}" for w in fwhm_list)
+            sr_all     = ", ".join(f"{s:.3f}" for s in dR_over_dn_list)
+
+            dips_sel   = f"{lam_dip:.1f} nm"
             fwhm_sel   = f"{fwhm:.1f}"
-            sr_sel     = f"{best_SR:.3f}" if best_SR is not None else "–"
+            sr_sel     = SR_txt                                                # ← FIX
 
-
-            # 4.9) Prépare ligne de tableau pour ce spectre
+            # 4.9) Ligne pour summary_rows
             summary_rows.append({
                 "cfg":      clean_config_label(lab),
-                "mode":     "FWHM ½" if use_half else "Dip",
-                "dips_all": ", ".join(f"{l:.1f}" for l in lam_dip_list),
-                "dips_sel": f"{lam_dip:.1f} nm",
-                "fwhm_all": ", ".join(f"{w:.1f}" for w in fwhm_list),
-                "fwhm_sel": f"{fwhm:.1f}",
-                "sr_all":   ", ".join(f"{s:.3f}" for s in dR_over_dn_list),
-                "sr_sel":   (f"{best_SR:.3f}" if best_SR is not None else "–"),
-                "note":     ("raw‑score" if best_SR is None else "")
+                "mode":     "FWHM ½" if use_half else "Dip",
+                "dips_all": dips_all,
+                "dips_sel": dips_sel,
+                "fwhm_all": fwhms_all,
+                "fwhm_sel": fwhm_sel,
+                "sr_all":   sr_all,
+                "sr_sel":   SR_txt,                                            # ← FIX
+                "note":     ("raw-score" if best_SR is None else "")
             })
+
 
             
             cfg_labels.append(clean_config_label(lab))

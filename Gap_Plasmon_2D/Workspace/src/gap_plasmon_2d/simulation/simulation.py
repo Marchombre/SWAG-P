@@ -259,7 +259,24 @@ class SimulationTab:
             nrows=2, figsize=(8, 7),
             gridspec_kw={'height_ratios': [1, 1]}
         )
-        # … vos ajustements de layout …
+
+        # ───> canvas réactif (s’adapte à la largeur disponible)
+        self.fig.canvas.layout = widgets.Layout(width='100%', min_width='0')
+
+        # ─────────── AJOUT (remplace la version précédente) ───────────
+        # (a) on masque complètement le canvas…
+        self.fig.canvas.layout.display = 'none'            # ← change « visibility » → « display »
+
+        # (b) …et on le remet dans le flux dès le premier draw().
+        def _show_canvas(_event):
+            self.fig.canvas.layout.display = ''            # ← ré-affiche le canvas
+            self.fig.canvas.mpl_disconnect(self._draw_cid)
+
+        self._draw_cid = self.fig.canvas.mpl_connect('draw_event', _show_canvas)
+        # ───────────────────────────────────────────────────────────────
+
+
+        # ajustements de layout
         self.fig.subplots_adjust(
             left=0.15, right=0.98,
             top=0.90,  bottom=0.10,
@@ -271,9 +288,16 @@ class SimulationTab:
         plt.ion()
 
         # 5) Prépare l’Output et n’affiche QUE ce canvas
-        self.canvas_output = widgets.Output(layout=widgets.Layout(
-            border='1px solid lightgray', min_height='250px'
-        ))
+        self.canvas_output = widgets.Output(
+            layout=widgets.Layout(
+                border='1px solid lightgray',
+                min_height='250px',
+                overflow_x='hidden',   # ← on interdit le scroll horizontal
+                min_width='0'
+            )
+        )
+
+
         with self.canvas_output:
             clear_output()
             display(self.fig.canvas)
@@ -410,8 +434,8 @@ class SimulationTab:
         )
         self.mode_calc_radio = widgets.RadioButtons(
             options=[
-                ('Dip (ΔR/Δn)',    'dip'),
-                ('FWHM (half)',    'half'),
+                ('(ΔR/Δn) λ dip of reflectance',    'dip'),
+                ('(ΔR/Δn) λ half slope',    'half'),
                 ('Custom fixed λ₀','fixed_lambda')
             ],
             value='dip',
@@ -448,7 +472,7 @@ class SimulationTab:
         self.mode_selection      = widgets.RadioButtons(
             options=[('Fixe','fixed'),('Custum','custom'),('Auto','auto')],
             value='fixed',
-            description='RCWA modes (opt)',
+            description='RCWA modes',
             style={'description_width':'initial'},
             layout=widgets.Layout(width='220px')
         )
@@ -555,7 +579,7 @@ class SimulationTab:
         layer_keys = [m['key'] for m in self.all_configs[0]['material']['MATERIALS_CONFIG']]
         self.layer_selector     = widgets.SelectMultiple(
             options=layer_keys,
-            description="Couches Δn:",
+            description="Add Δn to layers:",
             layout=widgets.Layout(width='300px', height='100px'),
             style={'description_width':'initial'},
             disabled=True
@@ -641,6 +665,7 @@ class SimulationTab:
 
     def _init_metrics_overlays(self):
         """Crée un panneau moderne pour choisir métriques et overlays."""
+
         # Libellés & valeurs par défaut
         metric_labels = [
             "FWHM", "λ₀", "Δλ/λₘᵢₙ", "Sλ (nm/RIU)",
@@ -664,34 +689,72 @@ class SimulationTab:
             for lbl in overlay_labels
         }
 
-        # Grilles responsives
-        metrics_grid = widgets.GridBox(
-            children=list(self.metric_checks.values()),
-            layout=widgets.Layout(
-                grid_template_columns="repeat(auto-fit, minmax(100px, 1fr))",
-                gap="8px"
-            )
-        )
-        overlays_grid = widgets.GridBox(
-            children=list(self.overlay_checks.values()),
-            layout=widgets.Layout(
-                grid_template_columns="repeat(auto-fit, minmax(100px, 1fr))",
-                gap="8px"
-            )
-        )
+        #  Autorise le retour à la ligne dans *tous* les labels
+        for cb in (*self.metric_checks.values(), *self.overlay_checks.values()):
+            cb.add_class("wrap-label")        # on pose une classe CSS
+            cb.layout.width = "auto"          # pas de largeur minimale
+            cb.style.description_width = "initial"
 
-        # Accordéon pour basculer
-        self.metrics_panel = widgets.Accordion(
-            children=[metrics_grid, overlays_grid],
+        # helper grid -------------------------------------------------------
+        def _make_grid(children):
+            return widgets.GridBox(
+                list(children),
+                layout=widgets.Layout(
+                    grid_template_columns="repeat(auto-fit, minmax(110px, 1fr))",
+                    gap="6px",
+                    overflow_x="hidden",      # ⟵ bloque le scroll horizontal
+                    width="100%",
+                    min_width="0"             # ⟵ évite que le grid force sa largeur
+                )
+            )
+
+        metrics_grid  = _make_grid(self.metric_checks.values())
+        overlays_grid = _make_grid(self.overlay_checks.values())
+
+
+        # ------------------------------------------------------------------
+        #  accordéons indépendants, chacun
+        #  contenant un seul panneau, tous deux ouverts par défaut
+        #  (selected_index = 0).  De cette façon, les contenus « Métriques »
+        #  *et* « Overlays » sont visibles dès le lancement.
+        # ------------------------------------------------------------------
+        acc_metrics = widgets.Accordion(
+            children=[metrics_grid],
+            selected_index=0,                       # ← ouvert d’office
+            layout=widgets.Layout(width="100%")
+        )
+        acc_metrics.set_title(0, "Show metrics")
+
+        acc_overlays = widgets.Accordion(
+            children=[overlays_grid],
+            selected_index=0,                       # ← ouvert d’office
+            layout=widgets.Layout(width="100%")
+        )
+        acc_overlays.set_title(0, "Graphical overlays")
+
+        # Regroupement : on remplace l’ancien unique Accordion
+        # par un VBox qui contient les deux accordéons ci-dessus.
+        self.metrics_panel = widgets.VBox(
+            [acc_metrics, acc_overlays],
             layout=widgets.Layout(
                 width="100%",
                 padding="8px",
                 border="1px solid lightgray",
-                border_radius="6px"
+                border_radius="6px",
+                gap="4px",
+                overflow_x="hidden"
             )
         )
-        self.metrics_panel.set_title(0, "Métriques à afficher")
-        self.metrics_panel.set_title(1, "Overlays graphiques")
+
+        # règle CSS injectée une fois pour la classe « wrap-label »
+        display(HTML("""
+        <style>
+        .wrap-label > label.widget-label {
+            white-space: normal !important;     /* autorise le retour à la ligne */
+            line-height : 1.1em;
+        }
+        </style>
+        """))
 
 
 
@@ -1681,36 +1744,46 @@ class SimulationTab:
         
     
     def _assemble_layout(self):
-        # ---- colonne gauche (contrôles) ----
+        
+        # ───────── colonne gauche : panneau de contrôle ──────────
         self.panel_controls.layout = widgets.Layout(
-            width='40%',
-            padding='0 10px 0 0'
+            flex="1 1 300px",     # min-width 300 px, grandit/rétrécit si besoin
+            padding="0 10px 0 0",
+            min_width="0"
         )
 
-        # ---- colonne droite (metrics + figure) ----
+        # ───────── colonne droite : métriques + figure ───────────
         right_column = widgets.VBox(
             [self.metrics_panel, self.canvas_output],
             layout=widgets.Layout(
-                width='60%',
-                padding='0 0 0 5px',
-                gap='5px',
-                align_items='stretch'
+                flex="2 1 400px",  # s’étire 2 × plus vite que la colonne de gauche
+                padding="0 0 0 5px",
+                gap="5px",
+                align_items="stretch",
+                min_width  ="0",
+                overflow_x ="hidden"
             )
         )
 
-        # ---- 1ᵉ ligne : contrôles + figure ----
+        # ───────── première ligne : controles + figure ───────────
         top_row = widgets.HBox(
             [self.panel_controls, right_column],
             layout=widgets.Layout(
-                width='100%',
-                align_items='flex-start'
+                width="100%",
+                flex_flow="row wrap",   # autorise le retour à la ligne pour le responsive
+                align_items="stretch",
+                overflow_x ="hidden"
             )
         )
 
-        # ---- assemblage final : log dessous, pleine largeur ----
+        # ───────── assemblage final : log sous le reste ──────────
         self.tab = widgets.VBox(
             [top_row, self.debug_out],
-            layout=widgets.Layout(width='100%', gap='6px')
+            layout=widgets.Layout(
+                width="100%",
+                gap="6px",
+                overflow_x="hidden"     # empêche toute barre de défilement horizontale
+            )
         )
 
 

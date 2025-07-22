@@ -654,6 +654,8 @@ class OptimizationTab:
         
         self._cfg_debounce_timer = None
 
+        self._panel_cache: dict[str, widgets.VBox] = {}
+
         # ─────────────────────────  saved references  ──────────────────────────
         self.sim                = sim_obj
         self.json_combined_path = str(json_combined_path)
@@ -1020,6 +1022,12 @@ class OptimizationTab:
                 [self.delta_n_widget, self.layer_selector],
                 layout=widgets.Layout(gap='10px')
             ),
+
+
+            widgets.HTML(value="<b>Immediate DE run</b>"),      
+            widgets.HBox([self.budget_w, self.pop_w],          
+                        layout=widgets.Layout(gap="10px")),    
+            self.run_btn,                                     
 
         ], layout=widgets.Layout(width='48%', padding='10px'))
 
@@ -1729,12 +1737,15 @@ class OptimizationTab:
         # ------------------------------------------------------------------
         need_dn = mode in ("dip", "half")        # True ⟹ on utilisera delta_n_val
 
+        # --- juste après avoir calculé need_dn ---
         if need_dn:
-            delta_n_val = self.delta_n_widget.value
-            if not self.opt_dn_check[cfg_name].value or delta_n_val <= 0:
-                raise ValueError("Δn doit être défini (>0) pour les modes 'dip' et 'half'.")
+            delta_n_val     = self.delta_n_widget.value
+            sel_layers_val  = (list(self.layer_selector.value)
+                            if isinstance(self.layer_selector.value, (list, tuple))
+                            else [int(self.layer_selector.value)])
         else:
-            delta_n_val = None                  # explicite : on n’enverra rien
+            delta_n_val    = None
+            sel_layers_val = []        # <<<<<< plus de couches si Δn inutile
 
 
 
@@ -1971,15 +1982,19 @@ class OptimizationTab:
             # -----------------------------------------------------
             # 2. Extraction des points caractéristiques
             # -----------------------------------------------------
-            out_base, _, idx_dip = find_best_dip(
-                cfg, lam, Rup, wave, n_modes,
-                sel_layers_val, delta_n_val,
-                self.json_combined_path,
-                smooth_win=0, polyorder=0,
-                dip_prom=1e-2, dip_dist=1, peak_dist=1,
-                verbose=False,
-                cfg_name=cfg_name, mode=mode
-            )
+            if mode in ("dip", "half"):
+                out_base, _, idx_dip = find_best_dip(
+                    cfg, lam, Rup, wave, n_modes,
+                    sel_layers_val, delta_n_val,
+                    self.json_combined_path,
+                    smooth_win=0, polyorder=0,
+                    dip_prom=1e-2, dip_dist=1, peak_dist=1,
+                    verbose=False,
+                    cfg_name=cfg_name, mode=mode
+                )
+            else:
+                out_base = None
+
 
             out_dn = None
             if need_dn and Rup_dn is not None:
@@ -2013,10 +2028,10 @@ class OptimizationTab:
             # -------------------------------------------------------------
             if mode == "dip":
                 if lambda0 is None:
-                    raise RuntimeError("Aucun dip détecté : impossible de calculer la métrique 'dip'.")
+                    logger.warning("No dip detected in post-processing; saving None fields.")
             elif mode == "half":
                 if lambda_right is None or fwhm is None:
-                    raise RuntimeError("Impossible de calculer la FWHM : aucun dip détecté.")
+                    logger.warning("Impossible de calculer la FWHM : aucun dip détecté.")
             # fixed_lambda et range_lambda n’ont rien à vérifier ici
 
             # -------------------------------------------------------------
@@ -2037,60 +2052,63 @@ class OptimizationTab:
             range_lambda_val = mode_kw.get("range_lambda", None)
 
             # Sauvegarde complète du run d’Optimization dans un fichier HDF5
-            save_optimization_hdf5(
-                square_ratio=square_ratio,
-                notebook_dir=str(BASE_NOTEBOOKS),   # Dossier racine où créer le .h5
-                family=fam,                       # on force ici la bonne famille
-                cost_mode=mode,                       # dip / half / fixed_lambda / range_lambda
-                # — méta-données pour filtrage futur —
-                config_name=config_name,            # Structure optimisée (pour comparer uniquement les runs compatibles)
-            
-                lambda0        = lambda0_val,
-                lambda0_dn     = lambda0_dn_val,
-                lambda_fwhm    = lambda_fwhm_val,
-                lambda_fwhm_dn = lambda_fwhm_dn_val,
-                fwhm           = fwhm_val,
-                fwhm_dn        = fwhm_dn_val,
+            try:
+                save_optimization_hdf5(
+                    square_ratio=square_ratio,
+                    notebook_dir=str(BASE_NOTEBOOKS),   # Dossier racine où créer le .h5
+                    family=fam,                       # on force ici la bonne famille
+                    cost_mode=mode,                       # dip / half / fixed_lambda / range_lambda
+                    # — méta-données pour filtrage futur —
+                    config_name=config_name,            # Structure optimisée (pour comparer uniquement les runs compatibles)
                 
-                # — paramètres DE —
-                budget=budget,                      # Budget d’évaluations
-                Npop=Npop,                          # Taille de population
-                
-                wavelength_range=(self.sim.sim_lambda_min.value, self.sim.sim_lambda_max.value),
-                n_modes=n_modes,
-                fixed_vals=fixed_vals,
-                # — espace de recherche —
-                keys=keys,                          # Paramètres optimisés
-                lowers=lowers,                      # Bornes inf.
-                uppers=uppers,                      # Bornes sup.
+                    lambda0        = lambda0_val,
+                    lambda0_dn     = lambda0_dn_val,
+                    lambda_fwhm    = lambda_fwhm_val,
+                    lambda_fwhm_dn = lambda_fwhm_dn_val,
+                    fwhm           = fwhm_val,
+                    fwhm_dn        = fwhm_dn_val,
+                    
+                    # — paramètres DE —
+                    budget=budget,                      # Budget d’évaluations
+                    Npop=Npop,                          # Taille de population
+                    
+                    wavelength_range=(self.sim.sim_lambda_min.value, self.sim.sim_lambda_max.value),
+                    n_modes=n_modes,
+                    fixed_vals=fixed_vals,
+                    # — espace de recherche —
+                    keys=keys,                          # Paramètres optimisés
+                    lowers=lowers,                      # Bornes inf.
+                    uppers=uppers,                      # Bornes sup.
 
-                # — suivi de la convergence —
-                conv_best=conv_best,                # Best cost par génération
-                conv_evals=conv_evals,              # Best cost par évaluation
+                    # — suivi de la convergence —
+                    conv_best=conv_best,                # Best cost par génération
+                    conv_evals=conv_evals,              # Best cost par évaluation
 
-                # — état final de la population —
-                cf_final=cf_final,                  # Coûts de la dernière population
+                    # — état final de la population —
+                    cf_final=cf_final,                  # Coûts de la dernière population
 
-                # — meilleurs individus —
-                best=pop[np.argmin(cf_final)],      # Meilleur avant dernière sélection
-                best_final=best_final,              # Meilleur après rééval finale
-                best_cost=best_cost,                # Coût de best_final
-                fixed_lambda=fixed_lambda_val,
-                range_lambda=range_lambda_val,
-                best_after_eval=np.asarray(best_after_eval),  # Snapshot du best à t instant
+                    # — meilleurs individus —
+                    best=pop[np.argmin(cf_final)],      # Meilleur avant dernière sélection
+                    best_final=best_final,              # Meilleur après rééval finale
+                    best_cost=best_cost,                # Coût de best_final
+                    fixed_lambda=fixed_lambda_val,
+                    range_lambda=range_lambda_val,
+                    best_after_eval=np.asarray(best_after_eval),  # Snapshot du best à t instant
 
-                # — contexte de la métrique —
-                mode=mode,                          # 'dip' ou 'half'
+                    # — contexte de la métrique —
+                    mode=mode,                          # 'dip' ou 'half'
 
-                # — spectre du design optimal —
-                lam=lam,                            # Grille λ
-                Rup=Rup,                            # Spectre R_up
-                Rdown=Rdown,                        # Spectre R_down
-                Rup_dn=Rup_dn, 
-                Rdown_dn=Rdown_dn,
-                geometry=cfg["geometry"]["geometry"],
-            )
-
+                    # — spectre du design optimal —
+                    lam=lam,                            # Grille λ
+                    Rup=Rup,                            # Spectre R_up
+                    Rdown=Rdown,                        # Spectre R_down
+                    Rup_dn=Rup_dn, 
+                    Rdown_dn=Rdown_dn,
+                    geometry=cfg["geometry"]["geometry"],
+                )
+            except Exception:
+                logger.exception("save_optimization_hdf5 failed.")
+                        
             # on rafraîchit la liste des runs disponibles
             get_ipython().kernel.io_loop.add_callback(self.opt_file_arbo._refresh_runs)
 
@@ -2465,29 +2483,61 @@ class OptimizationTab:
     #  Parametrization & Queue methods                                  #
     # ------------------------------------------------------------------#
     def _refresh_parametrization(self, change=None):
-        selected = [name for name, cb in self.opt_cfg_check.items() if cb.value]
-        panels, titles = [], []
+        """
+        Reconstruit l’onglet « Parametrization » en conservant les valeurs
+        déjà saisies : les panneaux existants (y compris les copies créées
+        via “Add copy”) sont ré‑utilisés au lieu d’être recréés à chaque
+        clic sur les cases config.
+        """
+        # ────────────────────────────────────────────────────────────────
+        # 1) Configurations actuellement cochées
+        # ────────────────────────────────────────────────────────────────
+        selected_cfgs = [name for name, cb in self.opt_cfg_check.items() if cb.value]
 
-        for cfg_name in selected:
-            panels.append(self._make_param_panel(cfg_name))
-            titles.append(cfg_name)
+        # ────────────────────────────────────────────────────────────────
+        # 2) Panneaux déjà affichés dans le Tab
+        # ────────────────────────────────────────────────────────────────
+        existing_panels = list(self.param_tabs.children or ())
 
-        # ── avant d’affecter les enfants, on invalide l’index courant
-        if not panels:
-            self.param_tabs.selected_index = None   # ← évite le TraitError
+        # ----------------------------------------------------------------
+        # 2.a  Conserver les panneaux dont la config est toujours cochée
+        # ----------------------------------------------------------------
+        kept_panels  = [
+            p for p in existing_panels
+            if getattr(p, "cfg_name", None) in selected_cfgs
+        ]
 
+        # ----------------------------------------------------------------
+        # 2.b  Pour chaque config cochée n’ayant encore aucun panneau,
+        #      on crée le panneau « original »
+        # ----------------------------------------------------------------
+        for cfg_name in selected_cfgs:
+            has_panel = any(getattr(p, "cfg_name", None) == cfg_name for p in kept_panels)
+            if not has_panel:
+                new_panel = self._make_param_panel(cfg_name)
+                kept_panels.append(new_panel)
 
-        prev = self.param_tabs.selected_index
-        self.param_tabs.children = panels           # <-- met à jour les onglets
+        # ----------------------------------------------------------------
+        # 3) Mise à jour de l’onglet ipywidgets.Tab
+        # ----------------------------------------------------------------
+        if not kept_panels:                     # aucune config cochée
+            # invalide l’index pour éviter le TraitError
+            self.param_tabs.selected_index = None
 
-        if panels:
-            # rétablit un index valide (le dernier onglet, par ex.)
-            new_idx = prev if prev is not None and prev < len(panels) else len(panels)-1
-            self.param_tabs.selected_index = new_idx            
-            
-            for i, t in enumerate(titles):
-                self.param_tabs.set_title(i, t)
+        prev_idx = self.param_tabs.selected_index
+        self.param_tabs.children = tuple(kept_panels)   # remplace le contenu
+
+        if kept_panels:
+            # titres = cfg_name de chaque panneau (copies ⇒ même titre)
+            for i, panel in enumerate(kept_panels):
+                self.param_tabs.set_title(i, getattr(panel, "cfg_name", ""))
+            # rétablit un index valide (l’ancien si possible)
+            new_idx = (
+                prev_idx if prev_idx is not None and prev_idx < len(kept_panels)
+                else len(kept_panels) - 1
+            )
             self.param_tabs.selected_index = new_idx
+
 
 
 
@@ -2508,15 +2558,20 @@ class OptimizationTab:
 
 
     def _remove_param_panel(self, panel: widgets.VBox) -> None:
-        """Supprime un panel de parametrization existant."""
+        """
+        Supprime un panneau de parametrization existant ; recalcule
+        proprement les titres et, le cas échéant, décoche la case config.
+        """
         # 1) copie mutable de la liste actuelle
         children = list(self.param_tabs.children)
 
-        if panel not in children:      # rien à faire
+        # rien à faire si le panneau n’est plus là
+        if panel not in children:
             return
 
         # 2) on enlève l'onglet demandé
         idx_removed = children.index(panel)
+        cfg_removed = getattr(panel, "cfg_name", None)
         del children[idx_removed]
 
         # 3) on publie la nouvelle liste **avant** de régler selected_index
@@ -2526,16 +2581,33 @@ class OptimizationTab:
         if not children:                       # plus aucun onglet
             self.param_tabs.selected_index = None
         else:                                  # au moins un onglet
-            # on choisit l'onglet juste avant celui supprimé,
+            # choisit l'onglet juste avant celui supprimé,
             # ou le dernier si on a supprimé le dernier
             new_idx = min(idx_removed, len(children) - 1)
             self.param_tabs.selected_index = new_idx
 
-        # 5) (optionnel) remettre les titres si besoin
-        #    Ipywidgets conserve les titres existants ; la boucle ci-dessous
-        #    est seulement utile si vous voulez les recalculer.
-        # for i, child in enumerate(children):
-        #     self.param_tabs.set_title(i, self.param_tabs.get_title(i))
+        # ------------------------------------------------------------------
+        # 5) Re‑labelling : titres cohérents, copies numérotées (#2, #3…)
+        # ------------------------------------------------------------------
+        counter: dict[str, int] = {}
+        for i, child in enumerate(children):
+            cfg = getattr(child, "cfg_name", "")
+            counter[cfg] = counter.get(cfg, 0) + 1
+            suffix = f" #{counter[cfg]}" if counter[cfg] > 1 else ""
+            self.param_tabs.set_title(i, f"{cfg}{suffix}")
+
+        # ------------------------------------------------------------------
+        # 6) Si c'était le DERNIER panneau de cette config → on décoche
+        # ------------------------------------------------------------------
+        if cfg_removed is not None:
+            still_present = any(
+                getattr(ch, "cfg_name", None) == cfg_removed for ch in children
+            )
+            if not still_present and cfg_removed in self.opt_cfg_check:
+                # cela déclenchera automatiquement un refresh complet
+                self.opt_cfg_check[cfg_removed].value = False
+
+
 
 
     
@@ -2775,7 +2847,7 @@ class OptimizationTab:
         apply_cb.on_click(_apply_all)
         # Cost Function mode + λ
         cf_radio = widgets.RadioButtons(
-            options=[('Dip','dip'),('FWHM','half'),('λ₀ fixe','fixed_lambda'),('λ range','range_lambda')],
+            options=[('(ΔR/Δn) λ dip of reflectance','dip'),('(ΔR/Δn) λ half slope','half'),('λ₀ fixe','fixed_lambda'),('λ range','range_lambda')],
             value='dip', description="CF mode:",
             style={'description_width':'initial'}
         )
@@ -2804,8 +2876,67 @@ class OptimizationTab:
         del_btn.on_click(_on_delete_panel)
 
 
+        warning_msg = widgets.HTML(
+            value="",
+            layout=widgets.Layout(flex="1 1 auto")       # le texte occupe l’espace
+        )
+        ok_btn = widgets.Button(
+            description="OK",
+            button_style="info",
+            layout=widgets.Layout(width="60px", display="none")  # caché par défaut
+        )
+
+        def _dismiss_warning(_):
+            warning_msg.value = ""
+            ok_btn.layout.display = "none"
+
+        ok_btn.on_click(_dismiss_warning)
+
+
 
         def _on_add(_):
+            # reset warning
+            _dismiss_warning(None)
+
+            # ──────────────────────────────────────────────────────────────
+            # Reset any previous warning
+            # ──────────────────────────────────────────────────────────────
+            # warning_msg.value      = ""
+            # ok_btn.layout.display  = "none"          # hide the dismiss button
+
+            # ──────────────────────────────────────────────────────────────
+            # 1) Δn rules – only for cost modes “dip” & “half”
+            # ──────────────────────────────────────────────────────────────
+            needs_dn        = cf_radio.value in ("dip", "half")
+            dn_checked      = self.opt_dn_check[cfg_name].value
+            dn_val          = float(self.delta_n_widget.value)
+            layers_selected = bool(self.layer_selector.value)
+
+            # 1.a  Δn checkbox is **not** ticked
+            if needs_dn and not dn_checked:
+                warning_msg.value = (
+                    f"<span style='color:#c62828;font-weight:bold;'>⚠️ "
+                    f"The cost mode <b>{cf_radio.value}</b> requires Δn, but the Δn "
+                    f"checkbox is not ticked for “{cfg_name}”.<br>"
+                    "Please tick the Δn box and try again.</span>"
+                )
+                ok_btn.layout.display = ""      # show the ‘OK’ button
+                return                          # job NOT added
+
+            # 1.b  Δn checkbox ticked but value ≤ 0 **or** no layer selected
+            if needs_dn and (dn_val <= 0 or not layers_selected):
+                missing = []
+                if dn_val <= 0:
+                    missing.append("a positive Δn value")
+                if not layers_selected:
+                    missing.append("at least one layer")
+                warning_msg.value = (
+                    f"<span style='color:#c62828;font-weight:bold;'>⚠️ "
+                    f"Incomplete Δn information – {', '.join(missing)} required.</span>"
+                )
+                ok_btn.layout.display = ""
+                return
+            
             # Synchronisation si <Square ratio> actif
             if thick_idx is not None and width_idx is not None and square_checkbox.value:
                 # Synchronise fixed
@@ -2872,16 +3003,37 @@ class OptimizationTab:
         add_copy.on_click(lambda _: self._add_copy_panel(cfg_name))
         
 
+
+        warning_box = widgets.HBox(
+            [warning_msg, ok_btn],
+            layout=widgets.Layout(
+                margin="6px 0 0 0",
+                align_items="center",
+                gap="10px"
+            )
+        )
+
+
+
+        buttons_row = widgets.VBox([
+            widgets.HBox(
+                [budget_w, pop_w, add_q, add_copy, del_btn],
+                layout=widgets.Layout(gap="10px")
+            ),
+            warning_box                       # ⟵ le duo placé juste dessous
+        ])
+
         panel = widgets.VBox([
             widgets.HTML(f"<b>Bounds for {cfg_name}</b>"),
             cb_controls, bounds_box,
             widgets.HTML("<b>Type of Cost Function</b>"), cf_radio, lambda_box,
             widgets.HTML("<b>DE parameters</b>"),
-            widgets.HBox([budget_w, pop_w, add_q, add_copy, del_btn], layout=widgets.Layout(gap="10px"))
+            buttons_row
         ], layout=widgets.Layout(padding="10px", border="1px solid #bbb", margin="5px"))
         
         panel.square_checkbox = square_checkbox 
-        
+        panel.cfg_name        = cfg_name  # identifiant du panel
+
         return panel
 
 
@@ -2895,12 +3047,12 @@ class OptimizationTab:
         try:
             self.DE_general(progress_queue=progress_queue, **kwargs)
         except OptimizationCancelled:
-            # On ne logge rien : annulation attendue
-            pass
+            # Annulation utilisateur = neutre
+            progress_queue.put(("CANCELLED", None))
         except Exception:
-            # Les vraies erreurs continuent à remonter vers l’UI
-            progress_queue.put(("ERROR", traceback.format_exc()))
-    
+            tb = traceback.format_exc()
+            progress_queue.put(("ERROR", tb))   # ← tb envoyé
+
     
     def _any_running(self) -> bool:
         return any(job["status"] == "running" for job in self.job_queue)
@@ -2916,6 +3068,7 @@ class OptimizationTab:
                 "running": "⌛",  # en cours
                 "done":    "✅",  # validé
                 "error":   "❌",  # erreur
+                "cancelled": "🚫",
             }[job["status"]]
 
             # 2) boutons
@@ -3066,8 +3219,17 @@ class OptimizationTab:
                 self._refresh_queue()         # là on rafraîchit pour passer à ✅
 
             elif tag == "ERROR":
+                tb = payload[0]
                 job["status"] = "error"
+                job["progress"].bar_style = "danger"
+                with self.out:
+                    self.out.clear_output(wait=True)
+                    print("❌ Job ended with an exception:\n")
+                    print(tb) 
+                
                 self._refresh_queue()         # là on rafraîchit pour passer à ❌
+
+
 
             # si on a toujours un thread en cours, on re‐schedule
             if t.is_alive():
@@ -3093,7 +3255,7 @@ class OptimizationTab:
         #     except Exception:
         #         pass
 
-        job["status"] = "error"
+        job["status"] = "cancelled"
 
         # ► rafraîchit l’UI seulement si demandé
         if refresh_ui:
