@@ -1,1 +1,1 @@
-web: python -m ipykernel install --sys-prefix && voila Gap_Plasmon_2D/Workspace/notebooks/SWAG_Sim_V1_2.ipynb --no-browser --port=$PORT --Voila.ip=0.0.0.0 --static=Gap_Plasmon_2D/Workspace/notebooks/static_assets
+web: voila Gap_Plasmon_2D/Workspace/notebooks/SWAG_Sim_V1_2.ipynb --no-browser --ip=0.0.0.0 --port=$PORT --static=Gap_Plasmon_2D/Workspace/notebooks/static --static-url-prefix=/static

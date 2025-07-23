@@ -1042,7 +1042,7 @@ class OptimizationTab:
             self.opt_config_selector,
 
             # Remplace l’ancien “Spectrum” par les widgets d’optimisation
-            widgets.HTML(value="<b>Spectrum (nm) — optimization only</b>"),
+            widgets.HTML(value="<b>Spectrum range (nm)</b>"),
             widgets.HBox(
                 [self.opt_lambda_min, self.opt_lambda_max, self.opt_n_points],
                 layout=widgets.Layout(gap='10px')
@@ -1055,8 +1055,8 @@ class OptimizationTab:
 
             widgets.HTML(value="<b>Δn & Layers</b>"),
             widgets.HBox(
-                [self.delta_n_widget, self.layer_selector],
-                layout=widgets.Layout(gap='10px')
+                [self.layer_selector, self.delta_n_widget],
+                layout=widgets.Layout(width='auto', flex='1 1 0%', height='100px')
             ),
 
         ], layout=widgets.Layout(width='48%', padding='10px'))

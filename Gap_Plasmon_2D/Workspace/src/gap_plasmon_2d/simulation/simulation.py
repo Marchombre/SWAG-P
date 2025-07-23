@@ -400,6 +400,7 @@ class SimulationTab:
 
         # ─── Spectre & points────────────────────────────────────────────────
         common_layout = widgets.Layout(min_width='0', flex='1 1 auto')
+        
         self.sim_lambda_min = widgets.FloatText(
             value=450.0, description="λ min (nm):",
             layout=common_layout,
@@ -661,14 +662,15 @@ class SimulationTab:
         """
         self.panel_controls = widgets.VBox(
             [
-                widgets.HTML("<h3>Simulation – Paramètres</h3>"),
+                widgets.HTML("<h3>Simulation – Parameters</h3>"),
                 self.sim_name_widget,
+                widgets.HTML(value="<b>Spectrum range (nm)</b>"),
                 widgets.HBox(
                     [self.sim_lambda_min, self.sim_lambda_max, self.sim_n_points],
                     layout=widgets.Layout(gap='10px', width='100%')
                 ),
                 self.config_selector,
-                widgets.HTML("<b>RCWA modes</b>"),
+                widgets.HTML("<b>RCWA Fourier modes</b>"),
                 widgets.HBox(
                     [self.mode_selection, self.sim_n_mod],
                     layout=widgets.Layout(gap='10px')
@@ -1833,7 +1835,7 @@ class SimulationTab:
         
         # ───────── colonne gauche : panneau de contrôle ──────────
         self.panel_controls.layout = widgets.Layout(
-            flex="1 1 300px",     # min-width 300 px, grandit/rétrécit si besoin
+            flex="1 1 200px",     # min-width 200 px, grandit/rétrécit si besoin
             padding="0 10px 0 0",
             min_width="0"
         )

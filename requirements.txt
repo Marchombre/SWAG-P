@@ -1,6 +1,8 @@
 # === Requirements for the project ============================================
 -e .                 # install local package in editable mode
 
+--upgrade pip
+
 # === Core scientific stack ====================================================
 numpy                # calcul matriciel & tableaux n-dim ↔ fondation de tout le code
 scipy                # fonctions scientifiques (interpol., opti, fft…) utilisées un peu partout
