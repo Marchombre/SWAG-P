@@ -33,9 +33,9 @@ def create_geometry_material_widget():
     """
 
     # ╭─ 0 |  Data & watcher  ───────────────────────────────────────────────╮
-    module_dir         = os.path.dirname(os.path.abspath(__file__))
-    CONFIG_DIR         = str(paths.CONFIGS_DIR)
-    combos_file        = os.path.join(CONFIG_DIR, "geom_mat_combinations.json")
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    CONFIG_DIR = str(paths.CONFIGS_DIR)
+    combos_file = os.path.join(CONFIG_DIR, "geom_mat_combinations.json")
 
     def _load(fname, key):
         try:
@@ -44,7 +44,7 @@ def create_geometry_material_widget():
             return []
 
     geom_data = _load("geometry_configurations.json", "ALL_GEOMETRY_CONFIGS")
-    mat_data  = _load("material_config.json",          "ALL_CONFIGS")
+    mat_data = _load("material_config.json", "ALL_CONFIGS")
 
     # petit watcher sur /CONFIG_DIR (hérite de ton util)
     # ── on crée un timer de debounce à l’échelle de la closure ──
@@ -73,15 +73,17 @@ def create_geometry_material_widget():
     def _geom_dd():
         opts = [(c["config_name"], c) for c in geom_data] or [("—", None)]
         return widgets.Dropdown(
-            options=opts, value=opts[0][1],
-            layout=widgets.Layout(width="auto", flex="1 1 0%")
+            options=opts,
+            value=opts[0][1],
+            layout=widgets.Layout(width="auto", flex="1 1 0%"),
         )
 
     def _mat_dd():
         opts = [(c["config_name"], c) for c in mat_data] or [("—", None)]
         return widgets.Dropdown(
-            options=opts, value=opts[0][1],
-            layout=widgets.Layout(width="auto", flex="1 1 0%")
+            options=opts,
+            value=opts[0][1],
+            layout=widgets.Layout(width="auto", flex="1 1 0%"),
         )
 
     # ╭─ 2 |  Ligne “tableau” (geom • mat • 🗑️)  ───────────────────────────╮
@@ -89,11 +91,15 @@ def create_geometry_material_widget():
 
     def _add_row(_=None):
         geom, mat = _geom_dd(), _mat_dd()
-        trash = widgets.Button(icon="trash", tooltip="Delete row",
-                               layout=widgets.Layout(width="auto", flex="1 1 0%"),
-                               button_style="danger")
-        row = widgets.HBox([geom, mat, trash],
-                           layout=widgets.Layout(gap="6px", align_items="center"))
+        trash = widgets.Button(
+            icon="trash",
+            tooltip="Delete row",
+            button_style="danger",
+            layout=widgets.Layout(width="36px", flex="0 0 auto"),
+        )
+        row = widgets.HBox(
+            [geom, mat, trash], layout=widgets.Layout(gap="6px", align_items="center")
+        )
         row_pool.append(row)
         rows_box.children = tuple(row_pool)
 
@@ -105,41 +111,47 @@ def create_geometry_material_widget():
 
         trash.on_click(_on_delete)
 
-
-
-    _add_row()                                                # première ligne
+    _add_row()  # première ligne
 
     # ╭─ 3 |  Actions globales  ─────────────────────────────────────────────╮
-    btn_add  = widgets.Button(icon="plus",  tooltip="Add a new row",
-                              button_style="info",
-                              layout=widgets.Layout(width="auto", flex="1 1 0%"))
-    btn_save = widgets.Button(icon="check", tooltip="Combine & save selections",
-                              button_style="success",
-                              layout=widgets.Layout(width="auto", flex="1 1 0%"))
+    btn_add = widgets.Button(
+        icon="plus",
+        tooltip="Add a new row",
+        button_style="info",
+        layout=widgets.Layout(width="36px", flex="0 0 auto"),
+    )
+    btn_save = widgets.Button(
+        icon="check",
+        tooltip="Combine & save selections",
+        button_style="success",
+        layout=widgets.Layout(width="36px", flex="0 0 auto"),
+    )
 
     btn_add.on_click(_add_row)
 
     # enregistrées → SelectMultiple dans un Accordion
     saved_sel = widgets.SelectMultiple(layout=widgets.Layout(height="140px"))
-    btn_del_saved = widgets.Button(icon="trash", button_style="danger",
-                                   tooltip="Delete selected combos",
-                                   layout=widgets.Layout(width="auto", flex="1 1 0%"))
-    saved_box = widgets.HBox([saved_sel, btn_del_saved],
-                             layout=widgets.Layout(gap="6px"))
+    btn_del_saved = widgets.Button(
+        icon="trash",
+        button_style="danger",
+        tooltip="Delete selected combos",
+        layout=widgets.Layout(width="36px", flex="0 0 auto"),
+    )
+    saved_box = widgets.HBox(
+        [saved_sel, btn_del_saved], layout=widgets.Layout(gap="6px")
+    )
     acc_saved = widgets.Accordion(children=[saved_box])
     acc_saved.set_title(0, "📁  Saved combinations")
-
 
     # ╭─ 4 |  Helpers de rechargement  ──────────────────────────────────────╮
     def _reload_options():
         nonlocal geom_data, mat_data
         geom_data = _load("geometry_configurations.json", "ALL_GEOMETRY_CONFIGS")
-        mat_data  = _load("material_config.json",          "ALL_CONFIGS")
+        mat_data = _load("material_config.json", "ALL_CONFIGS")
 
         # met à jour chaque dropdown existant
         for row in row_pool:
-            for dd, src in ((row.children[0], geom_data),
-                            (row.children[1], mat_data)):
+            for dd, src in ((row.children[0], geom_data), (row.children[1], mat_data)):
                 opts = [(c["config_name"], c) for c in src] or [("—", None)]
                 prev = dd.value
                 dd.options = opts
@@ -148,14 +160,14 @@ def create_geometry_material_widget():
 
         # recharge la liste saved combos
         try:
-            saved = json.load(open(combos_file, encoding="utf-8")) \
-                        .get("ALL_COMBINED_CONFIGS", [])
+            saved = json.load(open(combos_file, encoding="utf-8")).get(
+                "ALL_COMBINED_CONFIGS", []
+            )
         except (FileNotFoundError, json.JSONDecodeError):
             saved = []
         saved_sel.options = [c["config_name"] for c in saved]
 
-    _reload_options()                                         # init
-
+    _reload_options()  # init
 
     # ╭─ 5 |  Sauvegarde / suppression  ────────────────────────────────────╮
     def _save(_):
@@ -163,20 +175,23 @@ def create_geometry_material_widget():
         for row in row_pool:
             g, m = row.children[0].value, row.children[1].value
             if g and m:
-                combos.append({
-                    "config_name": f"{g['config_name']} + {m['config_name']}",
-                    "geometry": g, "material": m
-                })
+                combos.append(
+                    {
+                        "config_name": f"{g['config_name']} + {m['config_name']}",
+                        "geometry": g,
+                        "material": m,
+                    }
+                )
 
         if not combos:
             status.value = "⚠️ Nothing to save."
             return
 
-
         # lit l’existant
         try:
-            existing = json.load(open(combos_file, encoding="utf-8")) \
-                          .get("ALL_COMBINED_CONFIGS", [])
+            existing = json.load(open(combos_file, encoding="utf-8")).get(
+                "ALL_COMBINED_CONFIGS", []
+            )
         except (FileNotFoundError, json.JSONDecodeError):
             existing = []
 
@@ -185,9 +200,12 @@ def create_geometry_material_widget():
             merged[c["config_name"]] = c
 
         os.makedirs(CONFIG_DIR, exist_ok=True)
-        json.dump({"ALL_COMBINED_CONFIGS": list(merged.values())},
-                  open(combos_file, "w", encoding="utf-8"),
-                  indent=2, ensure_ascii=False)
+        json.dump(
+            {"ALL_COMBINED_CONFIGS": list(merged.values())},
+            open(combos_file, "w", encoding="utf-8"),
+            indent=2,
+            ensure_ascii=False,
+        )
         status.value = f"✅ Saved {len(combos)} structure(s)."
         _reload_options()
 
@@ -200,11 +218,17 @@ def create_geometry_material_widget():
             return
         try:
             data = json.load(open(combos_file, encoding="utf-8"))
-            keep = [c for c in data.get("ALL_COMBINED_CONFIGS", [])
-                    if c["config_name"] not in todel]
-            json.dump({"ALL_COMBINED_CONFIGS": keep},
-                      open(combos_file, "w", encoding="utf-8"),
-                      indent=2, ensure_ascii=False)
+            keep = [
+                c
+                for c in data.get("ALL_COMBINED_CONFIGS", [])
+                if c["config_name"] not in todel
+            ]
+            json.dump(
+                {"ALL_COMBINED_CONFIGS": keep},
+                open(combos_file, "w", encoding="utf-8"),
+                indent=2,
+                ensure_ascii=False,
+            )
             status.value = f"🗑️ Deleted {len(todel)} combo(s)."
             _reload_options()
         except FileNotFoundError:
@@ -212,11 +236,9 @@ def create_geometry_material_widget():
 
     btn_del_saved.on_click(_del_saved)
 
-
     # ╭─ 6 |  Status bar  ──────────────────────────────────────────────────╮
     status = widgets.HTML("")
     status.layout.margin = "4px 0 0 4px"
-
 
     # ╭─ 7 |  Mise en page globale  ────────────────────────────────────────╮
     header = widgets.HTML(
@@ -225,20 +247,20 @@ def create_geometry_material_widget():
     )
 
     buttons_bar = widgets.HBox(
-        [btn_add, btn_save],
-        layout=widgets.Layout(gap="8px", align_items="center")
+        [btn_add, btn_save], layout=widgets.Layout(gap="8px", align_items="center")
     )
 
-
     # petit style global
-    style = widgets.HTML("""
+    style = widgets.HTML(
+        """
     <style>
     .combo-panel{
         border:1px solid #ddd;border-radius:8px;padding:12px;
         background:#fafafa;box-shadow:0 2px 4px rgba(0,0,0,.05);
     }
     </style>
-    """)
+    """
+    )
 
     panel = widgets.VBox(
         [style, header, rows_box, buttons_bar, acc_saved, status],
@@ -247,4 +269,3 @@ def create_geometry_material_widget():
     # garde le watcher vivant
     panel._watcher = _watcher
     return panel
-
