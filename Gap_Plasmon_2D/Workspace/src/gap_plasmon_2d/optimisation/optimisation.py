@@ -672,6 +672,29 @@ class OptimizationTab:
         self.sim                = sim_obj
         self.json_combined_path = str(json_combined_path)
 
+
+        # ─── Spectral configuration (override SimulationTab) ───
+        # On crée trois widgets dédiés à l’optimisation, initialisés
+        # aux mêmes valeurs que dans SimulationTab, mais indépendants.
+        self.opt_lambda_min = widgets.FloatText(
+            value=self.sim.sim_lambda_min.value,
+            description="λ min (nm):",
+            layout=widgets.Layout(width="150px")
+        )
+        self.opt_lambda_max = widgets.FloatText(
+            value=self.sim.sim_lambda_max.value,
+            description="λ max (nm):",
+            layout=widgets.Layout(width="150px")
+        )
+        self.opt_n_points = widgets.IntText(
+            value=self.sim.sim_n_points.value,
+            description="n points:",
+            layout=widgets.Layout(width="150px")
+        )
+        # ──
+
+
+
         # runtime-state flags/handles
         self._is_running   = False         
         self._cancelled    = False
@@ -1016,11 +1039,12 @@ class OptimizationTab:
 
         # 1) Colonne de gauche (Simulation)
         left_col = widgets.VBox([
-            self.opt_config_selector,  # toggle + refresh + cases Config/Δn
+            self.opt_config_selector,
 
-            widgets.HTML(value="<b>Spectrum (nm)</b>"),
+            # Remplace l’ancien “Spectrum” par les widgets d’optimisation
+            widgets.HTML(value="<b>Spectrum (nm) — optimization only</b>"),
             widgets.HBox(
-                [self.sim.sim_lambda_min, self.sim.sim_lambda_max, self.sim.sim_n_points],
+                [self.opt_lambda_min, self.opt_lambda_max, self.opt_n_points],
                 layout=widgets.Layout(gap='10px')
             ),
 
@@ -1381,6 +1405,14 @@ class OptimizationTab:
         self._is_running = True
         self._cancelled  = False
         self.cancel_btn.disabled = False
+
+        # ─── Avant de lancer le calcul, on force SimulationTab
+        #     à utiliser **ses** valeurs spectrales choisies en Opt.
+        self.sim.sim_lambda_min.value = self.opt_lambda_min.value
+        self.sim.sim_lambda_max.value = self.opt_lambda_max.value
+        self.sim.sim_n_points.value  = self.opt_n_points.value
+
+
 
         # ----------  reset runtime widgets ----------
         self._status_html.value            = (
@@ -1898,9 +1930,12 @@ class OptimizationTab:
 
 
             # Tracé du spectre optimal + sauvegarde HDF5
-            lam = np.linspace(self.sim.sim_lambda_min.value,
-                              self.sim.sim_lambda_max.value,
-                              self.sim.sim_n_points.value)
+            # Génération de la grille spectrale *depuis l’onglet optimisation*
+            lam = np.linspace(
+                self.opt_lambda_min.value,
+                self.opt_lambda_max.value,
+                self.opt_n_points.value
+            )
             
             # on reprend la même config que celle passée au worker
             orig_cfg = next(c for c in self.sim.all_configs

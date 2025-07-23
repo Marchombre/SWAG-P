@@ -553,7 +553,14 @@ def create_geometry_widget():
 
     # 5) Prépare label & zone dessin
     case_label_widget = widgets.Label(value="")
-    fig_output = widgets.Output(layout=widgets.Layout(flex='1', height='700px', padding='10px'))
+    # fig_output sans scroll, et taille auto pour pouvoir être centré
+    fig_output = widgets.Output(layout=widgets.Layout(
+        min_height='0px',      # pour que la sortie puisse réduire sa hauteur
+        overflow='hidden',     # supprime les scrollbars
+        padding='10px',
+        width='auto'           # largeur auto pour ne pas prendre tout l'espace
+    ))
+
 
     # 6) Fonction de dessin, appelée à chaque modif
     def draw_structure(_=None):
@@ -621,7 +628,7 @@ def create_geometry_widget():
             # ------------------------------------------------------------------
             #  Création de la figure et calcul de la largeur affichée du cube
             # ------------------------------------------------------------------
-            fig, ax = plt.subplots(figsize=(6, 6))
+            fig, ax = plt.subplots(figsize=(6, 6), constrained_layout=True)
             ax.set_title(f"Schematics – {case_label_widget.value}", fontsize=10, pad=5)
 
             # — largeur affichée pour rendre le nanocube carré —
@@ -707,12 +714,29 @@ def create_geometry_widget():
         widgets.HBox([config_dropdown, button_load, button_update, button_delete]),
         output_area
     ])
-    left_panel  = widgets.VBox(slider_widgets + [config_controls],
-                              layout=widgets.Layout(width='600px'))
-    right_panel = widgets.VBox([fig_output],
-                              layout=widgets.Layout(flex='1'))
-    main_ui = widgets.HBox([left_panel, right_panel],
-                           layout=widgets.Layout(width='100%'))
+    left_panel  = widgets.VBox(
+        slider_widgets + [config_controls],
+        layout=widgets.Layout(width='600px')
+    )
+
+    # → Remplacement de right_panel pour centrer la figure
+    right_panel = widgets.VBox(
+        [fig_output],
+        layout=widgets.Layout(
+            flex='1',            # prend tout l'espace restant
+            min_width='0px',     # permet la réduction correcte
+            align_items='center',    # centre HORIZONTALEMENT fig_output
+            justify_content='center' # (optionnel) centre VERTICALEMENT si besoin
+        )
+    )
+
+    main_ui = widgets.HBox(
+        [left_panel, right_panel],
+        layout=widgets.Layout(
+            width='100%',
+            height='auto'
+        )
+    )
 
 
 

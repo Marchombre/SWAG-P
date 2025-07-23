@@ -511,7 +511,7 @@ class MaterialRoleWidget:
         self.comparison_vbox = widgets.VBox([])
         self.add_comparison_btn = widgets.Button(description="Add materials", button_style="info")
         self.add_comparison_btn.on_click(self.add_comparison)
-        self.comparison_area = widgets.VBox([widgets.HTML("<b>Comparaison:</b>"), self.comparison_vbox, self.add_comparison_btn])
+        self.comparison_area = widgets.VBox([widgets.HTML("<b>Compare with...:</b>"), self.comparison_vbox, self.add_comparison_btn])
         self.plot_area = widgets.VBox([self.plot_output, self.comparison_area])
 
         self.container = widgets.VBox([
@@ -520,7 +520,7 @@ class MaterialRoleWidget:
             self.standard_dropdown,
             self.ri_widget.container,
             self.override_box,
-            widgets.HTML(f"<hr><b>Trace pour {role_name}</b>"),
+            widgets.HTML(f"<hr><b>Plot spectrum for {role_name}</b>"),
             self.plot_type_and_btn,
             self.plot_area
         ])
@@ -900,7 +900,7 @@ class MaterialSelectorTabbedNotebook:
         self.load_preconfigs()
         self.preconfig_dropdown = widgets.Dropdown(options=self._get_preconfig_options(), description="Preconfig:")
         self.preconfig_name_text = widgets.Text(description="Preconfig Name:", placeholder="Enter a name...")
-        self.add_preconfig_btn = widgets.Button(description="Add Preconfig", button_style="info")
+        self.add_preconfig_btn = widgets.Button(description="Add Preconfig", button_style="warning")
         self.update_preconfig_btn = widgets.Button(description="Update Preconfig")
         self.delete_preconfig_btn = widgets.Button(description="Delete Preconfig", button_style="danger")
         self.preconfig_dropdown.observe(self.on_preconfig_change, names="value")
@@ -912,7 +912,7 @@ class MaterialSelectorTabbedNotebook:
             self.add_preconfig_btn, self.update_preconfig_btn, self.delete_preconfig_btn
         ])
         self.config_name_text = widgets.Text(description="Configuration Name:", placeholder="Enter the config name")
-        self.add_config_btn = widgets.Button(description="Add Material config")
+        self.add_config_btn = widgets.Button(description="Add Material config", button_style="warning")
         self.save_quit_btn = widgets.Button(description="Save & Quit", button_style="success")
         self.add_config_btn.on_click(self.on_add_config)
         self.save_quit_btn.on_click(self.on_save_quit)
