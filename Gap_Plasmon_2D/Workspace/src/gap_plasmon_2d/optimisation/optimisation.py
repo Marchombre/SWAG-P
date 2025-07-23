@@ -2718,7 +2718,7 @@ class OptimizationTab:
                 <div style="display:flex;align-items:center;justify-content:center;height:60px;">
                     <span style="font-size:4.4em;line-height:0.7;">&#x7B;</span>
                 </div>
-            """, layout=widgets.Layout(width="auto", flex="1 1 0%", min_width="auto", flex="1 1 0%"))
+            """, layout=widgets.Layout(width="auto", min_width="auto", flex="1 1 0%"))
 
             _syncing = {"thick": False, "width": False}
 
