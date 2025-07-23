@@ -1,0 +1,21 @@
+/* Responsive styling for ipywidgets */
+.widget-button,
+.widget-toggle-button,
+.widget-dropdown,
+.widget-select,
+.widget-text,
+.widget-textarea,
+.widget-checkbox,
+.widget-radio-box {
+    width: auto !important;
+    max-width: 100%;
+    margin: 2px;
+}
+
+.widget-hbox,
+.widget-vbox {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
