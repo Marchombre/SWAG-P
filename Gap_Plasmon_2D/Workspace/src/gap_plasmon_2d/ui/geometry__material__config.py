@@ -74,14 +74,14 @@ def create_geometry_material_widget():
         opts = [(c["config_name"], c) for c in geom_data] or [("—", None)]
         return widgets.Dropdown(
             options=opts, value=opts[0][1],
-            layout=widgets.Layout(width="auto", flex="1 1 0%")
+            layout=widgets.Layout(width="240px")
         )
 
     def _mat_dd():
         opts = [(c["config_name"], c) for c in mat_data] or [("—", None)]
         return widgets.Dropdown(
             options=opts, value=opts[0][1],
-            layout=widgets.Layout(width="auto", flex="1 1 0%")
+            layout=widgets.Layout(width="240px")
         )
 
     # ╭─ 2 |  Ligne “tableau” (geom • mat • 🗑️)  ───────────────────────────╮
@@ -90,7 +90,7 @@ def create_geometry_material_widget():
     def _add_row(_=None):
         geom, mat = _geom_dd(), _mat_dd()
         trash = widgets.Button(icon="trash", tooltip="Delete row",
-                               layout=widgets.Layout(width="auto", flex="1 1 0%"),
+                               layout=widgets.Layout(width="38px"),
                                button_style="danger")
         row = widgets.HBox([geom, mat, trash],
                            layout=widgets.Layout(gap="6px", align_items="center"))
@@ -112,10 +112,10 @@ def create_geometry_material_widget():
     # ╭─ 3 |  Actions globales  ─────────────────────────────────────────────╮
     btn_add  = widgets.Button(icon="plus",  tooltip="Add a new row",
                               button_style="info",
-                              layout=widgets.Layout(width="auto", flex="1 1 0%"))
+                              layout=widgets.Layout(width="38px"))
     btn_save = widgets.Button(icon="check", tooltip="Combine & save selections",
                               button_style="success",
-                              layout=widgets.Layout(width="auto", flex="1 1 0%"))
+                              layout=widgets.Layout(width="38px"))
 
     btn_add.on_click(_add_row)
 
@@ -123,7 +123,7 @@ def create_geometry_material_widget():
     saved_sel = widgets.SelectMultiple(layout=widgets.Layout(height="140px"))
     btn_del_saved = widgets.Button(icon="trash", button_style="danger",
                                    tooltip="Delete selected combos",
-                                   layout=widgets.Layout(width="auto", flex="1 1 0%"))
+                                   layout=widgets.Layout(width="38px"))
     saved_box = widgets.HBox([saved_sel, btn_del_saved],
                              layout=widgets.Layout(gap="6px"))
     acc_saved = widgets.Accordion(children=[saved_box])
@@ -242,8 +242,9 @@ def create_geometry_material_widget():
 
     panel = widgets.VBox(
         [style, header, rows_box, buttons_bar, acc_saved, status],
-        layout=widgets.Layout(width="auto", flex="1 1 0%", gap="6px"),
+        layout=widgets.Layout(width="680px", gap="6px"),
     )
     # garde le watcher vivant
     panel._watcher = _watcher
     return panel
+
