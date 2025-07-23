@@ -19,3 +19,6 @@ intéractive sous Jupyter/Voila.
 | **Export** | PNG, CSV, HDF5 (`simulation_results.h5`). |
 
 
+
+## Interface utilisateur
+Le sous-paquet `gap_plasmon_2d.ui` charge désormais automatiquement une feuille de style qui rend les widgets plus compacts et mieux alignés. Les boutons, listes déroulantes et cases à cocher s'adaptent à leur contenu pour une présentation plus harmonieuse.
