@@ -2462,22 +2462,45 @@ class OptimizationTab:
             self.out.clear_output(wait=True)
             # Affiche la figure groupée
             display(fig)
-            # Ligne de boutons (un sous chaque subplot, donc 2x2)
-            dl_conv = widgets.Button(description="Télécharger Convergence", icon="download", layout=widgets.Layout(width="auto", flex="1 1 0%"))
-            dl_cons = widgets.Button(description="Télécharger Consistency", icon="download", layout=widgets.Layout(width="auto", flex="1 1 0%"))
-            dl_geom = widgets.Button(description="Télécharger Géométrie", icon="download", layout=widgets.Layout(width="auto", flex="1 1 0%"))
-            dl_spec = widgets.Button(description="Télécharger Spectre", icon="download", layout=widgets.Layout(width="auto", flex="1 1 0%"))
+            # Boutons de téléchargement associés à chaque subplot
+            dl_conv = widgets.Button(
+                description="Télécharger Convergence",
+                icon="download",
+                layout=widgets.Layout(width="auto")
+            )
+            dl_cons = widgets.Button(
+                description="Télécharger Consistency",
+                icon="download",
+                layout=widgets.Layout(width="auto")
+            )
+            dl_geom = widgets.Button(
+                description="Télécharger Géométrie",
+                icon="download",
+                layout=widgets.Layout(width="auto")
+            )
+            dl_spec = widgets.Button(
+                description="Télécharger Spectre",
+                icon="download",
+                layout=widgets.Layout(width="auto")
+            )
             # Callback : exporte l’axe voulu
             dl_conv.on_click(lambda _: self._export_subplot(ax0, "convergence"))
             dl_cons.on_click(lambda _: self._export_subplot(ax1, "consistency"))
             dl_geom.on_click(lambda _: self._export_subplot(ax2, "geometry"))
             dl_spec.on_click(lambda _: self._export_subplot(ax3, "spectrum"))
-            # Affiche les boutons en 2 lignes sous chaque plot, 2x2
-            boutons_ligne1 = widgets.HBox([dl_conv, dl_cons], layout=widgets.Layout(justify_content="flex-start", gap="40px", margin="0 0 12px 0"))
-            boutons_ligne2 = widgets.HBox([dl_geom, dl_spec], layout=widgets.Layout(justify_content="flex-start", gap="40px"))
+            # Affiche les boutons sous leur subplot respectif
+            buttons_grid = widgets.GridBox(
+                children=[dl_conv, dl_cons, dl_geom, dl_spec],
+                layout=widgets.Layout(
+                    grid_template_columns="1fr 1fr",
+                    grid_template_rows="auto auto",
+                    gap="12px 40px",
+                    justify_items="center",
+                    width="100%"
+                )
+            )
+            display(buttons_grid)
             # Affiche la table debug HTML
-            display(boutons_ligne1)
-            display(boutons_ligne2)
             display(widgets.HTML(debug_html))
         plt.close(fig)
 
