@@ -552,7 +552,7 @@ class OptimizationTab:
             value=True,                      # ouvert par défaut
             icon="caret-up",
             button_style="warning",
-            layout=widgets.Layout(width="auto", flex="1 1 0%")
+            layout=widgets.Layout(width="auto", flex="0 0 auto")
         )
         self.opt_toggle_btn.observe(self._toggle_config_list, names="value")
 

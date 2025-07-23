@@ -566,7 +566,7 @@ class SimulationTab:
             description="Select Configs & Δn",
             value=True,                     # ← ouvert par défaut
             icon='caret-up',                # ← icône cohérente
-            layout=widgets.Layout(width='auto', flex='1 1 0%'),
+            layout=widgets.Layout(width='auto', flex='0 0 auto'),
             button_style='warning'
         )
 
