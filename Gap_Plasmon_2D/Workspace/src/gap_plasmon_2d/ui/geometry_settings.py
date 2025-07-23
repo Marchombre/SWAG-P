@@ -129,7 +129,7 @@ def save_geometry_configs():
         json.dump({"ALL_GEOMETRY_CONFIGS": GEOMETRY_CONFIGS}, f, indent=2)
     return save_path
 
-def draw_layer(ax, x, y, w, h, color, label, hatch=None):
+def draw_layer(ax, x, y, w, h, color, label, hatch=None, *, fontsize=9):
     """
     Dessine une couche rectangulaire sur l'objet Axes 'ax',
     avec un libellé optionnel (affiché au centre) et éventuellement un motif de hachures.
@@ -140,7 +140,14 @@ def draw_layer(ax, x, y, w, h, color, label, hatch=None):
     rect = patches.Rectangle((x, y), w, h, edgecolor=None, facecolor=color, hatch=hatch)
     ax.add_patch(rect)
     if label and h > 0:
-        ax.text(x + w/2, y + h/2, label, ha="center", va="center", fontsize=9)
+        ax.text(
+            x + w / 2,
+            y + h / 2,
+            label,
+            ha="center",
+            va="center",
+            fontsize=fontsize,
+        )
 
 
 
@@ -178,13 +185,19 @@ def create_geometry_widget():
             description_str = label + " (nm):"
         # Création d'un slider avec un FloatText lié pour chaque paramètre
         slider = widgets.FloatSlider(
-            value=default, min=min_val, max=max_val, step=0.1,
+            value=default,
+            min=min_val,
+            max=max_val,
+            step=0.1,
             description=description_str,
             continuous_update=False,
-            layout=widgets.Layout(width='auto', flex='1 1 0%'),
-            style={'description_width': '180px'}
+            layout=widgets.Layout(width="250px"),
+            style={"description_width": "180px"},
         )
-        float_text = widgets.FloatText(value=default, layout=widgets.Layout(width='auto', flex='1 1 0%'))
+        float_text = widgets.FloatText(
+            value=default,
+            layout=widgets.Layout(width="80px"),
+        )
         widgets.jslink((slider, 'value'), (float_text, 'value'))
         
         # Empêche les valeurs négatives
@@ -228,20 +241,28 @@ def create_geometry_widget():
 
         # Création du Text pour le nom de layer et du slider pour l'épaisseur
         name_w = widgets.Text(
-            value=default_name, placeholder='Layer name',
-            layout=widgets.Layout(width='auto', flex='1 1 0%')
+            value=default_name,
+            placeholder="Layer name",
+            layout=widgets.Layout(width="120px"),
         )
         sl = widgets.FloatSlider(
-            value=1.0, min=0, max=50, step=0.1,
-            description="thick (nm):", continuous_update=False,
-            layout=widgets.Layout(width='auto', flex='1 1 0%'),
-            style={'description_width':'100px'}
+            value=1.0,
+            min=0,
+            max=50,
+            step=0.1,
+            description="thick (nm):",
+            continuous_update=False,
+            layout=widgets.Layout(width="160px"),
+            style={"description_width": "100px"},
         )
-        ft = widgets.FloatText(value=1.0, layout=widgets.Layout(width='auto', flex='1 1 0%'))
+        ft = widgets.FloatText(value=1.0, layout=widgets.Layout(width="80px"))
         widgets.jslink((sl, 'value'), (ft, 'value'))
 
         # Bouton de suppression
-        btn_del = widgets.Button(description="✕", layout=widgets.Layout(width='auto', flex='1 1 0%'))
+        btn_del = widgets.Button(
+            description="✕",
+            layout=widgets.Layout(width="30px"),
+        )
         container = widgets.HBox([name_w, sl, ft, btn_del])
 
 
@@ -555,10 +576,11 @@ def create_geometry_widget():
     case_label_widget = widgets.Label(value="")
     fig_output = widgets.Output(
         layout=widgets.Layout(
-            flex='1',
-            height='700px',
-            padding='10px',
-            width='100%'
+            flex="1 1 auto",
+            height="auto",
+            padding="10px",
+            width="100%",
+            overflow="visible",
         )
     )
 
@@ -629,7 +651,13 @@ def create_geometry_widget():
             #  Création de la figure et calcul de la largeur affichée du cube
             # ------------------------------------------------------------------
             fig, ax = plt.subplots(figsize=(6, 6))
-            ax.set_title(f"Schematics – {case_label_widget.value}", fontsize=10, pad=5)
+            title_fs = int(fig.get_figheight() * 2)
+            label_fs = int(fig.get_figheight() * 1.5)
+            ax.set_title(
+                f"Schematics – {case_label_widget.value}",
+                fontsize=title_fs,
+                pad=5,
+            )
 
             # — largeur affichée pour rendre le nanocube carré —
             if t_reso > 0:
@@ -645,54 +673,163 @@ def create_geometry_widget():
             #  Substrate – Accroche – XIAOYI – couches homo_* déjà dans y_cursor
             # ------------------------------------------------------------------
             bande = min(0.05 * p, disp_sub, disp_super)
-            draw_layer(ax, 0, 0, p, disp_sub, "brown", "Substrate")
-            draw_layer(ax, 0, 0, p, bande, "none", "", hatch='///')
+            draw_layer(ax, 0, 0, p, disp_sub, "brown", "Substrate", fontsize=label_fs)
+            draw_layer(ax, 0, 0, p, bande, "none", "", hatch='///', fontsize=label_fs)
 
             y = disp_sub
-            draw_layer(ax, 0, y, p, disp_acc, "orange", "Accroche"); y += disp_acc
-            draw_layer(ax, 0, y, p, disp_x, "purple", "XIAOYI");     y += disp_x
+            draw_layer(ax, 0, y, p, disp_acc, "orange", "Accroche", fontsize=label_fs); y += disp_acc
+            draw_layer(ax, 0, y, p, disp_x, "purple", "XIAOYI", fontsize=label_fs);     y += disp_x
 
             for key, h in zip(extra_layer_keys, disp_extras):
                 color = extra_layer_colors.get(key, "#888")
-                draw_layer(ax, 0, y, p, h, color, key.replace("thick_homo_", ""))
+                draw_layer(
+                    ax,
+                    0,
+                    y,
+                    p,
+                    h,
+                    color,
+                    key.replace("thick_homo_", ""),
+                    fontsize=label_fs,
+                )
                 y += h
 
             # ------------------------------------------------------------------
             #  Metallic layer, Gap, Nanocube
             # ------------------------------------------------------------------
-            draw_layer(ax, 0, y, p, disp_metal, "gold", "Metallic layer")
+            draw_layer(ax, 0, y, p, disp_metal, "gold", "Metallic layer", fontsize=label_fs)
             y_metal_top = y + disp_metal
-            draw_layer(ax, central_x, y_metal_top,           w_reso_disp, disp_gap,  "lightgreen", "Gap")
-            draw_layer(ax, central_x, y_metal_top + disp_gap, w_reso_disp, disp_reso, "silver",     "Nanocube")
+            draw_layer(
+                ax,
+                central_x,
+                y_metal_top,
+                w_reso_disp,
+                disp_gap,
+                "lightgreen",
+                "Gap",
+                fontsize=label_fs,
+            )
+            draw_layer(
+                ax,
+                central_x,
+                y_metal_top + disp_gap,
+                w_reso_disp,
+                disp_reso,
+                "silver",
+                "Nanocube",
+                fontsize=label_fs,
+            )
             y_cube_top = y_metal_top + disp_gap + disp_reso
 
             # ------------------------------------------------------------------
             #  Parois latérales
             # ------------------------------------------------------------------
             y_lat = y_metal_top
-            draw_layer(ax, 0,              y_lat, lat_width, disp_dielectric, "green",  "Photopolymer")
-            draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, disp_dielectric, "green",  "")
+            draw_layer(
+                ax,
+                0,
+                y_lat,
+                lat_width,
+                disp_dielectric,
+                "green",
+                "Photopolymer",
+                fontsize=label_fs,
+            )
+            draw_layer(
+                ax,
+                central_x + w_reso_disp,
+                y_lat,
+                lat_width,
+                disp_dielectric,
+                "green",
+                "",
+                fontsize=label_fs,
+            )
             y_lat += disp_dielectric
 
-            draw_layer(ax, 0,              y_lat, lat_width, disp_func, "pink",  "Functionalisation")
-            draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, disp_func, "pink",  "")
+            draw_layer(
+                ax,
+                0,
+                y_lat,
+                lat_width,
+                disp_func,
+                "pink",
+                "Functionalisation",
+                fontsize=label_fs,
+            )
+            draw_layer(
+                ax,
+                central_x + w_reso_disp,
+                y_lat,
+                lat_width,
+                disp_func,
+                "pink",
+                "",
+                fontsize=label_fs,
+            )
             y_lat += disp_func
 
-            draw_layer(ax, 0,              y_lat, lat_width, disp_mol, "violet", "Molecule")
-            draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, disp_mol, "violet", "")
+            draw_layer(
+                ax,
+                0,
+                y_lat,
+                lat_width,
+                disp_mol,
+                "violet",
+                "Molecule",
+                fontsize=label_fs,
+            )
+            draw_layer(
+                ax,
+                central_x + w_reso_disp,
+                y_lat,
+                lat_width,
+                disp_mol,
+                "violet",
+                "",
+                fontsize=label_fs,
+            )
             y_lat += disp_mol
 
             # éventuel remplissage
             if y_cube_top > y_lat:
                 h_fill = y_cube_top - y_lat
-                draw_layer(ax, 0,              y_lat, lat_width, h_fill, "lightblue", "")
-                draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, h_fill, "lightblue", "")
+                draw_layer(ax, 0, y_lat, lat_width, h_fill, "lightblue", "", fontsize=label_fs)
+                draw_layer(
+                    ax,
+                    central_x + w_reso_disp,
+                    y_lat,
+                    lat_width,
+                    h_fill,
+                    "lightblue",
+                    "",
+                    fontsize=label_fs,
+                )
 
             # ------------------------------------------------------------------
             #  Superstrate
             # ------------------------------------------------------------------
-            draw_layer(ax, 0, y_cube_top, p, p - y_cube_top, "lightblue", "Superstrate")
-            draw_layer(ax, 0, p - bande, p, bande, "none", "", hatch='///')
+            draw_layer(
+                ax,
+                0,
+                y_cube_top,
+                p,
+                p - y_cube_top,
+                "lightblue",
+                "Superstrate",
+                fontsize=label_fs,
+            )
+            draw_layer(
+                ax,
+                0,
+                p - bande,
+                p,
+                bande,
+                "none",
+                "",
+                hatch="///",
+                fontsize=label_fs,
+            )
 
             ax.set_xlim(0, p)
             ax.set_ylim(0, p)
@@ -714,15 +851,17 @@ def create_geometry_widget():
         widgets.HBox([config_dropdown, button_load, button_update, button_delete]),
         output_area
     ])
-    left_panel  = widgets.VBox(slider_widgets + [config_controls],
-                              layout=widgets.Layout(width='auto', flex='1 1 0%'))
+    left_panel = widgets.VBox(
+        slider_widgets + [config_controls],
+        layout=widgets.Layout(min_width="330px", flex="0 0 auto"),
+    )
     right_panel = widgets.VBox(
         [fig_output],
         layout=widgets.Layout(
-            flex='1',
-            width='100%',
-            align_items='stretch'
-        )
+            flex="1 1 auto",
+            width="100%",
+            align_items="stretch",
+        ),
     )
     main_ui = widgets.HBox([left_panel, right_panel],
                            layout=widgets.Layout(width='100%'))
