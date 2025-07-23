@@ -553,7 +553,14 @@ def create_geometry_widget():
 
     # 5) Prépare label & zone dessin
     case_label_widget = widgets.Label(value="")
-    fig_output = widgets.Output(layout=widgets.Layout(flex='1', height='700px', padding='10px'))
+    fig_output = widgets.Output(
+        layout=widgets.Layout(
+            flex='1',
+            height='700px',
+            padding='10px',
+            width='100%'
+        )
+    )
 
     # 6) Fonction de dessin, appelée à chaque modif
     def draw_structure(_=None):
@@ -709,8 +716,14 @@ def create_geometry_widget():
     ])
     left_panel  = widgets.VBox(slider_widgets + [config_controls],
                               layout=widgets.Layout(width='auto', flex='1 1 0%'))
-    right_panel = widgets.VBox([fig_output],
-                              layout=widgets.Layout(flex='1'))
+    right_panel = widgets.VBox(
+        [fig_output],
+        layout=widgets.Layout(
+            flex='1',
+            width='100%',
+            align_items='stretch'
+        )
+    )
     main_ui = widgets.HBox([left_panel, right_panel],
                            layout=widgets.Layout(width='100%'))
 
