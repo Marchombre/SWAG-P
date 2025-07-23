@@ -101,6 +101,16 @@ def create_advanced_app():
     tabs.set_title(2, "Plot: Multi-spectra")
     tabs.set_title(3, "Accuracy checking")
     tabs.set_title(4, "Optimisation")
+
+    # Centre les contenus des onglets et occupe toute la largeur disponible
+    tabs.layout = widgets.Layout(width="100%")
+    for child in tabs.children:
+        child.layout = widgets.Layout(
+            width="100%",
+            align_items="center",
+            justify_content="center",
+            gap="10px",
+        )
     
 
     # 7) Rafraîchissement à la sélection d'un onglet
@@ -118,5 +128,15 @@ def create_advanced_app():
         # (et 4 = Optimisation, 0 = Convergence si besoin)
 
     tabs.observe(on_tab_change, names='selected_index')
-    return widgets.VBox([tabs])
+
+    # Conteneur principal centré
+    container = widgets.VBox(
+        [tabs],
+        layout=widgets.Layout(
+            width="100%",
+            align_items="center",
+            justify_content="center",
+        ),
+    )
+    return container
 
