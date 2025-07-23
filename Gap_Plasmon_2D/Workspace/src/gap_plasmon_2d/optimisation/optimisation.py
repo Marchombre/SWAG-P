@@ -592,7 +592,7 @@ class OptimizationTab:
              rows,
             layout=widgets.Layout(
                 width="auto", flex="1 1 0%",
-                height=f"{30 + visible*30}px",
+                height=f"{visible*30}px",
                 overflow_y="auto",
                 border="1px solid lightgray",
                 padding="5px",
@@ -642,7 +642,7 @@ class OptimizationTab:
                                         layout=widgets.Layout(gap="5px")))
         # 3) injecter dans l’ancien VBox
         visible = min(len(new_rows), 10)
-        self.opt_config_list.layout.height = f"{30 + visible*30}px"
+        self.opt_config_list.layout.height = f"{visible*30}px"
         self.opt_config_list.children =  new_rows
 
         # 4) mettre à jour l’affichage tout de suite
