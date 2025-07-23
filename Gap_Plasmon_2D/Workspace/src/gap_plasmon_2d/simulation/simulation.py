@@ -117,6 +117,19 @@ def _download_link(fig, fname="figure.png"):
         f'target="_blank">Télécharger l’image</a>')
 
 
+def _build_html_table(col_labels, row_labels, cell_text):
+    """Return an HTML table string for display with ipywidgets."""
+    header = ''.join(f'<th>{lab}</th>' for lab in col_labels)
+    rows = []
+    for lbl, row in zip(row_labels, cell_text):
+        cells = ''.join(f'<td>{str(val).replace("\n", "<br>")}</td>' for val in row)
+        rows.append(f'<tr><th>{lbl}</th>{cells}</tr>')
+    body = '\n'.join(rows)
+    return '<table style="border-collapse:collapse;">' \
+           '<thead><tr><th></th>' + header + '</tr></thead>' \
+           '<tbody>' + body + '</tbody></table>'
+
+
 
 # -----------------------------------------------------------------------------#
 #  Worker function — executed in each process                                  #
@@ -301,6 +314,15 @@ class SimulationTab:
                 border='1px solid lightgray',
                 min_height='250px',
                 overflow_x='hidden',   # ← on interdit le scroll horizontal
+                min_width='0'
+            )
+        )
+
+        # 6) Output séparé pour le tableau final
+        self.table_output = widgets.Output(
+            layout=widgets.Layout(
+                border='1px solid lightgray',
+                overflow_x='auto',
                 min_width='0'
             )
         )
@@ -1568,6 +1590,12 @@ class SimulationTab:
             if labels:
                 self.ax_plot.legend(handles, labels, loc='best', fontsize=9, frameon=False)
 
+            # Affichage HTML du tableau dans un widget séparé
+            html_table = _build_html_table(col_labels, rowLabels, cellText)
+            with self.table_output:
+                clear_output(wait=True)
+                display(HTML(html_table))
+
 
         except Exception as e:
                 import traceback
@@ -1788,7 +1816,7 @@ class SimulationTab:
 
         # ───────── colonne droite : métriques + figure ───────────
         right_column = widgets.VBox(
-            [self.metrics_panel, self.canvas_output],
+            [self.metrics_panel, self.canvas_output, self.table_output],
             layout=widgets.Layout(
                 flex="2 1 400px",  # s’étire 2 × plus vite que la colonne de gauche
                 padding="0 0 0 5px",
