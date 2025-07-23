@@ -19,6 +19,7 @@ import matplotlib as mpl
 mpl.use('module://ipympl.backend_nbagg')
 
 import os, io, base64, json, textwrap, sys
+import contextlib
 from copy import deepcopy
 from datetime import datetime
 
@@ -253,7 +254,9 @@ class SimulationTab:
         # 4) construction des panneaux (panels)
         # ── Initialise 1 seule figure + 2 axes ───────────────────────────
         # 1) Active le backend 'widget' pour ipympl (une seule fois)
-        get_ipython().run_line_magic('matplotlib', 'widget')
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            get_ipython().run_line_magic('matplotlib', 'widget')
         # 2) Désactive l’auto-affichage des figures, sinon plt.subplots() 
         #    injecte une figure dans la cellule
         plt.ioff()
