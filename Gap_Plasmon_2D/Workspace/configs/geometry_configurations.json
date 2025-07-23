@@ -512,6 +512,24 @@
         "thick_sub": 200.0,
         "period": 100.2153
       }
+    },
+    {
+      "config_name": "Geometry_27",
+      "compartment": "D\u00e9faut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.5,
+        "thick_func": 1.0,
+        "thick_diel": 1.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 1.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
     }
   ]
 }

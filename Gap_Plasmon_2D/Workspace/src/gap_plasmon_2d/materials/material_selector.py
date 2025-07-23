@@ -912,10 +912,20 @@ class MaterialSelectorTabbedNotebook:
             self.add_preconfig_btn, self.update_preconfig_btn, self.delete_preconfig_btn
         ])
         self.config_name_text = widgets.Text(description="Configuration Name:", placeholder="Enter the config name")
-        self.add_config_btn = widgets.Button(description="Add Material config", button_style="warning")
-        self.save_quit_btn = widgets.Button(description="Save & Quit", button_style="success")
-        self.add_config_btn.on_click(self.on_add_config)
-        self.save_quit_btn.on_click(self.on_save_quit)
+        
+        
+        self.add_save_btn = widgets.Button(
+            description="Add Material config(s)",
+            button_style="success",
+            layout=widgets.Layout(width='200px')
+        )
+        
+        def _on_add_and_save(_):
+            self.on_add_config(_)    # ajoute la config
+            self.on_save_quit(_)     # puis sauve et quitte
+        self.add_save_btn.on_click(_on_add_and_save)        
+            
+            
         self.config_dropdown = widgets.Dropdown(options=[], description="Saved Configs:", style={"description_width": "initial"})
         self.load_config_btn = widgets.Button(description="Load Config")
         self.update_config_btn = widgets.Button(description="Update Config")
@@ -926,7 +936,7 @@ class MaterialSelectorTabbedNotebook:
         self.container = widgets.VBox([
             self.geometry_dropdown,
             self.preconfig_control_box, self.tab, self.config_name_text,
-            widgets.HBox([self.add_config_btn, self.save_quit_btn]),
+            self.add_save_btn,
             widgets.HBox([self.config_dropdown, self.load_config_btn, self.update_config_btn, self.delete_config_btn]),
             self.output
         ])
@@ -1136,8 +1146,8 @@ class MaterialSelectorTabbedNotebook:
                 with open(preconfig_file, "r", encoding="utf-8") as f:
                     loaded = json.load(f)
                 self.preconfigs = loaded.get("PRECONFIGS", self.preconfigs)
-                with self.output:
-                    print(f"Preconfigurations loaded from {preconfig_file}")
+                # with self.output:
+                #     print(f"Preconfigurations loaded from {preconfig_file}")
             except Exception as e:
                 with self.output:
                     print(f"Error loading preconfigurations: {e}")
@@ -1163,8 +1173,8 @@ class MaterialSelectorTabbedNotebook:
                 final_dict = json.load(f)
             self.all_configs = final_dict.get("ALL_CONFIGS", [])
             self.update_config_dropdown()
-            with self.output:
-                print(f"Configurations loaded from {config_file}")
+            # with self.output:
+            #     print(f"Configurations loaded from {config_file}")
         except Exception as e:
             with self.output:
                 print(f"Unable to load configurations: {e}")
@@ -1228,7 +1238,7 @@ class MaterialSelectorTabbedNotebook:
         self.update_config_dropdown()
         with self.output:
             clear_output()
-            print(f"Configuration '{name}' ajoutée.")
+            print(f"'{name}' configuration added.")
 
         # 5) Persister tout de suite
         self._persist_configs()
@@ -1393,7 +1403,7 @@ class MaterialSelectorTabbedNotebook:
         self.config_dropdown.value = cfg
         with self.output:
             clear_output()
-            print(f"Configuration '{old_name}' mise à jour (nouveau nom : '{new_name}').")
+            print(f"'{old_name}' configuration  updated (new name : '{new_name}').")
 
         # 6) Persister les changements
         self._persist_configs()
@@ -1414,7 +1424,7 @@ class MaterialSelectorTabbedNotebook:
         # 2) Mettre à jour le dropdown
         self.update_config_dropdown()
         with self.output:
-            print(f"Configuration '{name}' supprimée.")
+            print(f"'{name}' configuration  deleted.")
 
         # 3) Persister immédiatement
         self._persist_configs()

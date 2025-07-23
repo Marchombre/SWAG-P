@@ -2261,6 +2261,72 @@
         }
       ],
       "RI_OVERRIDES": {}
+    },
+    {
+      "config_name": "TEST",
+      "MATERIALS_CONFIG": [
+        {
+          "key": "perm_env",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_reso",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_mol",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_func",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_diel",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_gap",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_metalliclayer",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_XIAOYI",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_accroche",
+          "material": {
+            "type": "None"
+          }
+        },
+        {
+          "key": "perm_sub",
+          "material": {
+            "type": "None"
+          }
+        }
+      ],
+      "RI_OVERRIDES": {}
     }
   ]
 }

@@ -313,9 +313,22 @@ def create_geometry_widget():
         value='', placeholder='Nom du compartiment', description='Compartiment :',
         layout=widgets.Layout(width='350px'), style={'description_width':'180px'}
     )
-    button_add    = widgets.Button(description="Add Config",    layout=widgets.Layout(width='150px'))
-    button_save   = widgets.Button(description="Save & Quit", button_style='success',
-                                  layout=widgets.Layout(width='200px'))
+    
+    
+    button_add_save = widgets.Button(
+        description="Add configuration(s)",
+        button_style='success',
+        layout=widgets.Layout(width='200px')
+    )
+    
+
+    # Callback qui chaîne l’ajout puis la sauvegarde
+    def on_add_and_save(_):
+        add_geometry_config(_)        # ajoute la config
+        save_geometry_configs_btn(_)  # puis la sauve
+
+
+        
     config_dropdown = widgets.Dropdown(options=[], description="Saved Configs :",
                                        layout=widgets.Layout(width='350px'),
                                        style={'description_width':'180px'})
@@ -545,8 +558,7 @@ def create_geometry_widget():
         with output_area:
             clear_output(); print(f"Configuration '{sel['config_name']}' supprimée.")
 
-    button_add.on_click(add_geometry_config)
-    button_save.on_click(save_geometry_configs_btn)
+    button_add_save.on_click(on_add_and_save)
     button_load.on_click(load_config)
     button_update.on_click(update_config)
     button_delete.on_click(delete_config)
@@ -670,7 +682,7 @@ def create_geometry_widget():
             #  Parois latérales
             # ------------------------------------------------------------------
             y_lat = y_metal_top
-            draw_layer(ax, 0,              y_lat, lat_width, disp_dielectric, "green",  "Photopolymer")
+            draw_layer(ax, 0,              y_lat, lat_width, disp_dielectric, "green",  "Dielectric")
             draw_layer(ax, central_x+w_reso_disp, y_lat, lat_width, disp_dielectric, "green",  "")
             y_lat += disp_dielectric
 
@@ -709,7 +721,7 @@ def create_geometry_widget():
     # 8) Assemblage final
     config_controls = widgets.VBox([
         config_name_text, compartment_text,
-        widgets.HBox([button_add, button_save]),
+        button_add_save,
         compartment_filter,
         widgets.HBox([config_dropdown, button_load, button_update, button_delete]),
         output_area
