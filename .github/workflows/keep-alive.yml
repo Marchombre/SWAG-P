@@ -1,0 +1,14 @@
+name: Keep SWAG-P Alive
+
+# déclenchement toutes les 10 minutes
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up Render Service
+        run: curl -fsS https://swag-p.onrender.com || true

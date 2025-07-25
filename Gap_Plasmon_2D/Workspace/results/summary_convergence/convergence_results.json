@@ -134,6 +134,15 @@
         "tolerance": 0.002,
         "stable_required": 3,
         "optimal_n_mode": 25
+      },
+      {
+        "timestamp": "2025-07-23T15:50:00.482062",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 45
       }
     ],
     "c30_g6_m10 - Mat_S1": [

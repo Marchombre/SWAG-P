@@ -1,5 +1,5 @@
 Simulation Summary - All Geometry/Material Combos
-Timestamp: 20250722_122640
+Timestamp: 20250723_155441
 Wave parameters: {'angle': 0, 'polarization': 1}
 Number of RCWA modes: 5
 ---- COMBINATIONS ----
@@ -15,7 +15,7 @@ Metrics:
   Lam_res      : 887.1 nm
   Δλ / λmin or λsym: 0.014 & 0.012
   Q-factor     : 53.6
-  best_S_R     : 0.074
+  best_S_R     : 
   Sλ (nm/RIU)  : 54.019
   ΔR/Δn (1/RIU): 0.074
   ΔR_half      : 0.001

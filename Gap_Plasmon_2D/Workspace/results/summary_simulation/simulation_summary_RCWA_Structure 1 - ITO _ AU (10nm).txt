@@ -1,5 +1,5 @@
 Simulation Summary - All Geometry/Material Combos
-Timestamp: 20250723_094949
+Timestamp: 20250723_173957
 Wave parameters: {'angle': 0, 'polarization': 1}
 Number of RCWA modes: 5
 ---- COMBINATIONS ----

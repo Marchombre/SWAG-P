@@ -40,8 +40,7 @@ import multiprocessing as mp
 import queue as q
 import threading
 from functools import partial   # si besoin d’init pool
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+
 
 from ipywidgets import Layout, HBox, VBox, ToggleButton, HTML
 from IPython.display import HTML as DHTML, display, Javascript, clear_output, Image
@@ -247,8 +246,6 @@ class SimulationTab:
 
         # 1) runtime flags & handles pour le parallélisme
         self._init_runtime_flags()
-        # -> executor pour nos tâches async
-        self._executor = ThreadPoolExecutor(max_workers=1)
         # 2) chargement des configs JSON
         self._load_configs()
         # 3) création des widgets (sans layout)
@@ -948,20 +945,25 @@ class SimulationTab:
         self._flags       = flags
         self._verbose     = verbose
 
-        # 5) Mise en place de la queue de résultats
+        # ----------------------------------------------------------------
+        # 5) Démarrage du thread worker + queue de communication
+        # ----------------------------------------------------------------
         self._result_queue = q.Queue()
 
-        # 6) On soumet la simulation au ThreadPool (délégation)
-        #    _simulate_many tourne alors dans un thread, sans bloquer l’UI.
-        self._future = self._executor.submit(
-            self._simulate_many,
-            args_list=args_list,
-            progress_queue=self._result_queue
+        self._worker_thread = threading.Thread(
+            target=self._simulate_many,          # méthode définie plus loin
+            kwargs=dict(args_list=args_list,
+                        progress_queue=self._result_queue),
+            daemon=True
         )
+        self._worker_thread.start()
 
-        # 7) Lancement immédiat de la boucle asyncio de polling
-        #    qui lit self._result_queue et met à jour l’UI
-        asyncio.get_event_loop().create_task(self._async_check_process())
+        # ----------------------------------------------------------------
+        # 6) Boucle de polling non bloquante (via IOLoop Tornado)
+        # ----------------------------------------------------------------
+        loop = get_ipython().kernel.io_loop
+        loop.add_timeout(loop.time() + 0.1, self._check_process)
+
 
 
 
@@ -2054,86 +2056,6 @@ class SimulationTab:
         self.mode_selection.observe(self._refresh_custom_modes, names='value')
         self.mode_calc_radio.observe(self._toggle_lambda0, names='value')
         self.verbose_toggle.observe(self._toggle_debug, names='value')
-
-
-
-
-
-
-    async def _async_check_process(self):
-        """
-        Récupère les messages de self._result_queue et 
-        met à jour l’UI en async, sans bloquer Jupyter.
-        """
-        while True:
-            try:
-                tag, *payload = self._result_queue.get_nowait()
-            except q.Empty:
-                # pas de message → on yield control puis on réessaye
-                await asyncio.sleep(0.1)
-                continue
-
-            # ─── réception d’un chunk partiel → tracé incrémental ─────────
-            if tag == "CHUNK":
-                self._on_new_chunk(payload[0])
-                continue
-
-            # ─── mise à jour PROG → mise à jour de la barre ───────────────
-            if tag == "PROG":
-                frac = payload[0]
-                self._status_html.value       = ""
-                self._progress_bar.value      = frac
-                self._progress_bar.description= f"{int(frac * 100)} %"
-                continue
-
-            # ─── 1) Fin normale ───────────────────────────────────────────
-            if tag == "DONE":
-                results = payload[0]
-                # état interne
-                self._is_running = False
-                self.sim_cancel_button.disabled = True
-                # cacher et réinitialiser la barre
-                self._progress_bar.layout.display = "none"
-                self._progress_bar.value          = 0
-                self._progress_bar.bar_style      = "info"
-                # message “Done”
-                self._status_html.layout.display = ""
-                self._status_html.value = (
-                    "<span style='"
-                    "display:inline-flex; align-items:center; gap:6px; "
-                    "font-weight:600; color:#2E7D32; font-size:14px;'>"
-                    "&#x2705; Done"
-                    "</span>"
-                )
-                # on force un draw ultra-rapide avant post-traitement
-                with self.canvas_output:
-                    clear_output(wait=True)
-                    display(self.fig.canvas)
-                # on reporte la suite dans l’event-loop
-                asyncio.get_event_loop().call_soon(self._build_outputs, results)
-                break
-
-            # ─── 2) Erreur ─────────────────────────────────────────────────
-            if tag == "ERROR":
-                trace = payload[0]
-                self._status_html.value = (
-                    "❌ Simulation aborted :<br>"
-                    f"<pre style='max-height:300px; overflow:auto'>{trace}</pre>"
-                )
-                self._progress_bar.bar_style   = "danger"
-                self.sim_cancel_button.disabled = True
-                self._is_running               = False
-                break
-
-        # fin de boucle async
-
-
-
-
-
-
-
-
 
 
 # instanciation globale

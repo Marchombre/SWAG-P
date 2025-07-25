@@ -207,6 +207,10 @@ class PlotTab:
             icon="chevron-down",
             layout=Layout(width="270px")
         )
+
+        # Désactivation initiale tant qu'aucune config n'est chargée
+        self.toggle_labels_editors_btn.disabled = True
+
         self.toggle_labels_editors_btn.observe(
             self._on_toggle_labels_panel, names="value"
         )
@@ -420,6 +424,15 @@ class PlotTab:
         Reconstruit self.labels_editors_box.children
         en fonction de la sélection courante et du mode (dip/half).
         """
+        # 1) activation/désactivation du bouton si pas de sélection
+        has_selection = bool(self.spectra_select.value)
+        self.toggle_labels_editors_btn.disabled = not has_selection
+        if not has_selection:
+            # si désactivé, on force aussi le panneau masqué
+            self.toggle_labels_editors_btn.value = False
+            self.labels_editors_panel.layout.display = 'none'        
+       
+        # 2) on ne continue que si on a quelque chose à éditer        
         labels = list(self.spectra_select.value) or list(self.Rup_dict.keys())
         marker_types = (["half-base","half-dn"] if self.show_half_level_metrics.value
                         else ["dip-base","dip-dn"])

@@ -514,19 +514,19 @@
       }
     },
     {
-      "config_name": "Geometry_27",
+      "config_name": "N82.9_G4.9_D_17.7_sens3.52",
       "compartment": "D\u00e9faut",
       "geometry": {
         "thick_super": 200.0,
-        "thick_reso": 30.0,
-        "width_reso": 30.0,
-        "thick_gap": 3.0,
-        "thick_mol": 0.5,
-        "thick_func": 1.0,
-        "thick_diel": 1.0,
-        "thick_metalliclayer": 10.0,
+        "thick_reso": 82.5,
+        "width_reso": 82.5,
+        "thick_gap": 4.9,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 17.7,
+        "thick_metalliclayer": 13.0,
         "thick_XIAOYI": 0.0,
-        "thick_accroche": 1.0,
+        "thick_accroche": 0.0,
         "thick_sub": 200.0,
         "period": 100.2153
       }

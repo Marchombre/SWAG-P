@@ -33,4 +33,3 @@ nbformat             # lecture/écriture programmatique des .ipynb (scripts de p
 
 # === Téléchargement de données externes =======================================
 requests             # fetch HTTP dans materials.refractiveindexINFO (télécharge n,k)
-

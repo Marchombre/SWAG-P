@@ -24,6 +24,11 @@ from typing import Any, Dict, List, Tuple
 import sys
 import io
 import os
+from traitlets import TraitError
+
+
+
+import uuid
 
 import warnings
 import threading
@@ -258,6 +263,12 @@ class OptimizationFileArboWidget:
             max_height="250px",  
             overflow_y="auto"
         ))        
+        # → WIDGET HTML RÉUTILISABLE POUR LE TABLEAU
+        # On crée un HTML vide, et on l’insert une seule fois dans l’Output :
+        self._bounds_table = widgets.HTML(value="")
+        with self.run_bounds_out:
+            display(self._bounds_table)        
+        
         # branchement du callback
         self.run_dd.observe(self._on_run_changed, names="value")
         
@@ -357,41 +368,63 @@ class OptimizationFileArboWidget:
     def _refresh_families(self, change=None):
         old = self.family_dd.value
         opts = self._list_subdirs(self.base_dir)
-        
-        # message quand la liste est vide
-        if not opts:                                  # ➋
-            # rien à afficher → on avertit l’utilisateur
+
+        # Message quand la liste est vide
+        if not opts:
             self.family_dd.description = "No result yet"
         else:
-            # au moins une famille trouvée → description normale
             self.family_dd.description = "Family:"
-        
-        # on met à jour les options du Dropdown
-        self.family_dd.options = opts
-        self.family_dd.value   = old if old in opts else (opts[0] if opts else None)
-        
+
+        # Mise à jour atomique des options et de la valeur, avec fallback en cas d’erreur
+        try:
+            with self.family_dd.hold_trait_notifications():
+                self.family_dd.options = opts
+                self.family_dd.value   = old if old in opts else (opts[0] if opts else None)
+        except TraitError:
+            # si l’ancienne valeur n’est vraiment pas valide, on choisit la première
+            self.family_dd.options = opts
+            self.family_dd.value   = opts[0] if opts else None
+
         self._refresh_cost_modes()
+
 
     def _refresh_cost_modes(self, change=None):
         old = self.cost_mode_dd.value
         base = self.base_dir / (self.family_dd.value or "")
         opts = self._list_subdirs(base) if base.is_dir() else []
-        self.cost_mode_dd.options = opts
-        self.cost_mode_dd.value   = old if old in opts else (opts[0] if opts else None)
+
+        try:
+            with self.cost_mode_dd.hold_trait_notifications():
+                self.cost_mode_dd.options = opts
+                self.cost_mode_dd.value   = old if old in opts else (opts[0] if opts else None)
+        except TraitError:
+            self.cost_mode_dd.options = opts
+            self.cost_mode_dd.value   = opts[0] if opts else None
+
         self._refresh_configs()
+
 
     def _refresh_configs(self, change=None):
         old = self.name_dd.value
         fam = self.family_dd.value
         cost = self.cost_mode_dd.value
+
         if fam and cost:
             base = self.base_dir / fam / cost
             opts = self._list_subdirs(base) if base.is_dir() else []
         else:
             opts = []
-        self.name_dd.options = opts
-        self.name_dd.value   = old if old in opts else (opts[0] if opts else None)
+
+        try:
+            with self.name_dd.hold_trait_notifications():
+                self.name_dd.options = opts
+                self.name_dd.value   = old if old in opts else (opts[0] if opts else None)
+        except TraitError:
+            self.name_dd.options = opts
+            self.name_dd.value   = opts[0] if opts else None
+
         self._refresh_budget_pops()
+
 
 
     def _refresh_budget_pops(self, change=None):
@@ -399,14 +432,26 @@ class OptimizationFileArboWidget:
         fam = self.family_dd.value
         cost = self.cost_mode_dd.value
         name = self.name_dd.value
+
         if fam and cost and name:
             base = self.base_dir / fam / cost / name
-            opts = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("budget")) if base.is_dir() else []
+            opts = sorted(
+                p.name for p in base.iterdir()
+                if p.is_dir() and p.name.startswith("budget")
+            ) if base.is_dir() else []
         else:
             opts = []
-        self.budget_pop_dd.options = opts
-        self.budget_pop_dd.value   = old if old in opts else (opts[0] if opts else None)
+
+        try:
+            with self.budget_pop_dd.hold_trait_notifications():
+                self.budget_pop_dd.options = opts
+                self.budget_pop_dd.value   = old if old in opts else (opts[0] if opts else None)
+        except TraitError:
+            self.budget_pop_dd.options = opts
+            self.budget_pop_dd.value   = opts[0] if opts else None
+
         self._refresh_wavelengths()
+
 
 
     def _refresh_wavelengths(self, change=None):
@@ -415,42 +460,109 @@ class OptimizationFileArboWidget:
         cost = self.cost_mode_dd.value
         name = self.name_dd.value
         budget = self.budget_pop_dd.value
+
         if fam and cost and name and budget:
             base = self.base_dir / fam / cost / name / budget
-            opts = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name.startswith("wavelength_range_")) if base.is_dir() else []
+            opts = sorted(
+                p.name for p in base.iterdir()
+                if p.is_dir() and p.name.startswith("wavelength_range_")
+            ) if base.is_dir() else []
         else:
             opts = []
-        self.wave_dd.options = opts
-        self.wave_dd.value   = old if old in opts else (opts[0] if opts else None)
+
+        try:
+            with self.wave_dd.hold_trait_notifications():
+                self.wave_dd.options = opts
+                self.wave_dd.value   = old if old in opts else (opts[0] if opts else None)
+        except TraitError:
+            self.wave_dd.options = opts
+            self.wave_dd.value   = opts[0] if opts else None
+
         self._refresh_files()
 
+#    def _refresh_files(self, change=None):
+#         old = self.file_dd.value
+#         fam = self.family_dd.value
+#         cost = self.cost_mode_dd.value
+#         name = self.name_dd.value
+#         budget = self.budget_pop_dd.value
+#         wave = self.wave_dd.value
+
+#         if fam and cost and name and budget and wave:
+#             base = self.base_dir / fam / cost / name / budget / wave
+#             opts = self._list_h5(base) if base.is_dir() else []
+#             paths = [p for (_, p) in opts]
+#         else:
+#             opts = []
+#             paths = []
+
+#         try:
+#             with self.file_dd.hold_trait_notifications():
+#                 self.file_dd.options = opts
+#                 self.file_dd.value   = old if old in paths else (paths[0] if paths else None)
+#         except TraitError:
+#             self.file_dd.options = opts
+#             self.file_dd.value   = paths[0] if paths else None
+
+        
+#         self._refresh_runs()
 
     def _refresh_files(self, change=None):
+        # on récupère l'ancien chemin
         old = self.file_dd.value
-        fam = self.family_dd.value
-        cost = self.cost_mode_dd.value
-        name = self.name_dd.value
-        budget = self.budget_pop_dd.value
-        wave = self.wave_dd.value
-        if fam and cost and name and budget and wave:
-            base = self.base_dir / fam / cost / name / budget / wave
-            opts = self._list_h5(base) if base.is_dir() else []
-            paths = [p for (_, p) in opts]
+
+        # construit un mapping { nom_du_fichier : chemin_complet }
+        if self.family_dd.value and self.cost_mode_dd.value and \
+           self.name_dd.value   and self.budget_pop_dd.value and \
+           self.wave_dd.value:
+            base = (
+                self.base_dir
+                / self.family_dd.value
+                / self.cost_mode_dd.value
+                / self.name_dd.value
+                / self.budget_pop_dd.value
+                / self.wave_dd.value
+            )
+            file_list = self._list_h5(base) if base.is_dir() else []
+            file_map  = {name: path for name, path in file_list}
         else:
-            opts = []
-            paths = []
-        self.file_dd.options = opts
-        self.file_dd.value   = old if old in paths else (paths[0] if paths else None)
+            file_map = {}
+
+        # on applique atomiquement le nouveau mapping
+        try:
+            with self.file_dd.hold_trait_notifications():
+                # options peut être un dict label→valeur
+                self.file_dd.options = file_map
+                # si l'ancien chemin existe toujours, on le remet ; sinon on prend le 1er
+                self.file_dd.value   = (
+                    old
+                    if old in file_map.values()
+                    else (next(iter(file_map.values())) if file_map else None)
+                )
+        except TraitError:
+            # fallback plus simple
+            self.file_dd.options = file_map
+            self.file_dd.value   = next(iter(file_map.values()), None)
+        
         self._refresh_runs()
+
 
 
     def _refresh_runs(self, change=None):
         old = self.run_dd.value
         runs = list_runs_in_h5(self.file_dd.value) if self.file_dd.value else []
-        self.run_dd.options = runs
-        # -- ne touche pas à .value si l’utilisateur vient d’agir --
-        if self.run_dd.value not in runs:
-            self.run_dd.value = runs[0] if runs else None
+
+        try:
+            with self.run_dd.hold_trait_notifications():
+                self.run_dd.options = runs
+                if old in runs:
+                    self.run_dd.value = old
+                else:
+                    self.run_dd.value = runs[0] if runs else None
+        except TraitError:
+            self.run_dd.options = runs
+            self.run_dd.value   = runs[0] if runs else None
+
 
     def get_selected_file(self) -> str | None:
         return self.file_dd.value
@@ -460,11 +572,13 @@ class OptimizationFileArboWidget:
         """Affiche Param / Min / Max / Best **+** Fixed dès qu’on sélectionne un run."""
         self._user_selecting = True              # l’utilisateur vient de cliquer
         try:
-            self.run_bounds_out.clear_output()
+            self.run_bounds_out.clear_output(wait=True)
             h5path  = self.file_dd.value
             run_key = change["new"]
             if not h5path or run_key is None:
                 return
+
+
 
             data      = read_optimization_hdf5(h5path, run_key=run_key)
             opt_keys  = data["keys"]
@@ -519,8 +633,8 @@ class OptimizationFileArboWidget:
             </div>
             """
 
-            with self.run_bounds_out:
-                display(widgets.HTML(table_html))
+            # Mise à jour incrémentale du widget HTML existant
+            self._bounds_table.value = table_html
 
         finally:
             self._user_selecting = False         # ← rendu la main
@@ -1030,6 +1144,12 @@ class OptimizationTab:
 
         # F) Appel initial pour construire l’onglet Parametrization
         self._refresh_parametrization()
+        # --- INITIALISATIONS POUR RAFRAÎCHISSEMENTS INCRÉMENTAUX ---
+        # stocke la liste des widgets de la queue pour _refresh_queue
+        self._queue_rows = []
+        # de même pour les bounds (update_optimization)
+        self._bounds_rows = []
+
         # on affiche la queue vide au démarrage
         self._refresh_queue()
 
@@ -1462,8 +1582,9 @@ class OptimizationTab:
             self.cancel_btn.disabled = True
             return
 
-        # ── queue de progression & thread lanceur ──────────
-        self._result_queue = q.Queue(maxsize=1)
+        # boucle de progression & thread lanceur ──────────
+        # → file non limitée pour éviter queue.Full
+        self._result_queue = q.Queue()  # file illimitée
         args = dict(budget=self.budget_w.value,
                     Npop   =self.pop_w.value,
                     lowers =lowers, uppers=uppers,
@@ -1625,6 +1746,8 @@ class OptimizationTab:
         cfg_chosen = selected_cfgs[0]
         geom = cfg_chosen["geometry"]["geometry"]
         
+        old_rows = getattr(self, "_bounds_rows", [])
+
         rows: List[widgets.HBox] = []
         self.param_widgets: Dict[str, Dict[str, widgets.Widget]] = {}
 
@@ -1660,25 +1783,39 @@ class OptimizationTab:
                 "fixed": fixed
             }
             # on affiche la ligne complète
-            rows.append(
-                widgets.HBox([chk, lbl, lo, hi, fixed],
-                            layout=widgets.Layout(align_items="center", gap="10px"))
-            )
+            row_widget = widgets.HBox([...],
+                                     layout=widgets.Layout(align_items="center", gap="10px"))
+            rows.append(row_widget)
 
 
 
             # clear the log Output **only when nothing is running**
             if not self._is_running:
-                self.out.clear_output()
+                self.out.clear_output(wait=True)
                 
 
         self.bounds_box.children = rows
+        # Si le nombre de lignes a changé : on remplace tout, sinon on met à jour en place
+        from traitlets import hold_trait_notifications
+        with hold_trait_notifications(self.bounds_box):
+            if len(rows) != len(old_rows):
+                # Remise à zéro complète
+                self.bounds_box.children = rows
+            else:
+                # Mise à jour in-place des widgets existants
+                for old, new in zip(old_rows, rows):
+                    # remplace simplement l’objet enfant sans reflow de tout le VBox
+                    old.children = new.children
+
+        # On stocke la nouvelle liste pour le prochain appel
+        self._bounds_rows = rows        
+        
         # branche les observateurs et met à jour -------------
         for w in self.param_widgets.values():               # chaque case 'opt'
             w['opt'].observe(self._update_run_button_state, names='value')
 
         self._update_run_button_state()                     # recalcul immédiat
-        self.out.clear_output()
+        self.out.clear_output(wait=True)
 
 
 
@@ -1789,6 +1926,16 @@ class OptimizationTab:
 
 
         try:
+            # === initialisation du compteur d’évaluations ===
+            evals_done = 0
+
+            # Petit coup de barre à 0% pour forcer l’affichage tout de suite
+            if progress_queue is not None:
+                try:
+                    progress_queue.put(("PROG", 0.0), block=False)
+                except q.Full:
+                    pass
+
             # ─────────────────  Évaluation initiale  ──────────────────
             sel_layers_val = (list(self.layer_selector.value)
                             if isinstance(self.layer_selector.value, (list, tuple))
@@ -1808,13 +1955,19 @@ class OptimizationTab:
                 cf[idx] = val
 
 
+                # === on poste la progression dès chaque retour de worker ===
+                evals_done += 1
+                if progress_queue is not None:
+                    try:
+                        progress_queue.put(("PROG", evals_done / budget), block=False)
+                    except q.Full:
+                        pass
+
             conv_best  = np.zeros(Ngen)
             conv_evals = np.arange(1, Ngen+1)*Npop
             best_after_eval: List[float] = []
             F1, F2, cr = 0.9, 0.8, 0.5
             
-            # ─── Nouvelle variable pour filtrer les messages PROG ───
-            prev_percent = -1          # 1ʳᵉ valeur impossible (−1 %) 
 
 
 
@@ -1828,6 +1981,7 @@ class OptimizationTab:
                 if self._cancelled:
                     pool.terminate()
                     raise OptimizationCancelled()
+
 
                 # ───────────── mutation / crossover → z_list ─────────────
                 z_list: list[tuple[int, np.ndarray]] = []
@@ -1881,6 +2035,18 @@ class OptimizationTab:
                         raise OptimizationCancelled()
                     cfz[idx] = val
 
+
+                    # ———— AJOUT : incrémenter et poster la progression ————
+                    evals_done += 1
+                    if progress_queue is not None:
+                        # fraction d’avancement entre 0 et 1
+                        try:
+                            # non-bloquant, on ignore si la queue est momentanément pleine
+                            progress_queue.put(("PROG", evals_done / budget), block=False)
+                        except q.Full:
+                            pass
+
+
                 # ───────────── 3. sélection ─────────────────────────────────
                 for (i, z) in z_list:            # i = index du parent
                     if cfz[i] < cf[i]:
@@ -1890,22 +2056,6 @@ class OptimizationTab:
                 best_after_eval.append(cf.min())
                 conv_best[g] = cf.min()
 
-                # if progress_queue is not None:
-                #             progress_queue.put(("PROG",
-                #                                 (g + 1) / Ngen,      # fraction 0-1
-                #                                 float(cf.min())))     # meilleur coût courant
-                            
-                # g démarre à 0
-                percent = int(100 * (g + 1) / Ngen)
-
-                if progress_queue is not None and percent != prev_percent:
-                    try:
-                        progress_queue.put_nowait(("PROG", percent / 100.0))
-                        prev_percent = percent
-                    except q.Full:
-                        # La queue ne peut contenir qu’un PROG ; on écrase l’ancien
-                        progress_queue.get_nowait()            # vide l’unique slot
-                        progress_queue.put_nowait(("PROG", percent / 100.0))
 
 
             # Ré-évaluation finale
@@ -2181,7 +2331,8 @@ class OptimizationTab:
         """
         Trace : convergence, consistency, bar des paramètres, spectre final.
         """
-        self.opt_file_arbo._refresh_files()
+        #self.opt_file_arbo._refresh_runs()
+
 
         h5file = self.opt_file_arbo.get_selected_file()
         run_key = self.opt_file_arbo.run_dd.value
@@ -2654,7 +2805,13 @@ class OptimizationTab:
     
     def _make_param_panel(self, cfg_name: str) -> widgets.VBox:
         """Construit tous les widgets pour la config cfg_name."""
-        cfg = next(c for c in self.sim.all_configs if c["config_name"] == cfg_name)
+        
+        
+        cfg = next((c for c in self.sim.all_configs if c["config_name"] == cfg_name), None)
+        if cfg is None:
+            raise RuntimeError(f"Aucune config nommée «{cfg_name}» dans all_configs")
+
+        
         geom = {k: v for k, v in cfg["geometry"]["geometry"].items() if v != 0.0}
         # Common bounds
         common_low = widgets.FloatText(value=0.0, description="Low all:", layout={"width":"150px"})
@@ -2889,7 +3046,7 @@ class OptimizationTab:
         # Cost Function mode + λ
         cf_radio = widgets.RadioButtons(
             options=[('(ΔR/Δn) λ dip of reflectance','dip'),('(ΔR/Δn) λ half slope','half'),('λ₀ fixe','fixed_lambda'),('λ range','range_lambda')],
-            value='dip', description="CF mode:",
+            value='dip',
             style={'description_width':'initial'}
         )
         lambda0 = widgets.FloatText(value=600, description="λ₀ :", layout={"width":"150px"})
@@ -3037,6 +3194,9 @@ class OptimizationTab:
                 ),
                 "square_ratio": is_square,
             }
+
+            job["uid"] = str(uuid.uuid4())
+
             self.job_queue.append(job)
             self._refresh_queue()
 
@@ -3081,9 +3241,37 @@ class OptimizationTab:
 
 
     # ------------------------------------------------------------------
-    # Helper : dit s'il reste des jobs "running"
+    # Helper : 
     # ------------------------------------------------------------------
     
+    def _find_job_idx_by_uid(self, uid: str) -> int | None:
+        """
+        Retourne l'index du job dans self.job_queue correspondant à l'uid,
+        ou None si introuvable.
+        """
+        for i, job in enumerate(self.job_queue):
+            if job.get("uid") == uid:
+                return i
+        return None
+
+    def _run_job_by_uid(self, uid: str) -> None:
+        """Lance le job dont l'uid est donné."""
+        idx = self._find_job_idx_by_uid(uid)
+        if idx is not None:
+            self._run_job(idx)
+
+    def _cancel_job_by_uid(self, uid: str) -> None:
+        """Annule le job dont l'uid est donné."""
+        idx = self._find_job_idx_by_uid(uid)
+        if idx is not None:
+            self._cancel_job(idx)
+
+    def _delete_job_by_uid(self, uid: str) -> None:
+        """Supprime le job dont l'uid est donné."""
+        idx = self._find_job_idx_by_uid(uid)
+        if idx is not None:
+            self._delete_job(idx)
+
     
     def _de_thread_wrapper(self, progress_queue, **kwargs):
         try:
@@ -3101,61 +3289,103 @@ class OptimizationTab:
 
 
     def _refresh_queue(self):
-        """Met à jour la liste des jobs et leurs barres de progression."""
-        rows = []
-        for i, job in enumerate(self.job_queue, 1):
-            # 1) icône de statut
-            status_ico = {
-                "idle":    "▶️",  # en attente
-                "running": "⌛",  # en cours
-                "done":    "✅",  # validé
-                "error":   "❌",  # erreur
+        """Met à jour la liste des jobs et leurs barres de progression par diff UID."""
+        # init mapping si besoin
+        if not hasattr(self, "_queue_map"):
+            self._queue_map = {}  # uid → {"container", "status_label", "prog"}
+
+        # calcul des sets
+        new_uids = [job["uid"] for job in self.job_queue]
+        old_uids = set(self._queue_map.keys())
+
+        # 1) SUPPRESSION : pour chaque uid qui n'est plus dans new_uids
+        for uid in old_uids - set(new_uids):
+            # on retire simplement l'entrée du mapping,
+            # le container sera ôté de l'affichage lors de la réaffectation de children
+            self._queue_map.pop(uid)
+
+        # 2) AJOUT : pour chaque job dont uid n'était pas dans old_uids
+        for job in self.job_queue:
+            uid = job["uid"]
+            if uid not in self._queue_map:
+                # création de la ligne
+                ico = {
+                    "idle":      "▶️",
+                    "running":   "⌛",
+                    "done":      "✅",
+                    "error":     "❌",
+                    "cancelled": "🚫",
+                }[job["status"]]
+
+                run_b = widgets.Button(
+                    description="Run ▶", layout=widgets.Layout(width="80px"),
+                    disabled=(job["status"]=="running")
+                )
+                cancel_b = widgets.Button(
+                    description="Cancel ⏹", layout=widgets.Layout(width="80px"),
+                    disabled=(job["status"]!="running")
+                )
+                delete_b = widgets.Button(
+                    description="Delete ❌", layout=widgets.Layout(width="80px"),
+                    disabled=(job["status"]=="running")
+                )
+                # bind callbacks avec capture d'uid
+                run_b.on_click(lambda _, u=uid: self._run_job_by_uid(u))
+                cancel_b.on_click(lambda _, u=uid: self._cancel_job_by_uid(u))
+                delete_b.on_click(lambda _, u=uid: self._delete_job_by_uid(u))
+
+                status_lbl = widgets.Label(ico, layout=widgets.Layout(width="30px"))
+                idx_lbl    = widgets.Label("",    layout=widgets.Layout(width="30px"))  # on remplira l'index plus bas
+                cfg_lbl    = widgets.Label(job["config"],  layout=widgets.Layout(width="150px"))
+                mode_lbl   = widgets.Label(job["cf_mode"], layout=widgets.Layout(width="80px"))
+                bp_lbl     = widgets.Label(f"{job['budget']}/{job['pop']}", layout=widgets.Layout(width="80px"))
+
+                info_row = widgets.HBox(
+                    [idx_lbl, cfg_lbl, mode_lbl, bp_lbl, status_lbl, run_b, cancel_b, delete_b],
+                    layout=widgets.Layout(gap="10px")
+                )
+                prog = job["progress"]
+                prog.layout.display = "" if job["status"]=="running" else "none"
+
+                container = widgets.VBox([info_row, prog], layout=widgets.Layout(gap="2px"))
+
+                self._queue_map[uid] = {
+                "container":    container,
+                "run_btn":      run_b,
+                "cancel_btn":   cancel_b,
+                "delete_btn":   delete_b,
+                "status_label": status_lbl,
+                "prog":         prog,
+                "idx_lbl":      idx_lbl
+                }
+
+
+        # 3) Mise à jour du statut / index / boutons
+        for pos, job in enumerate(self.job_queue, start=1):
+            entry = self._queue_map[job["uid"]]
+            entry["status_label"].value = {
+                "idle":      "▶️",
+                "running":   "⌛",
+                "done":      "✅",
+                "error":     "❌",
                 "cancelled": "🚫",
             }[job["status"]]
+            entry["prog"].value = job["progress"].value
+            entry["prog"].layout.display = "" if job["status"]=="running" else "none"
+            entry["idx_lbl"].value = str(pos)
+            entry["run_btn"].disabled    = (job["status"] == "running")
+            entry["cancel_btn"].disabled = (job["status"] != "running")
+            entry["delete_btn"].disabled = (job["status"] == "running")
 
-            # 2) boutons
-            run_b    = widgets.Button(
-                description="Run ▶",
-                layout=widgets.Layout(width="80px"),
-                disabled=(job["status"] == "running")
+        # 4) Réaffectation atomique des enfants (évite le flicker)
+        with self.queue_box.hold_trait_notifications():
+            self.queue_box.children = tuple(
+                self._queue_map[j["uid"]]["container"]
+                for j in self.job_queue
             )
-            cancel_b = widgets.Button(
-                description="Cancel ⏹",
-                layout=widgets.Layout(width="80px"),
-                disabled=(job["status"] not in ("running",))
-            )
-            delete_b = widgets.Button(
-                description="Delete ❌",
-                layout=widgets.Layout(width="80px"),
-                disabled=(job["status"] == "running")
-            )
-            
-            run_b.on_click(lambda _, idx=i-1: self._run_job(idx))
-            cancel_b.on_click(lambda _, idx=i-1: self._cancel_job(idx))
-            delete_b.on_click(lambda _, idx=i-1: self._delete_job(idx))
 
-            # 3) ligne d’infos
-            info_row = widgets.HBox([
-                widgets.Label(str(i),                             layout=widgets.Layout(width="30px")),
-                widgets.Label(job["config"],                      layout=widgets.Layout(width="150px")),
-                widgets.Label(job["cf_mode"],                     layout=widgets.Layout(width="80px")),
-                widgets.Label(f"{job['budget']}/{job['pop']}",    layout=widgets.Layout(width="80px")),
-                widgets.Label(status_ico,                         layout=widgets.Layout(width="30px")),
-                run_b, cancel_b, delete_b
-            ], layout=widgets.Layout(gap="10px"))
-
-            # 4) barre de progression propre à ce job
-            prog = job["progress"]
-            prog.layout.display = "" if job["status"] == "running" else "none"
-
-            # 5) empile ligne + barre
-            rows.append(widgets.VBox([info_row, prog], layout=widgets.Layout(gap="2px")))
-
-        # 6) on met à jour le VBox principal
-        self.queue_box.children = rows
-
-        #  état des boutons globaux 
-        running = self._any_running()
+        # 5) Boutons globaux
+        running = any(job["status"]=="running" for job in self.job_queue)
         self.run_all_btn.disabled    = running or not self.job_queue
         self.delete_all_btn.disabled = running or not self.job_queue
         self.cancel_all_btn.disabled = not running
@@ -3272,6 +3502,14 @@ class OptimizationTab:
                 self._refresh_queue()         # là on rafraîchit pour passer à ❌
 
 
+            elif tag == "CANCELLED":
+                    # traitement propre de l'annulation
+                    job["status"] = "cancelled"
+                    job["progress"].bar_style = "warning"
+                    self._refresh_queue()
+                    return
+
+
 
             # si on a toujours un thread en cours, on re‐schedule
             if t.is_alive():
@@ -3289,13 +3527,13 @@ class OptimizationTab:
         job = self.job_queue[idx]
         job["cancel_flag"] = True
 
-        # # tue le pool éventuel
-        # if "pool" in job and job["pool"] is not None:
-        #     try:
-        #         job["pool"].terminate()
-        #         job["pool"].join()
-        #     except Exception:
-        #         pass
+        # tue le pool éventuel
+        if "pool" in job and job["pool"] is not None:
+            try:
+                job["pool"].terminate()
+                job["pool"].join()
+            except Exception:
+                pass
 
         job["status"] = "cancelled"
 
@@ -3328,15 +3566,22 @@ class OptimizationTab:
 
 
     def _cancel_all(self, _=None):
-        if not self._any_running():
+        """
+        Annule **tous** les jobs en cours, en mettant à jour leur statut
+        afin que l'UI reflète l'annulation immédiatement.
+        """
+        if not any(job["status"] == "running" for job in self.job_queue):
             return
 
-        # on annule silencieusement chaque job
-        for idx in range(len(self.job_queue)):
-            self._cancel_job(idx, refresh_ui=False)
+        # Pour chaque job en cours, invoquer la même logique que _cancel_job
+        for idx, job in enumerate(self.job_queue):
+            if job["status"] == "running":
+                # _cancel_job met déjà job["cancel_flag"]=True et job["status"]="cancelled"
+                self._cancel_job(idx, refresh_ui=False)
 
-        # un seul redraw après la boucle
+        # Puis une seule mise à jour globale de l'UI
         self._refresh_queue()
+
 
 
 

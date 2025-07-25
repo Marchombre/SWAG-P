@@ -2263,18 +2263,31 @@
       "RI_OVERRIDES": {}
     },
     {
-      "config_name": "TEST",
+      "config_name": "N82.9_G4.9_D_17.7_sens3.52",
       "MATERIALS_CONFIG": [
         {
           "key": "perm_env",
           "material": {
-            "type": "None"
+            "type": "Standard",
+            "material": "Air",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
           "key": "perm_reso",
           "material": {
-            "type": "None"
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Ag",
+            "page": "Rakic-BB",
+            "data": "main/Ag/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              1936.97
+            ]
           }
         },
         {
@@ -2292,19 +2305,37 @@
         {
           "key": "perm_diel",
           "material": {
-            "type": "None"
+            "type": "Custom",
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
           "key": "perm_gap",
           "material": {
-            "type": "None"
+            "type": "Custom",
+            "expression": "1.45**2",
+            "override": [
+              300.0,
+              1000.0
+            ]
           }
         },
         {
           "key": "perm_metalliclayer",
           "material": {
-            "type": "None"
+            "type": "RefractiveIndex",
+            "shelf": "main",
+            "book": "Au",
+            "page": "Rakic-BB",
+            "data": "main/Au/nk/Rakic-BB.yml",
+            "override": [
+              247.97,
+              1936.97
+            ]
           }
         },
         {
@@ -2322,11 +2353,39 @@
         {
           "key": "perm_sub",
           "material": {
-            "type": "None"
+            "type": "Standard",
+            "material": "ITO",
+            "override": [
+              193.05,
+              1681.72
+            ]
           }
         }
       ],
-      "RI_OVERRIDES": {}
+      "RI_OVERRIDES": {
+        "perm_reso": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Ag",
+          "page": "Rakic-BB",
+          "data": "main/Ag/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            1936.97
+          ]
+        },
+        "perm_metalliclayer": {
+          "type": "RefractiveIndex",
+          "shelf": "main",
+          "book": "Au",
+          "page": "Rakic-BB",
+          "data": "main/Au/nk/Rakic-BB.yml",
+          "override": [
+            247.97,
+            1936.97
+          ]
+        }
+      }
     }
   ]
 }
