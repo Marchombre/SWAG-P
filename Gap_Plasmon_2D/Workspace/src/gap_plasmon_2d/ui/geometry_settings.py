@@ -10,6 +10,8 @@ import matplotlib.patches as patches
 from matplotlib.axes import Axes
 import numpy as np
 
+from gap_plasmon_2d.ui.ui_events import notify_geometry_changed
+
 # Configuration par défaut (les valeurs réelles utilisées pour les calculs de réflectance restent inchangées)
 geometry_config = {
     "thick_super": 200,        # Épaisseur réelle du Superstrate
@@ -113,20 +115,40 @@ def load_geometry_configs():
     """
     global GEOMETRY_CONFIGS
     save_path = get_geometry_save_path()
-    if os.path.exists(save_path):
+
+    if not os.path.exists(save_path):
+        GEOMETRY_CONFIGS = []
+        return
+
+    try:
         with open(save_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            GEOMETRY_CONFIGS = data.get("ALL_GEOMETRY_CONFIGS", [])
-    else:
+        GEOMETRY_CONFIGS = data.get("ALL_GEOMETRY_CONFIGS", [])
+        if not isinstance(GEOMETRY_CONFIGS, list):
+            GEOMETRY_CONFIGS = []
+    except Exception as e:
+        print(f"[geometry_settings] erreur lors du chargement des géométries : {e}")
         GEOMETRY_CONFIGS = []
 
 def save_geometry_configs():
     """
     Sauvegarde l'ensemble des configurations géométriques actuelles dans le fichier JSON.
+    Écriture atomique pour éviter qu'un lecteur ne voie un fichier partiellement écrit.
+    Puis notification immédiate aux widgets abonnés.
     """
     save_path = get_geometry_save_path()
-    with open(save_path, "w", encoding="utf-8") as f:
-        json.dump({"ALL_GEOMETRY_CONFIGS": GEOMETRY_CONFIGS}, f, indent=2)
+    save_dir = os.path.dirname(save_path)
+    os.makedirs(save_dir, exist_ok=True)
+
+    temp_path = save_path + ".tmp"
+
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump({"ALL_GEOMETRY_CONFIGS": GEOMETRY_CONFIGS}, f, indent=2, ensure_ascii=False)
+
+    os.replace(temp_path, save_path)
+
+    notify_geometry_changed()
+
     return save_path
 
 def draw_layer(ax, x, y, w, h, color, label, hatch=None):

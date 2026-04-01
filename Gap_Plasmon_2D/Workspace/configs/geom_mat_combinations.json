@@ -1,6 +1,126 @@
 {
   "ALL_COMBINED_CONFIGS": [
     {
+      "config_name": "TEST_Lam_Range + TEST_Lam_Range",
+      "geometry": {
+        "config_name": "TEST_Lam_Range",
+        "compartment": "Défaut",
+        "geometry": {
+          "thick_super": 200.0,
+          "thick_reso": 30.0,
+          "width_reso": 30.0,
+          "thick_gap": 3.0,
+          "thick_mol": 0.0,
+          "thick_func": 0.0,
+          "thick_diel": 1.0,
+          "thick_metalliclayer": 10.0,
+          "thick_XIAOYI": 0.0,
+          "thick_accroche": 1.0,
+          "thick_sub": 200.0,
+          "period": 100.2
+        }
+      },
+      "material": {
+        "config_name": "TEST_Lam_Range",
+        "MATERIALS_CONFIG": [
+          {
+            "key": "perm_env",
+            "material": {
+              "type": "Custom",
+              "expression": "1",
+              "override": [
+                0.0,
+                2000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_reso",
+            "material": {
+              "type": "Standard",
+              "material": "Silver",
+              "override": [
+                0.0,
+                2000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_gap",
+            "material": {
+              "type": "Custom",
+              "expression": "1",
+              "override": [
+                0.0,
+                2000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_diel",
+            "material": {
+              "type": "RefractiveIndex",
+              "shelf": "glass",
+              "book": "fused_silica",
+              "page": "Malitson",
+              "data": "main/SiO2/nk/Malitson.yml",
+              "override": [
+                210.0,
+                6700.0
+              ]
+            }
+          },
+          {
+            "key": "perm_metalliclayer",
+            "material": {
+              "type": "Standard",
+              "material": "Gold",
+              "override": [
+                0.0,
+                2000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_accroche",
+            "material": {
+              "type": "Standard",
+              "material": "Nickel",
+              "override": [
+                0.0,
+                2000.0
+              ]
+            }
+          },
+          {
+            "key": "perm_sub",
+            "material": {
+              "type": "Custom",
+              "expression": "1",
+              "override": [
+                0.0,
+                2000.0
+              ]
+            }
+          }
+        ],
+        "RI_OVERRIDES": {
+          "perm_diel": {
+            "type": "RefractiveIndex",
+            "shelf": "glass",
+            "book": "fused_silica",
+            "page": "Malitson",
+            "data": "main/SiO2/nk/Malitson.yml",
+            "override": [
+              210.0,
+              6700.0
+            ]
+          }
+        }
+      },
+      "created_at": "2026-03-28T15:41:30.262943"
+    },
+    {
       "config_name": "c30_g2_m10 - Mat_S1",
       "geometry": {
         "config_name": "c30_g2_m10",

@@ -96,6 +96,8 @@
 
 # In[1]:
 
+from IPython.display import display
+
 
 from gap_plasmon_2d import paths
 ### INITIALIZATION SCRIPT
@@ -105,7 +107,6 @@ from gap_plasmon_2d import paths
 
 import sys, subprocess
 from pathlib import Path
-from IPython.display import display
 
 
 # 1) Trust this notebook (silencieusement si ça échoue)
@@ -192,7 +193,7 @@ json_combined_path = data_dir / "combined_materials.json"
 # </details>
 # 
 
-# In[3]:
+# In[2]:
 
 
 # %% Cellule 2 – Geometry settings
@@ -244,7 +245,7 @@ display(geometry_widget)
 # </details>
 # 
 
-# In[ ]:
+# In[3]:
 
 
 from gap_plasmon_2d.materials.material_selector import MaterialSelectorTabbedNotebook, DEFAULT_ROLES
@@ -287,7 +288,7 @@ selector.display()
 # </details>
 # 
 
-# In[ ]:
+# In[4]:
 
 
 from gap_plasmon_2d.ui.geometry__material__config import create_geometry_material_widget
@@ -387,7 +388,7 @@ display(w)
 # ---
 # </details>
 
-# In[2]:
+# In[5]:
 
 
 from gap_plasmon_2d.ui.interactive_simulation import create_advanced_app

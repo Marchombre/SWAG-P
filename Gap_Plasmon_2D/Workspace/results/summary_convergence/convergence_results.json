@@ -114,6 +114,15 @@
         "tolerance": 0.002,
         "stable_required": 3,
         "optimal_n_mode": 25
+      },
+      {
+        "timestamp": "2025-11-18T12:38:11.252531",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 45
       }
     ],
     "c30_g2_m10 - Mat_S3": [
@@ -403,6 +412,15 @@
         "tolerance": 0.002,
         "stable_required": 3,
         "optimal_n_mode": 39
+      },
+      {
+        "timestamp": "2025-11-18T13:04:23.128134",
+        "lambda_fixed": 700.0,
+        "n_mode_max": 100,
+        "n_mode_step": 1,
+        "tolerance": 0.001,
+        "stable_required": 3,
+        "optimal_n_mode": 68
       }
     ],
     "c70_g12_m10 - Mat_S2": [

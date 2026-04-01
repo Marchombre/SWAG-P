@@ -59,6 +59,13 @@ from gap_plasmon_2d.utils.data_readers import (
 )
 from gap_plasmon_2d.utils.file_watchers import start_watcher
 
+from gap_plasmon_2d.ui.ui_config_events import subscribe_geom_mat_configs_changed
+
+
+
+
+
+
 
 
 
@@ -106,53 +113,91 @@ json_combined_path = data_dir / "combined_materials.json"
 configurations_dir = Path(paths.CONFIGS_DIR)  
 CONFIG_LIST_JSON = Path(configurations_dir) / "geom_mat_combinations.json"
 
+
+def _load_combined_configs_with_sort(config_list_json, sort_mode="created"):
+    """
+    Charge les combinaisons geom+mat depuis geom_mat_combinations.json
+    et retourne la liste complète des dictionnaires config.
+
+    sort_mode:
+        - "created" : tri par date de création si disponible,
+                      sinon ordre naturel du JSON
+        - "name"    : tri alphabétique par config_name
+    """
+    try:
+        with open(config_list_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return []
+
+    configs = data.get("ALL_COMBINED_CONFIGS", [])
+    if not isinstance(configs, list):
+        return []
+
+    if sort_mode == "name":
+        return sorted(
+            configs,
+            key=lambda cfg: cfg.get("config_name", "").lower()
+        )
+
+    if sort_mode == "created":
+        # Si toutes les dates existent, vrai tri chronologique
+        if all(isinstance(cfg.get("created_at"), str) and cfg.get("created_at") for cfg in configs):
+            return sorted(
+                configs,
+                key=lambda cfg: cfg.get("created_at", "")
+            )
+
+        # Sinon, on garde l’ordre du JSON tel quel
+        return configs
+
+    return configs
+
+
 # ------------------------------------------------------------------ #
 # Fichier de combinaisons géométrie/matériaux : deux formats possibles
 # ------------------------------------------------------------------ #
-def _load_available_configs() -> list[str]:
+def _load_available_configs(sort_mode="created") -> list[str]:
     """
     Retourne la liste des noms de configuration présents dans
-    « geom_mat_combinations.json ».
+    geom_mat_combinations.json selon le mode de tri demandé.
 
-    • Ancien format  (clé “configs”) :
-        {
-            "configs": {
-                "cfg_A": {...},
-                "cfg_B": {...},
-                ...
-            }
-        }
-
-    • Format utilisé par l’onglet Simulation (clé “ALL_COMBINED_CONFIGS”) :
-        {
-            "ALL_COMBINED_CONFIGS": [
-                { "config_name": "cfg_A", ... },
-                { "config_name": "cfg_B", ... },
-                ...
-            ]
-        }
+    sort_mode:
+        - "created" : ordre de création si created_at existe,
+                      sinon ordre naturel du JSON
+        - "name"    : tri alphabétique
     """
     try:
         with open(CONFIG_LIST_JSON, encoding="utf-8") as f:
             data = json.load(f)
-
-        # ① ancien format
-        if "configs" in data:
-            return sorted(data["configs"].keys())
-
-        # ② nouveau format (celui de SimulationTab)
-        if "ALL_COMBINED_CONFIGS" in data:
-            return sorted(
-                cfg["config_name"]              # ← même champ que SimulationTab
-                for cfg in data["ALL_COMBINED_CONFIGS"]
-                if "config_name" in cfg
-            )
-
-        return []  
-                                 # format inattendu
     except Exception as e:
         warnings.warn(f"Erreur de lecture de '{CONFIG_LIST_JSON}': {e}")
         return []
+
+    configs = data.get("ALL_COMBINED_CONFIGS", [])
+    if not isinstance(configs, list):
+        return []
+
+    if sort_mode == "name":
+        configs = sorted(
+            configs,
+            key=lambda cfg: cfg.get("config_name", "").lower()
+        )
+    elif sort_mode == "created":
+        if all(isinstance(cfg.get("created_at"), str) and cfg.get("created_at") for cfg in configs):
+            configs = sorted(
+                configs,
+                key=lambda cfg: cfg.get("created_at", "")
+            )
+        else:
+            # ordre du JSON conservé
+            pass
+
+    return [
+        cfg["config_name"]
+        for cfg in configs
+        if "config_name" in cfg
+    ]
                                 # fichier illisible ? → vide
 
     
@@ -655,121 +700,149 @@ class OptimizationTab:
     # ------------------------------------------------------------------#
     #  Config selector (identique à Simulation, sans synchro)           #
     # ------------------------------------------------------------------#
+
+
+    def _refresh_available_configs(self):
+        """
+        Recharge les combinaisons géométrie+matériaux depuis le JSON,
+        resynchronise SimulationTab, puis reconstruit le sélecteur
+        de configurations de l'onglet Optimization.
+        """
+        try:
+            # Recharge la source complète utilisée ensuite partout dans Optimization
+            if hasattr(self.sim, "_load_configs"):
+                self.sim._load_configs()
+
+            # Reconstruit les checkboxes à partir du JSON à jour
+            self._rebuild_opt_config_selector()
+
+            # Rafraîchit aussi la partie parametrization
+            self._refresh_parametrization()
+
+        except Exception as e:
+            with self.out:
+                self.out.clear_output(wait=True)
+                print(f"[OptimizationTab] erreur refresh configs : {e}")
+
+
+
+    def _on_cfg_fs_event(self, *args):
+        """
+        Callback du watcher fichier sur geom_mat_combinations.json.
+        Utilisé comme fallback si le JSON change hors event bus mémoire.
+        """
+        self._refresh_available_configs()
+
+
+
     def _build_opt_config_selector(self):
-        # dictionnaires   {cfg_name: Checkbox}
         self.opt_cfg_check = {}
         self.opt_dn_check  = {}
 
-        # --- bouton toggle (ouvre/ferme la liste) ---
         self.opt_toggle_btn = widgets.ToggleButton(
             description="Select Configs & Δn",
-            value=True,                      # ouvert par défaut
+            value=True,
             icon="caret-up",
             button_style="warning",
             layout=widgets.Layout(width="520px")
         )
         self.opt_toggle_btn.observe(self._toggle_config_list, names="value")
 
-        # # --- “Tout sélectionner” ---
-        # self.opt_select_all_cfg_btn = widgets.Button(
-        #     description="Tout sélectionner Configs", button_style="info",
-        #     layout=widgets.Layout(margin="0 5px 5px 0")
-        # )
-        # self.opt_select_all_dn_btn  = widgets.Button(
-        #     description="Tout sélectionner Δn",     button_style="info",
-        #     layout=widgets.Layout(margin="0 0 5px 0")
-        # )
-        # self.opt_select_all_cfg_btn.on_click(self._toggle_all_cfg)
-        # self.opt_select_all_dn_btn.on_click(self._toggle_all_dn)
-
-        # --- lignes Config / Δn ---
         rows = []
-        for cfg_name in _load_available_configs():
+
+        sort_mode = self.opt_config_sort_dropdown.value if hasattr(self, "opt_config_sort_dropdown") else "created"
+
+        for cfg_name in _load_available_configs(sort_mode=sort_mode):
             chk_cfg = widgets.Checkbox(value=False, description=cfg_name, indent=False)
-            chk_dn  = widgets.Checkbox(value=False, description="Δn", indent=False,
-                                       layout=widgets.Layout(width="46px"))
+            chk_dn  = widgets.Checkbox(
+                value=False,
+                description="Δn",
+                indent=False,
+                layout=widgets.Layout(width="46px")
+            )
 
             chk_dn.observe(self._update_dn_widgets_state, names="value")
-
-
-            # callbacks internes
             chk_cfg.observe(self._refresh_parametrization, names="value")
             chk_cfg.observe(self._opt_refresh_custom_modes, names="value")
 
             self.opt_cfg_check[cfg_name] = chk_cfg
             self.opt_dn_check[cfg_name]  = chk_dn
-            rows.append(widgets.HBox([chk_cfg, chk_dn], layout=widgets.Layout(gap="5px")))
 
-        # conteneur scrollable
-        visible = min(len(rows), 10)      # 10 lignes max avant scroll
+            rows.append(
+                widgets.HBox([chk_cfg, chk_dn], layout=widgets.Layout(gap="5px"))
+            )
+
+        visible = min(len(rows), 10)
         self.opt_config_list = widgets.VBox(
-             rows,
+            rows,
             layout=widgets.Layout(
                 width="500px",
                 height=f"{30 + visible*30}px",
                 overflow_y="auto",
                 border="1px solid lightgray",
                 padding="5px",
-                display="none"            # affiché par le toggle
+                display="none"
             )
         )
 
-        # assembly final
         self.opt_config_selector = widgets.VBox(
-            [self.opt_toggle_btn, self.opt_config_list],
+            [self.opt_config_sort_dropdown, self.opt_toggle_btn, self.opt_config_list],
             layout=widgets.Layout(padding="5px")
         )
 
-        # Compatibilité : certaines parties du code attendent opt_cfg_box
         self.opt_cfg_box = self.opt_config_selector
 
 
 
+    def _on_opt_config_sort_changed(self, change):
+        self._rebuild_opt_config_selector()
+
 
     def _rebuild_opt_config_selector(self, *_):
-        # 1) extraire l’ancien état
-        # mémorise l’état du toggle pour le réappliquer après rebuild
-        was_open = self.opt_toggle_btn.value
+        if hasattr(self.sim, "_load_configs"):
+            self.sim._load_configs()
 
-        # 1) extraire l’ancien état de sélection
+        was_open = self.opt_toggle_btn.value
         prev_sel = {n: cb.value for n, cb in self.opt_cfg_check.items()}
         prev_dn  = {n: cb.value for n, cb in self.opt_dn_check.items()}
 
-        # 2) reconstruire la liste des lignes (mais pas le VBox parent)
         new_rows = []
         self.opt_cfg_check.clear()
         self.opt_dn_check.clear()
-        for cfg_name in _load_available_configs():
-            chk_cfg = widgets.Checkbox(value=prev_sel.get(cfg_name, False),
-                                    description=cfg_name, indent=False)
-            chk_dn  = widgets.Checkbox(value=prev_dn.get(cfg_name, False),
-                                    description="Δn", indent=False,
-                                    layout=widgets.Layout(width="46px"))
-            # rattacher callbacks
-            chk_cfg.observe(self._refresh_parametrization,    names="value")
-            chk_cfg.observe(self._opt_refresh_custom_modes,   names="value")
-            chk_dn.observe(self._update_dn_widgets_state,     names="value")
+
+        sort_mode = self.opt_config_sort_dropdown.value if hasattr(self, "opt_config_sort_dropdown") else "created"
+
+        for cfg_name in _load_available_configs(sort_mode=sort_mode):
+            chk_cfg = widgets.Checkbox(
+                value=prev_sel.get(cfg_name, False),
+                description=cfg_name,
+                indent=False
+            )
+            chk_dn = widgets.Checkbox(
+                value=prev_dn.get(cfg_name, False),
+                description="Δn",
+                indent=False,
+                layout=widgets.Layout(width="46px")
+            )
+
+            chk_cfg.observe(self._refresh_parametrization, names="value")
+            chk_cfg.observe(self._opt_refresh_custom_modes, names="value")
+            chk_dn.observe(self._update_dn_widgets_state, names="value")
 
             self.opt_cfg_check[cfg_name] = chk_cfg
             self.opt_dn_check[cfg_name]  = chk_dn
-            new_rows.append(widgets.HBox([chk_cfg, chk_dn],
-                                        layout=widgets.Layout(gap="5px")))
-        # 3) injecter dans l’ancien VBox
+
+            new_rows.append(
+                widgets.HBox([chk_cfg, chk_dn], layout=widgets.Layout(gap="5px"))
+            )
+
         visible = min(len(new_rows), 10)
         self.opt_config_list.layout.height = f"{30 + visible*30}px"
-        self.opt_config_list.children =  new_rows
+        self.opt_config_list.children = new_rows
 
-        # 4) mettre à jour l’affichage tout de suite
+        self.opt_toggle_btn.value = was_open
         self._refresh_parametrization()
         self._opt_refresh_custom_modes()
-        # 5) rétablis l’état ouvert/fermé
-        self.opt_toggle_btn.value = was_open
-
-
-
-    def _on_cfg_fs_event(self, *args):
-        # on dé-bounce si besoin, ou directement :
-        self._rebuild_opt_config_selector()
 
 
 
@@ -785,7 +858,6 @@ class OptimizationTab:
         # ─────────────────────────  saved references  ──────────────────────────
         self.sim                = sim_obj
         self.json_combined_path = str(json_combined_path)
-
 
         # ─── Spectral configuration (override SimulationTab) ───
         # On crée trois widgets dédiés à l’optimisation, initialisés
@@ -891,6 +963,21 @@ class OptimizationTab:
             layout=widgets.Layout(width='300px')
         )
 
+
+        self.opt_config_sort_dropdown = widgets.Dropdown(
+            options=[
+                ("Creation date", "created"),
+                ("Name", "name"),
+            ],
+            value="created",
+            description="Sort configs:",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width="220px")
+        )   
+
+        self.opt_config_sort_dropdown.observe(self._on_opt_config_sort_changed, names="value")        
+
+
         self._build_opt_config_selector()
         self._toggle_config_list({'new': True})
 
@@ -901,6 +988,10 @@ class OptimizationTab:
             extensions=[".json"],
             recursive=False,
             debounce_interval=0.2,
+        )
+
+        self._unsubscribe_geom_mat_event = subscribe_geom_mat_configs_changed(
+            self._refresh_available_configs
         )
 
 
@@ -1460,6 +1551,13 @@ class OptimizationTab:
         self._update_dn_widgets_state()
 
     def close(self):
+        if hasattr(self, "_unsubscribe_geom_mat_event") and self._unsubscribe_geom_mat_event is not None:
+            try:
+                self._unsubscribe_geom_mat_event()
+            except Exception:
+                pass
+            self._unsubscribe_geom_mat_event = None
+
         if hasattr(self, "_cfg_watcher"):
             obs, handler = self._cfg_watcher, self._cfg_handler
             obs.stop()
@@ -1478,6 +1576,8 @@ class OptimizationTab:
             self._json_watcher.stop()
             self._json_watcher.join()
             del self._json_watcher
+
+
 
         def __del__(self) -> None:
             self.close()

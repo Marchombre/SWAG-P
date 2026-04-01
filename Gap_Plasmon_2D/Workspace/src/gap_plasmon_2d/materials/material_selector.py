@@ -11,11 +11,13 @@ from IPython.display import display, clear_output
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from IPython import get_ipython
+from functools import lru_cache
 
 
-from gap_plasmon_2d.ui.geometry_settings import geometry_widget, get_geometry_save_path
+from gap_plasmon_2d.ui.geometry_settings import get_geometry_save_path
 from gap_plasmon_2d.utils.file_watchers import start_watcher
+from gap_plasmon_2d.ui.ui_events import subscribe_geometry_changed
+from gap_plasmon_2d.ui.ui_material_events import notify_material_config_changed
 
 # ============================================================================
 # Définition des chemins globaux
@@ -42,13 +44,116 @@ DEFAULT_ROLES = [
 # ============================================================================
 
 
-def _load_geometry_names():
+def get_bounds_function_for_mode(mode):
+    """
+    Retourne une fonction adaptée au mode matériau pour calculer les bornes λ.
+    """
+    if mode == "RefractiveIndex":
+        return lambda cfg, json_path, data_dir: get_lambda_bounds_refractiveindex(cfg, data_dir)
+    elif mode == "Standard":
+        return lambda cfg, json_path, data_dir: get_lambda_bounds(cfg.get("material", ""), json_path, data_dir)
+    elif mode == "Custom":
+        return lambda cfg, json_path, data_dir: None
+    else:
+        return lambda cfg, json_path, data_dir: None
+
+
+
+
+def safe_eval_custom_expression(expr, lam=None):
+    """
+    Évalue une expression custom dans un contexte restreint.
+    Autorise np et éventuellement lam.
+    """
+    safe_globals = {"__builtins__": {}}
+    safe_locals = {"np": np}
+
+    if lam is not None:
+        safe_locals["lam"] = lam
+
+    return eval(expr, safe_globals, safe_locals)
+
+
+
+def _load_all_geometry_configs():
+    """
+    Charge toutes les géométries sauvegardées.
+    Retourne une liste de dictionnaires.
+    """
     path = get_geometry_save_path()
     if not os.path.exists(path):
         return []
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return [cfg["config_name"] for cfg in data.get("ALL_GEOMETRY_CONFIGS", [])]
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        all_cfgs = data.get("ALL_GEOMETRY_CONFIGS", [])
+        return all_cfgs if isinstance(all_cfgs, list) else []
+    except Exception:
+        return []
+
+
+
+def _load_geometry_names():
+    all_cfgs = _load_all_geometry_configs()
+    return [cfg["config_name"] for cfg in all_cfgs if "config_name" in cfg]
+
+
+
+def _geometry_to_display_roles(geom):
+    """
+    Transforme un dict de géométrie en liste ordonnée de rôles matériaux
+    à afficher, uniquement pour les couches dont l'épaisseur est > 0.
+
+    On conserve l'ordre physique voulu pour l'UI matériaux.
+    """
+    if not isinstance(geom, dict):
+        return DEFAULT_ROLES.copy()
+
+    display_roles = []
+
+    # --- avant ---
+    if geom.get("thick_super", 0) > 0:
+        display_roles.append("perm_env")
+
+    before_map = [
+        ("thick_reso",             "perm_reso"),
+        ("thick_gap",              "perm_gap"),
+        ("thick_mol",              "perm_mol"),
+        ("thick_func",             "perm_func"),
+        ("thick_diel",             "perm_diel"),
+        ("thick_metalliclayer",    "perm_metalliclayer"),
+    ]
+    for key, role in before_map:
+        if geom.get(key, 0) > 0:
+            display_roles.append(role)
+
+    # --- couches homo dynamiques ---
+    for thick_key, val in geom.items():
+        if thick_key.startswith("thick_homo_") and val > 0:
+            suffix = thick_key[len("thick_"):]
+            display_roles.append(f"perm_{suffix}")
+
+    # --- après ---
+    after_map = [
+        ("thick_XIAOYI",   "perm_XIAOYI"),
+        ("thick_accroche", "perm_accroche"),
+        ("thick_sub",      "perm_sub"),
+    ]
+    for key, role in after_map:
+        if geom.get(key, 0) > 0:
+            display_roles.append(role)
+
+    return display_roles
+
+
+def _load_geometry_by_name(config_name):
+    """
+    Charge une géométrie sauvegardée à partir de son nom.
+    Retourne l'entrée complète {config_name, compartment, geometry} ou None.
+    """
+    all_cfgs = _load_all_geometry_configs()
+    return next((cfg for cfg in all_cfgs if cfg.get("config_name") == config_name), None)
 
 
 def html_sub_to_unicode(text):
@@ -70,26 +175,34 @@ def load_catalog_full(catalog_file):
     with open(catalog_file, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
+@lru_cache(maxsize=1)
 def load_combined_materials(json_combined_path):
-    """Charge le fichier JSON contenant la configuration combinée des matériaux."""
+    """
+    Charge le fichier JSON contenant la configuration combinée des matériaux.
+    Le résultat est mis en cache pour éviter de relire le fichier à chaque appel.
+    """
     with open(json_combined_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+@lru_cache(maxsize=1)
 def get_standard_materials(json_combined_path, data_directory):
     """Retourne la liste triée des matériaux standards."""
     found = set()
+
     if os.path.isfile(json_combined_path):
         try:
             materials_data = load_combined_materials(json_combined_path)
             found.update(materials_data.keys())
         except Exception as e:
             print(f"[WARNING] {e}")
+
     if os.path.isdir(data_directory):
         for root, dirs, files in os.walk(data_directory):
             for fn in files:
                 if fn.lower().endswith(".txt"):
                     name = os.path.splitext(fn)[0]
                     found.add(name)
+
     return sorted(found)
 
 def get_lambda_range_from_txt(material_name, data_dir):
@@ -122,19 +235,23 @@ def get_lambda_range_from_txt(material_name, data_dir):
     wl_data = np.array(wl_data)
     return float(np.min(wl_data)*1000), float(np.max(wl_data)*1000)
 
+
+
 def get_lambda_bounds(material_name, json_combined_path, data_dir):
     """Retourne la plage (lambda_min, lambda_max) en nm pour material_name."""
-    with open(json_combined_path, "r", encoding="utf-8") as f:
-        materials_data = json.load(f)
+    materials_data = load_combined_materials(json_combined_path)
+
     material_lower = material_name.lower()
     found = None
     for key in materials_data:
         if key.lower() == material_lower:
             found = key
             break
+
     if found is not None:
         material = materials_data[found]
         model = material.get("model", "").strip().lower()
+
         if model == "expdata":
             if "wavelength_range" in material and isinstance(material["wavelength_range"], list):
                 return float(material["wavelength_range"][0]), float(material["wavelength_range"][1])
@@ -143,15 +260,22 @@ def get_lambda_bounds(material_name, json_combined_path, data_dir):
                 return float(min(wl)), float(max(wl))
             else:
                 return get_lambda_range_from_txt(found, data_dir)
+
         elif model == "brendelbormann":
             if "wavelength_range" in material and isinstance(material["wavelength_range"], list):
                 return float(material["wavelength_range"][0]), float(material["wavelength_range"][1])
             else:
                 return None
+
         else:
             raise ValueError(f"Modèle non supporté pour '{found}'.")
+
     else:
         return get_lambda_range_from_txt(material_name, data_dir)
+    
+
+
+
 
 def get_lambda_bounds_refractiveindex(config_identifier, data_dir):
     """Retourne la plage (lambda_min, lambda_max) en nm pour un matériau RefractiveIndex."""
@@ -190,29 +314,27 @@ def compute_epsilon(n_func, k_func, lam_range):
 
 
 
-def resolve_lambda_bounds(get_bounds_fn, config, JSON_COMBINED_PATH, DATA_DIR,
+def resolve_lambda_bounds(get_bounds_fn, config, json_combined_path, data_dir,
                           default_bounds=(200.0, 1000.0)):
     """
-    Appelle get_bounds_fn(config, JSON_COMBINED_PATH, DATA_DIR)
+    Appelle get_bounds_fn(config, json_combined_path, data_dir)
     qui renvoie soit (min, max) soit None,
     gère l’override dans config['override'] et fournit toujours
     un tuple (min, max) valide.
     """
     try:
-        raw = get_bounds_fn(config, JSON_COMBINED_PATH, DATA_DIR)
+        raw = get_bounds_fn(config, json_combined_path, data_dir)
     except Exception:
         raw = None
 
     ov_min, ov_max = config.get("override", (None, None))
 
-    # pas de bornes intrinsèques ?
     if raw is None or raw[0] is None or raw[1] is None:
         if ov_min is not None and ov_max is not None:
             return ov_min, ov_max
         return default_bounds
 
-    # bornes intrinsèques -> on applique override et clamp
-    low  = ov_min if ov_min is not None else raw[0]
+    low = ov_min if ov_min is not None else raw[0]
     high = ov_max if ov_max is not None else raw[1]
     return max(raw[0], low), min(raw[1], high)
 
@@ -346,6 +468,7 @@ class ComparisonMaterialWidget:
         self.standard_list = standard_list
         self.library = library
         self.remove_callback = remove_callback
+        self._is_applying_config = False
 
         self.mode_dropdown = widgets.Dropdown(
             options=["Standard", "Custom", "RefractiveIndex"],
@@ -358,7 +481,7 @@ class ComparisonMaterialWidget:
         self.remove_btn = widgets.Button(description="Delete materials", button_style="danger")
         self.config_box = widgets.HBox([self.mode_dropdown, self.custom_text, self.standard_dropdown, self.ri_widget.container])
         
-        # Pour Standard/Custom, override via Text (affiche valeurs si disponibles, sinon vide)
+        # Pour Standard/Custom, override via Text
         self.standard_override_min = widgets.Text(value="", description="λ min override:")
         self.standard_override_max = widgets.Text(value="", description="λ max override:")
         self.standard_override_box = widgets.HBox([self.standard_override_min, self.standard_override_max])
@@ -373,7 +496,7 @@ class ComparisonMaterialWidget:
         self.container = widgets.VBox([self.config_box, self.override_box, self.button_box])
         self.added_config = None
 
-        self.mode_dropdown.observe(lambda change: self._update_visibility(), names="value")
+        self.mode_dropdown.observe(lambda change: self._update_visibility(refresh_override=not self._is_applying_config), names="value")
         self.standard_dropdown.observe(lambda change: self._update_override_standard(), names="value")
         self.ri_widget.shelf_dropdown.observe(lambda change: self._update_override_refrac(), names="value")
         self.ri_widget.book_dropdown.observe(lambda change: self._update_override_refrac(), names="value")
@@ -381,8 +504,104 @@ class ComparisonMaterialWidget:
         self.draw_btn.on_click(self._on_draw)
         self.remove_btn.on_click(self._on_remove)
         self._update_visibility()
-    
+
+    def _override_pair_from_config(self, config):
+        override = config.get("override", (None, None))
+        if not isinstance(override, (list, tuple)) or len(override) != 2:
+            return None, None
+        return override[0], override[1]
+
+    def _set_standard_override_fields(self, override_min, override_max):
+        self.standard_override_min.value = "" if override_min is None else str(override_min)
+        self.standard_override_max.value = "" if override_max is None else str(override_max)
+
+    def _set_refractiveindex_override_fields(self, override_min, override_max):
+        try:
+            current_min_limit = self.refrac_override_min.min
+            current_max_limit = self.refrac_override_max.max
+
+            if override_min is None:
+                override_min = self.refrac_override_min.value
+            if override_max is None:
+                override_max = self.refrac_override_max.value
+
+            override_min = float(override_min)
+            override_max = float(override_max)
+
+            override_min = max(current_min_limit, min(current_max_limit, override_min))
+            override_max = max(current_min_limit, min(current_max_limit, override_max))
+
+            if override_max < override_min:
+                override_max = override_min
+
+            self.refrac_override_min.value = override_min
+            self.refrac_override_max.value = override_max
+
+        except Exception:
+            pass
+
+    def apply_config(self, config):
+        """
+        Applique une configuration complète au widget de comparaison,
+        y compris les overrides sauvegardés, sans les écraser ensuite.
+        """
+        if not isinstance(config, dict):
+            self.mode_dropdown.value = "Standard"
+            self._update_visibility(refresh_override=True)
+            return
+
+        mode = config.get("type", "Standard")
+
+        if mode not in ("Standard", "Custom", "RefractiveIndex"):
+            mode = "Standard"
+
+        self._is_applying_config = True
+        try:
+            self.mode_dropdown.value = mode
+
+            if mode == "Standard":
+                material_name = config.get("material", "")
+                available_values = [opt[1] if isinstance(opt, tuple) else opt for opt in self.standard_dropdown.options]
+                if material_name in available_values:
+                    self.standard_dropdown.value = material_name
+
+                self._update_visibility(refresh_override=False)
+
+                override_min, override_max = self._override_pair_from_config(config)
+                self._set_standard_override_fields(override_min, override_max)
+
+            elif mode == "Custom":
+                self.custom_text.value = config.get("expression", "").strip()
+
+                self._update_visibility(refresh_override=False)
+
+                override_min, override_max = self._override_pair_from_config(config)
+                self._set_standard_override_fields(override_min, override_max)
+
+            elif mode == "RefractiveIndex":
+                sel = {
+                    "shelf": config.get("shelf", ""),
+                    "book": config.get("book", ""),
+                    "page": config.get("page", ""),
+                    "data": config.get("data", "")
+                }
+                self.ri_widget.set_selection(sel)
+
+                # D'abord on met à jour les limites intrinsèques
+                self._update_override_refrac()
+
+                # Puis on affiche le bon mode sans réécraser
+                self._update_visibility(refresh_override=False)
+
+                # Enfin on applique les overrides sauvegardés
+                override_min, override_max = self._override_pair_from_config(config)
+                self._set_refractiveindex_override_fields(override_min, override_max)
+        finally:
+            self._is_applying_config = False
+
     def _update_override_standard(self):
+        if self._is_applying_config:
+            return
         try:
             bounds = get_lambda_bounds(self.standard_dropdown.value, JSON_COMBINED_PATH, DATA_DIR)
             if bounds is not None:
@@ -394,8 +613,10 @@ class ComparisonMaterialWidget:
         except Exception:
             self.standard_override_min.value = ""
             self.standard_override_max.value = ""
-    
+
     def _update_override_refrac(self):
+        if self._is_applying_config:
+            return
         try:
             config = self.get_config()
             bounds = get_lambda_bounds_refractiveindex(config, DATA_DIR)
@@ -408,60 +629,71 @@ class ComparisonMaterialWidget:
         except Exception:
             self.refrac_override_min.value = 200
             self.refrac_override_max.value = 1000
-    
-    def _update_visibility(self):
+
+    def _update_visibility(self, refresh_override=True):
         mode = self.mode_dropdown.value
         if mode == "Standard":
             self.custom_text.layout.display = "none"
             self.standard_dropdown.layout.display = ""
             self.ri_widget.container.layout.display = "none"
-            self._update_override_standard()
             self.override_box.children = (self.standard_override_box,)
+            if refresh_override:
+                self._update_override_standard()
         elif mode == "Custom":
             self.custom_text.layout.display = ""
             self.standard_dropdown.layout.display = "none"
             self.ri_widget.container.layout.display = "none"
-            self._update_override_standard()
             self.override_box.children = (self.standard_override_box,)
         elif mode == "RefractiveIndex":
             self.custom_text.layout.display = "none"
             self.standard_dropdown.layout.display = "none"
             self.ri_widget.container.layout.display = ""
-            self._update_override_refrac()
             self.override_box.children = (self.refrac_override_box,)
-    
+            if refresh_override:
+                self._update_override_refrac()
+
     def _on_draw(self, b):
         self.added_config = self.get_config()
-    
+
     def _on_remove(self, b):
         if self.remove_callback is not None:
             self.remove_callback(self)
-    
+
     def get_config(self):
         mode = self.mode_dropdown.value
         if mode == "Standard":
-            return {"type": "Standard",
-                    "material": self.standard_dropdown.value,
-                    "override": (self._parse_text(self.standard_override_min.value),
-                                 self._parse_text(self.standard_override_max.value))}
+            return {
+                "type": "Standard",
+                "material": self.standard_dropdown.value,
+                "override": (
+                    self._parse_text(self.standard_override_min.value),
+                    self._parse_text(self.standard_override_max.value)
+                )
+            }
         elif mode == "Custom":
-            return {"type": "Custom",
-                    "expression": self.custom_text.value.strip(),
-                    "override": (self._parse_text(self.standard_override_min.value),
-                                 self._parse_text(self.standard_override_max.value))}
+            return {
+                "type": "Custom",
+                "expression": self.custom_text.value.strip(),
+                "override": (
+                    self._parse_text(self.standard_override_min.value),
+                    self._parse_text(self.standard_override_max.value)
+                )
+            }
         elif mode == "RefractiveIndex":
             sel = self.ri_widget.get_selection()
             if sel is None:
                 return {"type": "None"}
-            return {"type": "RefractiveIndex",
-                    "shelf": sel["shelf"],
-                    "book": sel["book"],
-                    "page": sel["page"],
-                    "data": sel["data"],
-                    "override": (self.refrac_override_min.value, self.refrac_override_max.value)}
+            return {
+                "type": "RefractiveIndex",
+                "shelf": sel["shelf"],
+                "book": sel["book"],
+                "page": sel["page"],
+                "data": sel["data"],
+                "override": (self.refrac_override_min.value, self.refrac_override_max.value)
+            }
         else:
             return {"type": "None"}
-    
+
     def _parse_text(self, text_value):
         try:
             return float(text_value.strip()) if text_value.strip() != "" else None
@@ -476,6 +708,7 @@ class MaterialRoleWidget:
         self.role_name = role_name
         self.library = library
         self.standard_list = standard_list
+        self._is_applying_config = False
 
         self.mode_dropdown = widgets.Dropdown(
             options=["None", "Custom", "Standard", "RefractiveIndex"],
@@ -491,22 +724,19 @@ class MaterialRoleWidget:
         )
         self.draw_btn = widgets.Button(description="Draw", button_style="info")
         self.plot_type_and_btn = widgets.HBox([self.plot_type_dropdown, self.draw_btn])
-        
-        # Aucun slider global n'est utilisé
+
         self.plot_output = widgets.Output()
 
-        # Override pour le matériau principal
         self.standard_override_min = widgets.Text(value="", description="λ min override:")
         self.standard_override_max = widgets.Text(value="", description="λ max override:")
         self.standard_override_box = widgets.HBox([self.standard_override_min, self.standard_override_max])
-        
+
         self.refrac_override_min = widgets.FloatSlider(value=200, min=0, max=100000, step=1, description="λ min:")
         self.refrac_override_max = widgets.FloatSlider(value=1000, min=0, max=100000, step=1, description="λ max:")
         self.refrac_override_box = widgets.HBox([self.refrac_override_min, self.refrac_override_max])
-        
+
         self.override_box = widgets.VBox([])
-        
-        # Zone de comparaison
+
         self.comparison_widgets = []
         self.comparison_vbox = widgets.VBox([])
         self.add_comparison_btn = widgets.Button(description="Add materials", button_style="info")
@@ -525,16 +755,131 @@ class MaterialRoleWidget:
             self.plot_area
         ])
 
-        self.mode_dropdown.observe(lambda change: self._update_visibility(), names="value")
+        self.mode_dropdown.observe(lambda change: self._update_visibility(refresh_override=not self._is_applying_config), names="value")
         self.standard_dropdown.observe(lambda change: self._update_override_standard(), names="value")
         self.ri_widget.shelf_dropdown.observe(lambda change: self._update_override_refrac(), names="value")
         self.ri_widget.book_dropdown.observe(lambda change: self._update_override_refrac(), names="value")
         self.ri_widget.page_dropdown.observe(lambda change: self._update_override_refrac(), names="value")
         self.draw_btn.on_click(lambda b: self.update_plot())
         self._update_visibility()
-        # Ne pas appeler update_plot() automatiquement ici.
-    
+
+
+
+    def reset_widget(self):
+        """
+        Remet le widget dans un état propre.
+        """
+        self.mode_dropdown.value = "None"
+        self.custom_text.value = ""
+        self.standard_override_min.value = ""
+        self.standard_override_max.value = ""
+        self.comparison_widgets = []
+        self.comparison_vbox.children = tuple()
+        self._update_visibility(refresh_override=False)
+
+
+    def _override_pair_from_config(self, config):
+        override = config.get("override", (None, None))
+        if not isinstance(override, (list, tuple)) or len(override) != 2:
+            return None, None
+        return override[0], override[1]
+
+    def _set_standard_override_fields(self, override_min, override_max):
+        self.standard_override_min.value = "" if override_min is None else str(override_min)
+        self.standard_override_max.value = "" if override_max is None else str(override_max)
+
+    def _set_refractiveindex_override_fields(self, override_min, override_max):
+        try:
+            current_min_limit = self.refrac_override_min.min
+            current_max_limit = self.refrac_override_max.max
+
+            if override_min is None:
+                override_min = self.refrac_override_min.value
+            if override_max is None:
+                override_max = self.refrac_override_max.value
+
+            override_min = float(override_min)
+            override_max = float(override_max)
+
+            override_min = max(current_min_limit, min(current_max_limit, override_min))
+            override_max = max(current_min_limit, min(current_max_limit, override_max))
+
+            if override_max < override_min:
+                override_max = override_min
+
+            self.refrac_override_min.value = override_min
+            self.refrac_override_max.value = override_max
+
+        except Exception:
+            pass
+
+    def apply_config(self, config):
+        """
+        Applique une configuration complète au widget de rôle,
+        y compris les overrides sauvegardés, sans les écraser ensuite.
+        """
+        if not isinstance(config, dict):
+            self.mode_dropdown.value = "None"
+            self._update_visibility(refresh_override=True)
+            return
+
+        mode = config.get("type", "None")
+
+        if mode not in ("None", "Custom", "Standard", "RefractiveIndex"):
+            mode = "None"
+
+        self._is_applying_config = True
+        try:
+            self.mode_dropdown.value = mode
+
+            if mode == "None":
+                self.custom_text.value = ""
+                self._update_visibility(refresh_override=False)
+                return
+
+            if mode == "Standard":
+                material_name = config.get("material", "")
+                available_values = [opt[1] if isinstance(opt, tuple) else opt for opt in self.standard_dropdown.options]
+                if material_name in available_values:
+                    self.standard_dropdown.value = material_name
+
+                self._update_visibility(refresh_override=False)
+
+                override_min, override_max = self._override_pair_from_config(config)
+                self._set_standard_override_fields(override_min, override_max)
+
+            elif mode == "Custom":
+                self.custom_text.value = config.get("expression", "").strip()
+
+                self._update_visibility(refresh_override=False)
+
+                override_min, override_max = self._override_pair_from_config(config)
+                self._set_standard_override_fields(override_min, override_max)
+
+            elif mode == "RefractiveIndex":
+                sel = {
+                    "shelf": config.get("shelf", ""),
+                    "book": config.get("book", ""),
+                    "page": config.get("page", ""),
+                    "data": config.get("data", "")
+                }
+                self.ri_widget.set_selection(sel)
+
+                # D'abord on met à jour les limites intrinsèques
+                self._update_override_refrac()
+
+                # Puis on affiche le bon mode sans écrasement
+                self._update_visibility(refresh_override=False)
+
+                # Enfin on applique les overrides sauvegardés
+                override_min, override_max = self._override_pair_from_config(config)
+                self._set_refractiveindex_override_fields(override_min, override_max)
+        finally:
+            self._is_applying_config = False
+
     def _update_override_standard(self):
+        if self._is_applying_config:
+            return
         try:
             bounds = get_lambda_bounds(self.standard_dropdown.value, JSON_COMBINED_PATH, DATA_DIR)
             if bounds is not None:
@@ -546,8 +891,10 @@ class MaterialRoleWidget:
         except Exception:
             self.standard_override_min.value = ""
             self.standard_override_max.value = ""
-    
+
     def _update_override_refrac(self):
+        if self._is_applying_config:
+            return
         try:
             config = self.get_config()
             bounds = get_lambda_bounds_refractiveindex(config, DATA_DIR)
@@ -560,8 +907,8 @@ class MaterialRoleWidget:
         except Exception:
             self.refrac_override_min.value = 200
             self.refrac_override_max.value = 1000
-    
-    def _update_visibility(self):
+
+    def _update_visibility(self, refresh_override=True):
         mode = self.mode_dropdown.value
         if mode == "None":
             self.custom_text.layout.display = "none"
@@ -572,73 +919,82 @@ class MaterialRoleWidget:
             self.custom_text.layout.display = ""
             self.standard_dropdown.layout.display = "none"
             self.ri_widget.container.layout.display = "none"
-            self._update_override_standard()
             self.override_box.children = (self.standard_override_box,)
         elif mode == "Standard":
             self.custom_text.layout.display = "none"
             self.standard_dropdown.layout.display = ""
             self.ri_widget.container.layout.display = "none"
-            self._update_override_standard()
             self.override_box.children = (self.standard_override_box,)
+            if refresh_override:
+                self._update_override_standard()
         elif mode == "RefractiveIndex":
             self.custom_text.layout.display = "none"
             self.standard_dropdown.layout.display = "none"
             self.ri_widget.container.layout.display = ""
-            self._update_override_refrac()
             self.override_box.children = (self.refrac_override_box,)
-    
+            if refresh_override:
+                self._update_override_refrac()
+
     def add_comparison(self, b):
         new_comp = ComparisonMaterialWidget(self.standard_list, self.library, remove_callback=self.remove_comparison)
-        # Ne validez pas automatiquement : l'utilisateur doit appuyer sur Draw pour le comparatif.
         self.comparison_widgets.append(new_comp)
         self.comparison_vbox.children = tuple(comp.container for comp in self.comparison_widgets)
-    
+
     def remove_comparison(self, comp_widget):
         self.comparison_widgets = [c for c in self.comparison_widgets if c is not comp_widget]
         self.comparison_vbox.children = tuple(c.container for c in self.comparison_widgets)
-    
+
     def get_config(self):
         mode = self.mode_dropdown.value
+
         if mode == "None":
             return {"type": "None"}
+
         elif mode == "Custom":
             expr = self.custom_text.value.strip() or "None"
-            try:
-                ov_min = float(self.standard_override_min.value.strip()) if self.standard_override_min.value.strip() != "" else None
-            except Exception:
-                ov_min = None
-            try:
-                ov_max = float(self.standard_override_max.value.strip()) if self.standard_override_max.value.strip() != "" else None
-            except Exception:
-                ov_max = None
-            return {"type": "Custom",
-                    "expression": expr,
-                    "override": (ov_min, ov_max)}
+            ov_min = self._parse_text(self.standard_override_min.value)
+            ov_max = self._parse_text(self.standard_override_max.value)
+
+            return {
+                "type": "Custom",
+                "expression": expr,
+                "override": (ov_min, ov_max)
+            }
+
         elif mode == "Standard":
-            try:
-                ov_min = float(self.standard_override_min.value.strip()) if self.standard_override_min.value.strip() != "" else None
-            except Exception:
-                ov_min = None
-            try:
-                ov_max = float(self.standard_override_max.value.strip()) if self.standard_override_max.value.strip() != "" else None
-            except Exception:
-                ov_max = None
-            return {"type": "Standard",
-                    "material": self.standard_dropdown.value,
-                    "override": (ov_min, ov_max)}
+            ov_min = self._parse_text(self.standard_override_min.value)
+            ov_max = self._parse_text(self.standard_override_max.value)
+
+            return {
+                "type": "Standard",
+                "material": self.standard_dropdown.value,
+                "override": (ov_min, ov_max)
+            }
+
         elif mode == "RefractiveIndex":
             sel = self.ri_widget.get_selection()
             if sel is None:
                 return {"type": "None"}
-            return {"type": "RefractiveIndex",
-                    "shelf": sel["shelf"],
-                    "book": sel["book"],
-                    "page": sel["page"],
-                    "data": sel["data"],
-                    "override": (self.refrac_override_min.value, self.refrac_override_max.value)}
-    
-    
-    
+
+            return {
+                "type": "RefractiveIndex",
+                "shelf": sel["shelf"],
+                "book": sel["book"],
+                "page": sel["page"],
+                "data": sel["data"],
+                "override": (self.refrac_override_min.value, self.refrac_override_max.value)
+            }
+
+
+
+    def _parse_text(self, text_value):
+        try:
+            return float(text_value.strip()) if text_value.strip() != "" else None
+        except Exception:
+            return None
+
+
+
     def update_plot(self):
         with self.plot_output:
             clear_output(wait=True)
@@ -649,26 +1005,18 @@ class MaterialRoleWidget:
                 print("Aucun matériau défini pour le tracé.")
                 return
 
-            # --- calcul des bornes du matériau principal sans aucun fallback ---
-            # --- calcul des bornes du matériau principal, via resolve_lambda_bounds ---
-            if mode == "RefractiveIndex":
-                bounds_fn = lambda cfg, json_path, data_dir: get_lambda_bounds_refractiveindex(cfg, data_dir)
-            else:
-                bounds_fn = lambda cfg, json_path, data_dir: get_lambda_bounds(
-                    cfg.get("material",""), json_path, data_dir)
+            bounds_fn = get_bounds_function_for_mode(mode)
 
             main_bounds = resolve_lambda_bounds(bounds_fn, config, JSON_COMBINED_PATH, DATA_DIR)
             local_range = np.linspace(main_bounds[0], main_bounds[1], num_points)
 
-
-            # --- calcul des valeurs du matériau principal ---
             if mode == "Custom":
                 expr = config.get("expression", "")
                 try:
                     if "lam" in expr:
-                        n_func = lambda lam: np.array([float(eval(expr, {"lam": l})) for l in lam])
+                        n_func = lambda lam: np.array([float(safe_eval_custom_expression(expr, lam=l)) for l in lam])
                     else:
-                        eps_val = float(eval(expr))
+                        eps_val = float(safe_eval_custom_expression(expr))
                         n_val = np.sqrt(eps_val)
                         n_func = lambda lam: n_val * np.ones_like(lam)
                     k_func = lambda lam: np.zeros_like(lam)
@@ -684,8 +1032,12 @@ class MaterialRoleWidget:
                     from gap_plasmon_2d.materials.material__configuration import get_material_permittivity
                     n_vals, k_vals, eps_list = [], [], []
                     for l in local_range:
-                        perm_val = get_material_permittivity(config.get("material", "").strip(),
-                                                            l, JSON_COMBINED_PATH, DATA_DIR)
+                        perm_val = get_material_permittivity(
+                            config.get("material", "").strip(),
+                            l,
+                            JSON_COMBINED_PATH,
+                            DATA_DIR
+                        )
                         eps_list.append(perm_val)
                         sqrt_val = np.sqrt(perm_val)
                         n_vals.append(np.real(sqrt_val))
@@ -700,18 +1052,27 @@ class MaterialRoleWidget:
             elif mode == "RefractiveIndex":
                 try:
                     from gap_plasmon_2d.materials.material__configuration import build_material_configuration_dynamic
-                    n_vals, k_vals, eps_list = [], [], []
+
+                    df = pd.DataFrame([{"key": self.role_name, "material": config}])
+
+                    n_vals = []
+                    k_vals = []
+                    eps_list = []
+
                     for l in local_range:
-                        df = pd.DataFrame([{"key": self.role_name, "material": config}])
                         eps_val = build_material_configuration_dynamic(
-                            df, l, JSON_COMBINED_PATH, None)[self.role_name]
+                            df, l, JSON_COMBINED_PATH, None
+                        )[self.role_name]
                         eps_list.append(eps_val)
+
                         sqrt_val = np.sqrt(eps_val)
                         n_vals.append(np.real(sqrt_val))
                         k_vals.append(np.imag(sqrt_val))
+
                     n_vals = np.array(n_vals)
                     k_vals = np.array(k_vals)
                     eps_vals = np.array(eps_list)
+
                 except Exception as e:
                     print(f"Erreur dans build_material_configuration_dynamic: {e}")
                     return
@@ -720,7 +1081,6 @@ class MaterialRoleWidget:
                 print("Mode de configuration inconnu.")
                 return
 
-            # --- tracé du matériau principal ---
             fig, ax = plt.subplots(figsize=(8, 4))
             plot_type = self.plot_type_dropdown.value
             if plot_type == "epsilon":
@@ -738,32 +1098,22 @@ class MaterialRoleWidget:
                 ax.plot(local_range, k_vals, label=f"{self.role_name} (k)")
                 ax.set_ylabel("n et k")
 
-            # === tracé des matériaux de comparaison ===
             for comp in self.comparison_widgets:
                 comp_conf = comp.get_config()
                 if comp_conf.get("type", "None") == "None":
                     continue
 
-                # bornes
-                # bornes et plage comparée via resolve_lambda_bounds
-                if comp_conf["type"] == "RefractiveIndex":
-                    bounds_fn_c = lambda cfg, json_path, data_dir: get_lambda_bounds_refractiveindex(cfg, data_dir)
-                else:
-                    bounds_fn_c = lambda cfg, json_path, data_dir: get_lambda_bounds(
-                        cfg.get("material",""), json_path, data_dir)
+                bounds_fn_c = get_bounds_function_for_mode(comp_conf["type"])
 
-                comp_bounds = resolve_lambda_bounds(bounds_fn_c, comp_conf,
-                                                    JSON_COMBINED_PATH, DATA_DIR)
-                comp_range  = np.linspace(comp_bounds[0], comp_bounds[1], num_points)
+                comp_bounds = resolve_lambda_bounds(bounds_fn_c, comp_conf, JSON_COMBINED_PATH, DATA_DIR)
+                comp_range = np.linspace(comp_bounds[0], comp_bounds[1], num_points)
 
-
-                # calcul des valeurs
                 if comp_conf["type"] == "Custom":
                     expr = comp_conf.get("expression", "")
                     if "lam" in expr:
-                        n_comp = lambda lam: np.array([float(eval(expr, {"lam": l})) for l in lam])
+                        n_comp = lambda lam: np.array([float(safe_eval_custom_expression(expr, lam=l)) for l in lam])
                     else:
-                        val = float(eval(expr))
+                        val = float(safe_eval_custom_expression(expr))
                         n_comp = lambda lam: val * np.ones_like(lam)
                     k_comp = lambda lam: np.zeros_like(lam)
                     eps_comp = compute_epsilon(n_comp, k_comp, comp_range)
@@ -774,8 +1124,12 @@ class MaterialRoleWidget:
                     from gap_plasmon_2d.materials.material__configuration import get_material_permittivity
                     n_vals_c, k_vals_c, eps_list_c = [], [], []
                     for l in comp_range:
-                        epsv = get_material_permittivity(comp_conf.get("material", ""), l,
-                                                        JSON_COMBINED_PATH, DATA_DIR)
+                        epsv = get_material_permittivity(
+                            comp_conf.get("material", ""),
+                            l,
+                            JSON_COMBINED_PATH,
+                            DATA_DIR
+                        )
                         eps_list_c.append(epsv)
                         sq = np.sqrt(epsv)
                         n_vals_c.append(np.real(sq))
@@ -786,26 +1140,32 @@ class MaterialRoleWidget:
 
                 elif comp_conf["type"] == "RefractiveIndex":
                     from gap_plasmon_2d.materials.material__configuration import build_material_configuration_dynamic
-                    n_vals_c, k_vals_c, eps_list_c = [], [], []
+
+                    df = pd.DataFrame([{"key": self.role_name, "material": comp_conf}])
+
+                    n_vals_c = []
+                    k_vals_c = []
+                    eps_list_c = []
+
                     for l in comp_range:
-                        df = pd.DataFrame([{"key": self.role_name, "material": comp_conf}])
                         epsv = build_material_configuration_dynamic(
-                            df, l, JSON_COMBINED_PATH, None)[self.role_name]
+                            df, l, JSON_COMBINED_PATH, None
+                        )[self.role_name]
                         eps_list_c.append(epsv)
+
                         sq = np.sqrt(epsv)
                         n_vals_c.append(np.real(sq))
                         k_vals_c.append(np.imag(sq))
+
                     n_vals_c = np.array(n_vals_c)
                     k_vals_c = np.array(k_vals_c)
                     eps_comp = np.array(eps_list_c)
 
-                # préparation du label
                 if comp_conf["type"] in ["Standard", "Custom"]:
                     label_base = comp_conf.get("material", comp_conf.get("expression", ""))
                 else:
                     label_base = f"RI {comp_conf.get('shelf')}:{comp_conf.get('page')}"
 
-                # tracé comparison
                 if plot_type == "epsilon":
                     ax.plot(comp_range, np.real(eps_comp), label=f"{label_base} (Re)", linestyle=":")
                     ax.plot(comp_range, np.imag(eps_comp), label=f"{label_base} (Im)", linestyle=":")
@@ -817,8 +1177,6 @@ class MaterialRoleWidget:
                     ax.plot(comp_range, n_vals_c, label=f"{label_base} (n)", linestyle=":")
                     ax.plot(comp_range, k_vals_c, label=f"{label_base} (k)", linestyle=":")
 
-            # --- fin comparaison ---
-
             ax.set_xlabel("λ (nm)")
             ax.set_title(f"{self.role_name} : {mode} - {plot_type}")
             ax.legend()
@@ -826,7 +1184,6 @@ class MaterialRoleWidget:
             fig.tight_layout()
             display(fig)
             plt.close(fig)
-
 
 # ============================================================================
 # Widget principal regroupant les rôles en onglets
@@ -842,16 +1199,22 @@ class MaterialSelectorTabbedNotebook:
         )
         self.geometry_dropdown.observe(self._on_geometry_change, names="value")
 
+        # ──────────────────────────────────────────────────────────────────────
+        # Mécanisme principal : notification directe en mémoire
+        # ──────────────────────────────────────────────────────────────────────
+        self._unsubscribe_geometry_event = subscribe_geometry_changed(
+            self._on_geometry_event
+        )
 
         # ──────────────────────────────────────────────────────────────────────
-        # Watcher : rafraîchir la liste de géométries si le JSON change
+        # Fallback : watcher si le JSON change hors de cette UI
         # ──────────────────────────────────────────────────────────────────────
         self._geom_watcher, self._geom_handler = start_watcher(
-            path=str(get_geometry_save_path()),   # le fichier à surveiller
-            callback=self._on_geom_fs_event,      # défini plus bas
+            path=str(get_geometry_save_path()),
+            callback=self._on_geom_fs_event,
             extensions=[".json"],
             recursive=False,
-            debounce_interval=0.2,                # évite les doublons d’événements
+            debounce_interval=0.2,
         )
 
 
@@ -944,72 +1307,49 @@ class MaterialSelectorTabbedNotebook:
         self.load_saved_configs()
         
 
+    def close(self):
+        """
+        Nettoyage optionnel de l'instance.
+        Désabonne l'event bus et arrête le timer du handler watcher.
+        """
+        try:
+            if hasattr(self, "_unsubscribe_geometry_event") and self._unsubscribe_geometry_event is not None:
+                self._unsubscribe_geometry_event()
+                self._unsubscribe_geometry_event = None
+        except Exception as e:
+            print(f"[MaterialSelector] erreur unsubscribe geometry event : {e}")
 
+        try:
+            if hasattr(self, "_geom_handler") and self._geom_handler is not None:
+                self._geom_handler.stop()
+        except Exception as e:
+            print(f"[MaterialSelector] erreur arrêt handler watcher : {e}")
 
 
     def _on_geometry_change(self, change):
         name = change["new"]
-        # 1) Déterminer les rôles à afficher selon la géométrie sélectionnée
+
         if not name:
-            # Pas de géométrie choisie → on affiche tous les rôles par défaut
             display_roles = DEFAULT_ROLES.copy()
         else:
-            # Charger toutes les géométries sauvegardées
-            path = get_geometry_save_path()
-            with open(path, "r", encoding="utf-8") as f:
-                all_cfgs = json.load(f)["ALL_GEOMETRY_CONFIGS"]
-            # Chercher l’entrée correspondant au nom
-            geom_entry = next((cfg for cfg in all_cfgs if cfg["config_name"] == name), None)
+            geom_entry = _load_geometry_by_name(name)
             if geom_entry is None:
-                # Si introuvable, revenir aux rôles par défaut
                 with self.output:
+                    clear_output()
                     print(f"[WARN] Géométrie '{name}' introuvable, affichage par défaut.")
                 display_roles = DEFAULT_ROLES.copy()
             else:
-                geom = geom_entry["geometry"]
-                display_roles = []
-                # --- avant ---
-                # Superstrate → perm_env
-                if geom.get("thick_super", 0) > 0:
-                    display_roles.append("perm_env")
-                # Résonateur, gap et couches latérales
-                before_map = [
-                    ("thick_reso",             "perm_reso"),
-                    ("thick_gap",              "perm_gap"),
-                    ("thick_mol",              "perm_mol"),
-                    ("thick_func",             "perm_func"),
-                    ("thick_diel",             "perm_diel"),
-                    ("thick_metalliclayer",    "perm_metalliclayer"),
-                ]
-                for key, role in before_map:
-                    if geom.get(key, 0) > 0:
-                        display_roles.append(role)
-                # --- couches homo dynamiques ---
-                for thick_key, val in geom.items():
-                    if thick_key.startswith("thick_homo_") and val > 0:
-                        suffix = thick_key[len("thick_"):]
-                        display_roles.append(f"perm_{suffix}")
-                # --- après ---
-                after_map = [
-                    ("thick_XIAOYI",   "perm_XIAOYI"),
-                    ("thick_accroche", "perm_accroche"),
-                    ("thick_sub",      "perm_sub"),
-                ]
-                for key, role in after_map:
-                    if geom.get(key, 0) > 0:
-                        display_roles.append(role)
+                geom = geom_entry.get("geometry", {})
+                display_roles = _geometry_to_display_roles(geom)
 
-        # 2) Reconstruire les onglets pour ne garder que ces rôles
         self._rebuild_tabs(display_roles)
 
-        # 3) Tout rôle non affiché repasse en mode None
         for role, widget_role in self.role_widgets.items():
             if role not in display_roles:
                 widget_role.mode_dropdown.value = "None"
 
-        # 4) Mémoriser la liste complète des rôles pour le futur
-        self.current_roles = list(self.role_widgets.keys())
-
+        # IMPORTANT : mémoriser uniquement les rôles réellement affichés
+        self.current_roles = display_roles.copy()
 
 
 
@@ -1017,17 +1357,39 @@ class MaterialSelectorTabbedNotebook:
     #  Callbacks liés au watcher de géométrie
     # ──────────────────────────────────────────────────────────────────────
     def _refresh_geometry_dropdown(self):
-        """Relit la liste des géométries et garde la sélection si possible."""
-        current = self.geometry_dropdown.value
-        names   = [""] + _load_geometry_names()     # relit le JSON
-        self.geometry_dropdown.options = names
-        if current not in names:                    # l’ancienne sélection n’existe plus
-            self.geometry_dropdown.value = ""       # repasse à « aucune »
+        """
+        Recharge la liste des géométries disponibles tout en conservant
+        la sélection courante si elle existe encore.
+        """
+        current_value = self.geometry_dropdown.value
+        new_options = [""] + _load_geometry_names()
 
-    def _on_geom_fs_event(self, *args):
-        """Appelé par le watcher (thread séparé) → exécute dans le thread Jupyter."""
-        loop = get_ipython().kernel.io_loop
-        loop.add_callback(self._refresh_geometry_dropdown)
+        old_options = list(self.geometry_dropdown.options)
+        if old_options == new_options:
+            return
+
+        target_value = current_value if current_value in new_options else ""
+
+        # On change d'abord les options
+        self.geometry_dropdown.options = new_options
+
+        # Puis on ne modifie la valeur que si nécessaire
+        if self.geometry_dropdown.value != target_value:
+            self.geometry_dropdown.value = target_value
+
+    def _on_geometry_event(self):
+        """
+        Callback principal déclenché par l'event bus en mémoire après une
+        sauvegarde / mise à jour / suppression de géométrie.
+        """
+        self._refresh_geometry_dropdown()
+
+    def _on_geom_fs_event(self):
+        """
+        Callback fallback appelé par le watcher fichier.
+        Ici, le handler watchdog a déjà rebasculé dans la boucle Jupyter.
+        """
+        self._refresh_geometry_dropdown()
 
 
 
@@ -1062,8 +1424,7 @@ class MaterialSelectorTabbedNotebook:
         preconfig_id = change["new"]
         if preconfig_id == "":
             for role, widget_role in self.role_widgets.items():
-                widget_role.mode_dropdown.value = "None"
-                widget_role.custom_text.value = ""
+                widget_role.reset_widget()
         else:
             self.apply_preconfig(preconfig_id)
     
@@ -1071,23 +1432,9 @@ class MaterialSelectorTabbedNotebook:
         mapping = self.preconfigs.get(preconfig_id, {})
         for role, widget_role in self.role_widgets.items():
             if role in mapping:
-                config = mapping[role]
-                widget_role.mode_dropdown.value = config["type"]
-                if config["type"] == "Custom":
-                    widget_role.custom_text.value = config.get("expression", "")
-                elif config["type"] == "Standard":
-                    widget_role.standard_dropdown.value = config.get("material", "")
-                elif config["type"] == "RefractiveIndex":
-                    if hasattr(widget_role.ri_widget, "set_selection"):
-                        sel = {
-                            "shelf": config.get("shelf", ""),
-                            "book": config.get("book", ""),
-                            "page": config.get("page", ""),
-                            "data": config.get("data", "")
-                        }
-                        widget_role.ri_widget.set_selection(sel)
+                widget_role.apply_config(mapping[role])
             else:
-                widget_role.mode_dropdown.value = "None"
+                widget_role.apply_config({"type": "None"})
     
     def on_add_preconfig(self, b):
         name = self.preconfig_name_text.value.strip()
@@ -1187,24 +1534,12 @@ class MaterialSelectorTabbedNotebook:
         # 1) Définir l'ordre des rôles d'après la géométrie sélectionnée
         geom_name = self.geometry_dropdown.value
         if geom_name:
-            path = get_geometry_save_path()
-            with open(path, "r", encoding="utf-8") as f:
-                geoms = json.load(f)["ALL_GEOMETRY_CONFIGS"]
-            geom = next(cfg for cfg in geoms if cfg["config_name"] == geom_name)["geometry"]
-            # Parcours dans l'ordre exact des clés thick_… pour inclure aussi les homo
-            ordered_roles = []
-            for key in geom.keys():
-                if not key.startswith("thick_"):
-                    continue
-                suffix = key[len("thick_"):]
-                # On ignore period
-                if suffix == "period":
-                    continue
-                # Super → perm_env, sinon perm_<suffix>
-                perm_role = "perm_env" if suffix == "super" else f"perm_{suffix}"
-                ordered_roles.append(perm_role)
+            geom_entry = _load_geometry_by_name(geom_name)
+            if geom_entry is not None:
+                ordered_roles = _geometry_to_display_roles(geom_entry.get("geometry", {}))
+            else:
+                ordered_roles = self.current_roles.copy()
         else:
-            # Pas de géométrie → on garde le dernier jeu de rôles utilisé
             ordered_roles = self.current_roles.copy()
 
         # 2) Construire MATERIALS_CONFIG et RI_OVERRIDES
@@ -1242,12 +1577,12 @@ class MaterialSelectorTabbedNotebook:
 
         # 5) Persister tout de suite
         self._persist_configs()
+        notify_material_config_changed()
         self.config_name_text.value = ""
 
         # 6) Réinitialiser l’UI
         for w in self.role_widgets.values():
-            w.mode_dropdown.value = "None"
-            w.custom_text.value = ""
+            w.reset_widget()
 
     
     def on_save_quit(self, b):
@@ -1279,44 +1614,21 @@ class MaterialSelectorTabbedNotebook:
         self._rebuild_tabs(roles_to_show)
         self.current_roles = roles_to_show.copy()
 
-        # 3) Initialiser chaque widget de rôle
-        #    On commence tous à None (sécurité)
+        # 3) Initialiser chaque widget de rôle avec sa config complète,
+        #    y compris les overrides sauvegardés
         for role in self.role_widgets:
+            w = self.role_widgets[role]
+
             if role in roles_to_show:
-                # trouver la config de ce rôle
                 mat_cfg = next(
                     (e["material"] for e in selected["MATERIALS_CONFIG"] if e["key"] == role),
                     None
                 )
-                w = self.role_widgets[role]
-
-                if not isinstance(mat_cfg, dict) or mat_cfg.get("type") in (None, "None"):
-                    w.mode_dropdown.value = "None"
-                else:
-                    mode = mat_cfg["type"]
-                    w.mode_dropdown.value = mode
-                    if mode == "Custom":
-                        w.custom_text.value = mat_cfg.get("expression", "")
-                    elif mode == "Standard":
-                        w.standard_dropdown.value = mat_cfg.get("material", "")
-                    elif mode == "RefractiveIndex":
-                        sel = {
-                            "shelf": mat_cfg.get("shelf", ""),
-                            "book":  mat_cfg.get("book",  ""),
-                            "page":  mat_cfg.get("page",  ""),
-                            "data":  mat_cfg.get("data",  "")
-                        }
-                        w.ri_widget.set_selection(sel)
-                        w._update_override_refrac()
+                w.apply_config(mat_cfg if isinstance(mat_cfg, dict) else {"type": "None"})
             else:
-                # ne devrait pas arriver car on a rebuild_tabs, mais pour sécurité :
-                self.role_widgets[role].mode_dropdown.value = "None"
+                w.apply_config({"type": "None"})
 
-        # 4) Forcer la mise à jour de la visibilité de chaque onglet
-        for w in self.role_widgets.values():
-            w._update_visibility()
-
-        # 5) Mettre à jour le nom de la config et informer l'utilisateur
+        # 4) Mettre à jour le nom de la config et informer l'utilisateur
         self.config_name_text.value = selected["config_name"]
         with self.output:
             clear_output()
@@ -1340,19 +1652,11 @@ class MaterialSelectorTabbedNotebook:
         # 1) Même logique que pour on_add_config pour l'ordre des rôles
         geom_name = self.geometry_dropdown.value
         if geom_name:
-            path = get_geometry_save_path()
-            with open(path, "r", encoding="utf-8") as f:
-                geoms = json.load(f)["ALL_GEOMETRY_CONFIGS"]
-            geom = next((cfg for cfg in geoms if cfg["config_name"] == geom_name), {}).get("geometry", {})
-            ordered_roles = []
-            for key in geom.keys():
-                if not key.startswith("thick_"):
-                    continue
-                suffix = key[len("thick_"):]
-                if suffix == "period":
-                    continue
-                perm_role = "perm_env" if suffix == "super" else f"perm_{suffix}"
-                ordered_roles.append(perm_role)
+            geom_entry = _load_geometry_by_name(geom_name)
+            if geom_entry is not None:
+                ordered_roles = _geometry_to_display_roles(geom_entry.get("geometry", {}))
+            else:
+                ordered_roles = self.current_roles.copy()
         else:
             ordered_roles = self.current_roles.copy()
 
@@ -1407,6 +1711,7 @@ class MaterialSelectorTabbedNotebook:
 
         # 6) Persister les changements
         self._persist_configs()
+        notify_material_config_changed()
 
     def on_delete_config(self, b):
         selected = self.config_dropdown.value
@@ -1428,6 +1733,7 @@ class MaterialSelectorTabbedNotebook:
 
         # 3) Persister immédiatement
         self._persist_configs()
+        notify_material_config_changed()
 
 
     def _persist_configs(self):

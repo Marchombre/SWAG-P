@@ -54,6 +54,8 @@ from IPython import get_ipython
 
 from gap_plasmon_2d.utils.file_watchers import start_watcher
 
+from gap_plasmon_2d.ui.ui_config_events import subscribe_geom_mat_configs_changed
+
 # dépendances internes
 from gap_plasmon_2d.optimisation.cost_function import compute_cost
 from gap_plasmon_2d.simulation.simulate_and_plot     import ordered_params, run_simulation_one_combo
@@ -204,27 +206,61 @@ def _simulate_worker(args):
     )
 
 
-
-
-
-def _load_available_configs() -> list[str]:
+def _load_combined_configs_with_sort(config_list_json, sort_mode="created"):
     """
-    Lit CONFIG_LIST_JSON et retourne la liste triée des config_name disponibles.
-    Gère à la fois l’ancien format “configs” et le format “ALL_COMBINED_CONFIGS”.
+    Charge les combinaisons geom+mat depuis geom_mat_combinations.json
+    et retourne la liste complète des dictionnaires config.
+
+    sort_mode:
+        - "created" : tri par date de création si disponible,
+                      sinon ordre naturel du JSON
+        - "name"    : tri alphabétique par config_name
     """
     try:
-        data = json.loads(CONFIG_LIST_JSON.read_text(encoding="utf-8"))
-        if "configs" in data:
-            return sorted(data["configs"].keys())
-        if "ALL_COMBINED_CONFIGS" in data:
+        with open(config_list_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return []
+
+    configs = data.get("ALL_COMBINED_CONFIGS", [])
+    if not isinstance(configs, list):
+        return []
+
+    if sort_mode == "name":
+        return sorted(
+            configs,
+            key=lambda cfg: cfg.get("config_name", "").lower()
+        )
+
+    if sort_mode == "created":
+        # Si toutes les dates existent, vrai tri chronologique
+        if all(isinstance(cfg.get("created_at"), str) and cfg.get("created_at") for cfg in configs):
             return sorted(
-                cfg["config_name"]
-                for cfg in data["ALL_COMBINED_CONFIGS"]
-                if "config_name" in cfg
+                configs,
+                key=lambda cfg: cfg.get("created_at", "")
             )
-    except Exception as e:
-        warnings.warn(f"Impossible de lire '{CONFIG_LIST_JSON}': {e}")
-    return []
+
+        # Sinon, on garde l’ordre du JSON tel quel
+        return configs
+
+    return configs
+
+
+def _load_available_configs(sort_mode="created") -> list[str]:
+    """
+    Lit CONFIG_LIST_JSON et retourne la liste des config_name disponibles.
+
+    sort_mode:
+        - "created" : ordre de création si created_at existe,
+                      sinon ordre naturel du JSON
+        - "name"    : tri alphabétique
+    """
+    configs = _load_combined_configs_with_sort(CONFIG_LIST_JSON, sort_mode=sort_mode)
+    return [
+        cfg["config_name"]
+        for cfg in configs
+        if "config_name" in cfg
+    ]
 
 
 
@@ -256,6 +292,9 @@ class SimulationTab:
         
         self._init_metrics_overlays()
 
+        self._unsubscribe_geom_mat_event = subscribe_geom_mat_configs_changed(
+            self._on_geom_mat_configs_changed
+        )
 
         # 4) construction des panneaux (panels)
         # ── Initialise 1 seule figure + 2 axes ───────────────────────────
@@ -350,6 +389,78 @@ class SimulationTab:
 
 
 
+
+    def close(self):
+        """
+        Nettoyage optionnel de l'instance SimulationTab.
+        """
+        try:
+            if hasattr(self, "_unsubscribe_geom_mat_event") and self._unsubscribe_geom_mat_event is not None:
+                self._unsubscribe_geom_mat_event()
+                self._unsubscribe_geom_mat_event = None
+        except Exception as e:
+            print(f"[SimulationTab] erreur unsubscribe geom_mat event : {e}")
+
+        try:
+            if hasattr(self, "_cfg_handler") and self._cfg_handler is not None:
+                self._cfg_handler.stop()
+        except Exception as e:
+            print(f"[SimulationTab] erreur arrêt handler cfg watcher : {e}")
+
+
+
+    def _on_geom_mat_configs_changed(self):
+        """
+        Callback principal : déclenché immédiatement quand une config geom+mat
+        est sauvegardée/supprimée depuis l'UI de composition.
+        """
+        self.refresh_available_configs()
+
+
+    def refresh_available_configs(self):
+        """
+        Recharge les configurations geom+mat depuis le JSON,
+        puis reconstruit le sélecteur 'Select Configs & Δn'
+        en conservant autant que possible les sélections précédentes.
+        """
+        previous_cfg_values = {
+            name: cb.value for name, cb in self.config_checkboxes.items()
+        }
+        previous_dn_values = {
+            name: cb.value for name, cb in self.dn_checkboxes.items()
+        }
+
+        self.all_configs = self._load_combined_configs_from_file()
+
+        self._rebuild_sim_config_selector()
+
+        for name, cb in self.config_checkboxes.items():
+            if name in previous_cfg_values:
+                cb.value = previous_cfg_values[name]
+
+        for name, cb in self.dn_checkboxes.items():
+            if name in previous_dn_values:
+                cb.value = previous_dn_values[name]
+
+        # Met à jour les layers si possible
+        if self.all_configs:
+            try:
+                first_cfg = self.all_configs[0]
+                layer_keys = [
+                    m['key']
+                    for m in first_cfg['material']['MATERIALS_CONFIG']
+                ]
+                self.layer_selector.options = layer_keys
+            except Exception:
+                self.layer_selector.options = []
+        else:
+            self.layer_selector.options = []
+
+        self._toggle_delta_widgets()
+        self._update_sim_run_button()
+
+
+
     def _on_new_summary(self, event):
         """
         Callback watchdog : lorsqu’un nouveau fichier summary_sim
@@ -379,16 +490,30 @@ class SimulationTab:
         self._worker_thread = None
         self._result_queue  = None
 
+
     def _load_configs(self):
-        cfg_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
-        if os.path.exists(cfg_file):
-            with open(cfg_file, encoding="utf-8") as f:
-                self.all_configs = json.load(f)["ALL_COMBINED_CONFIGS"]
-        else:
-            self.all_configs = []
+        self.all_configs = self._load_combined_configs_from_file()
         self.json_combined_path = json_combined_path
 
 
+    def _load_combined_configs_from_file(self):
+        """
+        Relit le fichier geom_mat_combinations.json et retourne la liste complète
+        des configurations combinées.
+        """
+        cfg_file = os.path.join(configurations_dir, "geom_mat_combinations.json")
+
+        if not os.path.exists(cfg_file):
+            return []
+
+        try:
+            with open(cfg_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            all_cfgs = data.get("ALL_COMBINED_CONFIGS", [])
+            return all_cfgs if isinstance(all_cfgs, list) else []
+        except Exception as e:
+            warnings.warn(f"Impossible de relire '{cfg_file}': {e}")
+            return []
 
     # ----------------------------------------------------------------- #
     #       2) toggle λ₀ (méthode de classe, pas locale)               #
@@ -672,6 +797,21 @@ class SimulationTab:
 
 
 
+        self.config_sort_dropdown = widgets.Dropdown(
+            options=[
+                ("Creation date", "created"),
+                ("Name", "name"),
+            ],
+            value="created",
+            description="Sort configs:",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width="220px")
+        )
+
+
+
+
+
     def _build_panels(self):
         """
         Ne construit plus que le panneau de contrôle (à gauche).
@@ -686,6 +826,7 @@ class SimulationTab:
                     [self.sim_lambda_min, self.sim_lambda_max, self.sim_n_points],
                     layout=widgets.Layout(gap='10px', width='100%')
                 ),
+                self.config_sort_dropdown,
                 self.config_selector,
                 widgets.HTML("<b>RCWA Fourier modes</b>"),
                 widgets.HBox(
@@ -1873,56 +2014,71 @@ class SimulationTab:
 
 
     def _rebuild_sim_config_selector(self, *_):
-        # 1) on mémorise l’état ouvert/fermé
+        if hasattr(self, "_load_configs"):
+            self._load_configs()
+
         was_open = self.toggle_btn.value
-        # 2) on garde d’anciennes sélections
         prev_cfg = {n: cb.value for n, cb in self.config_checkboxes.items()}
         prev_dn  = {n: cb.value for n, cb in self.dn_checkboxes.items()}
 
-        # 3) on reconstruit les widgets ligne par ligne
         rows = []
         self.config_checkboxes.clear()
         self.dn_checkboxes.clear()
-        for name in _load_available_configs():
+
+        sort_mode = self.config_sort_dropdown.value if hasattr(self, "config_sort_dropdown") else "created"
+
+        for name in _load_available_configs(sort_mode=sort_mode):
             chk_cfg = widgets.Checkbox(
                 value=prev_cfg.get(name, False),
-                description=name, indent=False
+                description=name,
+                indent=False
             )
             chk_dn = widgets.Checkbox(
                 value=prev_dn.get(name, False),
-                description="Δn", indent=False,
+                description="Δn",
+                indent=False,
                 layout=widgets.Layout(width="auto", flex="1 1 0%")
             )
-            # on rattache les observateurs existants
+
             chk_dn.observe(self._toggle_delta_widgets, names='value')
             chk_cfg.observe(self._update_sim_run_button, names='value')
-
-            # pour que, si on coche/décoche une config en mode custom, on rafraîchisse tout de suite
             chk_cfg.observe(self._on_toggle_custom, names='value')
 
             self.config_checkboxes[name] = chk_cfg
             self.dn_checkboxes[name]     = chk_dn
-            rows.append(widgets.HBox([chk_cfg, chk_dn],
-                          layout=widgets.Layout(gap='5px')))
-        # 4) on réinjecte dans le VBox
+
+            rows.append(
+                widgets.HBox(
+                    [chk_cfg, chk_dn],
+                    layout=widgets.Layout(gap='5px')
+                )
+            )
+
         visible = min(len(rows), 10)
         self.config_list.layout.height = f"{30 + visible*30}px"
-        # on veut juste les HBox, pas le header ni les boutons
-        header = widgets.HBox([self.select_all_cfg_btn, self.select_all_dn_btn],
-                               layout=widgets.Layout(gap='10px'))
+
+        header = widgets.HBox(
+            [self.select_all_cfg_btn, self.select_all_dn_btn],
+            layout=widgets.Layout(gap='10px')
+        )
+
         self.config_list.children = [header, *rows]
 
-        # 5) on réapplique l’état ouvert/fermé et on refresh custom modes
         self.toggle_btn.value = was_open
         self._refresh_custom_modes()
         self._update_sim_run_button()
 
 
     def _on_cfg_fs_event(self, *args):
-        """Callback du watcher : on reconstruit la liste dès que JSON change."""
+        """
+        Callback fallback du watcher :
+        on recharge réellement les configs combinées puis on reconstruit l'UI.
+        """
+        self.refresh_available_configs()
+
+
+    def _on_config_sort_changed(self, change):
         self._rebuild_sim_config_selector()
-
-
 
 
     def _refresh_custom_modes(self, *_):
@@ -2054,6 +2210,7 @@ class SimulationTab:
         self.mode_selection.observe(self._refresh_custom_modes, names='value')
         self.mode_calc_radio.observe(self._toggle_lambda0, names='value')
         self.verbose_toggle.observe(self._toggle_debug, names='value')
+        self.config_sort_dropdown.observe(self._on_config_sort_changed, names="value")        
 
 
 

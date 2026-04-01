@@ -214,7 +214,7 @@
         "thick_sub": 200.0,
         "period": 100.2153
       },
-      "compartment": "D\u00e9faut"
+      "compartment": "Défaut"
     },
     {
       "config_name": "c30_g2_m10",
@@ -272,7 +272,7 @@
     },
     {
       "config_name": "c0_g2_m50",
-      "compartment": "D\u00e9faut",
+      "compartment": "Défaut",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 0.0,
@@ -345,7 +345,7 @@
     },
     {
       "config_name": "Test_homo_acc",
-      "compartment": "D\u00e9faut",
+      "compartment": "Défaut",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 30.0,
@@ -364,7 +364,7 @@
     },
     {
       "config_name": "Test_acc",
-      "compartment": "D\u00e9faut",
+      "compartment": "Défaut",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 30.0,
@@ -451,7 +451,7 @@
     },
     {
       "config_name": "Test_result_opti",
-      "compartment": "D\u00e9faut",
+      "compartment": "Défaut",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 10.0,
@@ -469,7 +469,7 @@
     },
     {
       "config_name": "test_result_opti_80",
-      "compartment": "D\u00e9faut",
+      "compartment": "Défaut",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 80.0,
@@ -515,7 +515,7 @@
     },
     {
       "config_name": "N82.9_G4.9_D_17.7_sens3.52",
-      "compartment": "D\u00e9faut",
+      "compartment": "Défaut",
       "geometry": {
         "thick_super": 200.0,
         "thick_reso": 82.5,
@@ -527,6 +527,42 @@
         "thick_metalliclayer": 13.0,
         "thick_XIAOYI": 0.0,
         "thick_accroche": 0.0,
+        "thick_sub": 200.0,
+        "period": 100.2153
+      }
+    },
+    {
+      "config_name": "TEST_Lam_Range",
+      "compartment": "Défaut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.0,
+        "thick_func": 0.0,
+        "thick_diel": 1.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 1.0,
+        "thick_sub": 200.0,
+        "period": 100.2
+      }
+    },
+    {
+      "config_name": "TEST_watchdog",
+      "compartment": "Défaut",
+      "geometry": {
+        "thick_super": 200.0,
+        "thick_reso": 30.0,
+        "width_reso": 30.0,
+        "thick_gap": 3.0,
+        "thick_mol": 0.5,
+        "thick_func": 1.0,
+        "thick_diel": 1.0,
+        "thick_metalliclayer": 10.0,
+        "thick_XIAOYI": 0.0,
+        "thick_accroche": 1.0,
         "thick_sub": 200.0,
         "period": 100.2153
       }
