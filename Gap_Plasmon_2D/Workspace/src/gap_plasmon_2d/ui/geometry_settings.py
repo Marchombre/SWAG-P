@@ -29,18 +29,33 @@ geometry_config = {
 }
 
 geometry_limits = {
-    "thick_super": (0, 2000),
-    "thick_reso": (0, 300),
-    "width_reso": (0, 300),
-    "thick_gap": (0, 50),
-    "thick_mol": (0, 50),
-    "thick_func": (0, 50),
-    "thick_diel": (0, 50),
-    "thick_metalliclayer": (0, 500),
-    "thick_XIAOYI": (0, 2000),
-    "thick_accroche": (0, 50),
-    "thick_sub": (0, 2000),
-    "period": (50, 300)
+    "thick_super": (0, None),
+    "thick_reso": (0, None),
+    "width_reso": (0, None),
+    "thick_gap": (0, None),
+    "thick_mol": (0, None),
+    "thick_func": (0, None),
+    "thick_diel": (0, None),
+    "thick_metalliclayer": (0, None),
+    "thick_XIAOYI": (0, None),
+    "thick_accroche": (0, None),
+    "thick_sub": (0, None),
+    "period": (0, None)
+}
+
+layer_ui_colors = {
+    "thick_super": "#00B0FF",           # bleu clair vif
+    "thick_reso": "#9E9E9E",            # gris plus soutenu
+    "width_reso": "#9E9E9E",            # gris plus soutenu
+    "thick_gap": "#00C853",             # vert vif
+    "thick_mol": "#AA00FF",             # violet vif
+    "thick_func": "#FF4081",            # rose vif
+    "thick_diel": "#00A000",            # vert soutenu
+    "thick_metalliclayer": "#FFB300",   # or vif
+    "thick_XIAOYI": "#7C4DFF",          # violet bleu vif
+    "thick_accroche": "#FF6D00",        # orange vif
+    "thick_sub": "#8D4E2F",             # brun plus lisible
+    "period": "#222222"                 # gris très foncé
 }
 
 def displayed_thickness(t):
@@ -165,6 +180,35 @@ def draw_layer(ax, x, y, w, h, color, label, hatch=None):
         ax.text(x + w/2, y + h/2, label, ha="center", va="center", fontsize=9)
 
 
+def clamp_positive_widget(change):
+    """
+    Empêche toute valeur négative dans un FloatText.
+    """
+    if change["new"] is None:
+        return
+    if change["new"] < 0:
+        change["owner"].value = 0
+
+
+
+def make_colored_label_html(text, color):
+    """
+    Retourne un widget HTML affichant le texte dans une couleur vive,
+    avec une typo plus grande, plus grasse, et plus lisible.
+    """
+    return widgets.HTML(
+        value=(
+            f'<span style="'
+            f'color:{color};'
+            f'font-weight:900;'
+            f'font-size:18px;'
+            f'line-height:1.2;'
+            f'letter-spacing:0.2px;'
+            f'text-shadow: 0.5px 0.5px 0px rgba(255,255,255,0.85);'
+            f'">{text}</span>'
+        ),
+        layout=widgets.Layout(width="220px")
+    )
 
 
 def create_geometry_widget():
@@ -225,39 +269,26 @@ def create_geometry_widget():
 
     for key, label in ordered_params:
         default = geometry_config.get(key, 0)
-        min_val, max_val = geometry_limits.get(key, (0, 200))
-        
+
         if key == "period":
             description_str = label + ":"
         else:
             description_str = label + " (nm):"
-        
-        # Création d'un slider avec un FloatText lié pour chaque paramètre
-        slider = widgets.FloatSlider(
-            value=default, min=min_val, max=max_val, step=0.1,
-            description=description_str,
-            continuous_update=False,
-            layout=slider_layout,
-            style=slider_style
-        )
+
+        label_color = layer_ui_colors.get(key, "#222222")
+        label_widget = make_colored_label_html(description_str, label_color)
+
         float_text = widgets.FloatText(
             value=default,
-            layout=text_layout
+            layout=widgets.Layout(width='150px')
         )
-        
-        widgets.jslink((slider, 'value'), (float_text, 'value'))
-        
-        # Empêche les valeurs négatives
-        def validate_positive(change):
-            if change['new'] < 0:
-                change['owner'].value = 0
-        float_text.observe(validate_positive, names='value')
-        
-        geometry_sliders[key] = slider
-        # HBox responsive : espace entre slider et valeur
+        float_text.observe(clamp_positive_widget, names='value')
+
+        geometry_sliders[key] = float_text
+
         slider_widgets.append(
             widgets.HBox(
-                [slider, float_text],
+                [label_widget, float_text],
                 layout=widgets.Layout(
                     display='flex',
                     flex_flow='row nowrap',
@@ -341,49 +372,101 @@ def create_geometry_widget():
 
         # Création du Text pour le nom de layer et du slider pour l'épaisseur
         name_w = widgets.Text(
-            value=default_name, placeholder='Layer name',
+            value=default_name,
+            placeholder='Layer name',
             layout=widgets.Layout(width='120px')
         )
-        sl = widgets.FloatSlider(
-            value=1.0, min=0, max=50, step=0.1,
-            description="thick (nm):", continuous_update=False,
-            layout=widgets.Layout(width='250px'),
-            style={'description_width':'100px'}
+
+        layer_name_preview = widgets.HTML(
+            value=(
+                f'<span style="'
+                f'color:#222222;'
+                f'font-weight:900;'
+                f'font-size:18px;'
+                f'line-height:1.2;'
+                f'letter-spacing:0.2px;'
+                f'text-shadow: 0.5px 0.5px 0px rgba(255,255,255,0.85);'
+                f'">{default_name}</span>'
+            ),
+            layout=widgets.Layout(width='160px')
         )
-        ft = widgets.FloatText(value=1.0, layout=widgets.Layout(width='80px'))
-        widgets.jslink((sl, 'value'), (ft, 'value'))
 
-        # Bouton de suppression
+        thick_label = widgets.HTML(
+            value=(
+                '<span style="'
+                'color:#222222;'
+                'font-weight:900;'
+                'font-size:17px;'
+                'line-height:1.2;'
+                'letter-spacing:0.2px;'
+                'text-shadow: 0.5px 0.5px 0px rgba(255,255,255,0.85);'
+                '">thick (nm):</span>'
+            ),
+            layout=widgets.Layout(width='130px')
+        )
+
+        ft = widgets.FloatText(
+            value=1.0,
+            layout=widgets.Layout(width='120px')
+        )
+        ft.observe(clamp_positive_widget, names='value')
+
         btn_del = widgets.Button(description="✕", layout=widgets.Layout(width='30px'))
-        container = widgets.HBox([name_w, sl, ft, btn_del])
-
-
+        container = widgets.HBox(
+            [name_w, layer_name_preview, thick_label, ft, btn_del],
+            layout=widgets.Layout(
+                display='flex',
+                flex_flow='row nowrap',
+                align_items='center',
+                gap='8px',
+                width='100%'
+            )
+        )
         # 1) Gestion du renommage du Text en clé thick_homo_<name>
         def _rename(change):
             nonlocal next_color_idx
+
+            new_name = change["new"].strip() if change["new"] else "layer"
             old_key = getattr(container, 'layer_key', None)
-            base_key = f"thick_homo_{change['new']}"
-            # générer un key unique (comme dans votre code)
+            base_key = f"thick_homo_{new_name}"
+
             candidate = base_key
             i = 1
             while candidate in geometry_sliders and candidate != old_key:
                 candidate = f"{base_key}_{i}"
                 i += 1
 
-            # on enlève l’ancienne si besoin
             if old_key in geometry_sliders:
-                geometry_sliders.pop(old_key); extra_layer_keys.remove(old_key)
-                extra_layer_colors.pop(old_key, None)
+                geometry_sliders.pop(old_key)
+                if old_key in extra_layer_keys:
+                    extra_layer_keys.remove(old_key)
 
-            # on attribue la couleur si c’est un nouveau layer
+                old_color = extra_layer_colors.pop(old_key, None)
+            else:
+                old_color = None
+
             if candidate not in extra_layer_colors:
-                extra_layer_colors[candidate] = color_cycle[next_color_idx % len(color_cycle)]
-                next_color_idx += 1
+                if old_color is not None:
+                    extra_layer_colors[candidate] = old_color
+                else:
+                    extra_layer_colors[candidate] = color_cycle[next_color_idx % len(color_cycle)]
+                    next_color_idx += 1
 
-            # on enregistre la clé
-            geometry_sliders[candidate] = sl
+            geometry_sliders[candidate] = ft
             extra_layer_keys.append(candidate)
             container.layer_key = candidate
+
+            current_color = extra_layer_colors[candidate]
+            layer_name_preview.value = (
+                f'<span style="'
+                f'color:{current_color};'
+                f'font-weight:900;'
+                f'font-size:18px;'
+                f'line-height:1.2;'
+                f'letter-spacing:0.2px;'
+                f'text-shadow: 0.5px 0.5px 0px rgba(255,255,255,0.85);'
+                f'">{new_name}</span>'
+            )
 
             draw_structure()
 
@@ -404,7 +487,7 @@ def create_geometry_widget():
             draw_structure()
 
         btn_del.on_click(_del)
-        sl.observe(lambda *_: draw_structure(), names='value')
+        ft.observe(lambda *_: draw_structure(), names='value')
 
         layers_box.children = tuple(list(layers_box.children) + [container])
 

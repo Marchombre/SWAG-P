@@ -41,6 +41,9 @@ Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/ui/nkexplorer_interface.py
 Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/ui/nkexplorer_interface__widget.py
 Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/ui/nkexplorer_widget.py
 Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/ui/optimized_geometry.py
+Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/ui/ui_config_events.py
+Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/ui/ui_events.py
+Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/ui/ui_material_events.py
 Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/utils/__init__.py
 Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/utils/data_readers.py
 Gap_Plasmon_2D/Workspace/src/gap_plasmon_2d/utils/file_watchers.py
