@@ -1,5 +1,6 @@
 # ─── Environnement virtuel ────────────────────────────────────────
 env/
+.venv/
 
 # ─── Python compilé (inutile à versionner) ────────────────────────
 __pycache__/

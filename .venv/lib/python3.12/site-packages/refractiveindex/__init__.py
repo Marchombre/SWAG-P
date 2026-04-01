@@ -1,1 +1,0 @@
-from .refractiveindex import RefractiveIndexMaterial
